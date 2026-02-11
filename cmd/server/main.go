@@ -61,10 +61,13 @@ func main() {
 	// Dev mode: start gh webhook forward as a subprocess
 	var ghCmd *exec.Cmd
 	if flags.DevMode {
-		if flags.DevRepo == "" {
-			log.Fatal("--repo is required in dev mode (e.g. --repo=owner/repo)")
+		if flags.DevOwner == "" {
+			log.Fatal("--owner is required in dev mode (e.g. --owner=owner)")
 		}
-		ghCmd, err = startWebhookForward(flags.DevRepo, cfg.Server.Port, cfg.GitHub.WebhookSecret)
+		if flags.DevRepo == "" {
+			log.Fatal("--repo is required in dev mode (e.g. --repo=repo)")
+		}
+		ghCmd, err = startWebhookForward(client, flags.DevOwner, flags.DevRepo, cfg.Server.Port, cfg.GitHub.WebhookSecret)
 		if err != nil {
 			log.Fatalf("failed to start gh webhook forward: %v", err)
 		}
@@ -100,10 +103,14 @@ func main() {
 	log.Println("server: stopped")
 }
 
-func startWebhookForward(repo string, port int, secret string) (*exec.Cmd, error) {
+func startWebhookForward(client *gh.Client, owner, repo string, port int, secret string) (*exec.Cmd, error) {
+	if err := client.RemoveLocalRepoWebhooks(context.Background(), owner, repo, port); err != nil {
+		return nil, fmt.Errorf("remove local repo webhooks: %w", err)
+	}
+
 	args := []string{
 		"webhook", "forward",
-		"--repo=" + repo,
+		"--repo=" + fmt.Sprintf("%s/%s", owner, repo),
 		"--events=issues,issue_comment",
 		fmt.Sprintf("--url=http://localhost:%d/webhook", port),
 		"--secret=" + secret,

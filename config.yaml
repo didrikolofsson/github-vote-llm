@@ -6,8 +6,8 @@ server:
   port: 8080
 
 repos:
-  - owner: "myorg"
-    name: "myrepo"
+  - owner: "didrikolofsson"
+    name: "github-vote-llm"
     labels:
       feature_request: "feature-request"
       approved: "approved-for-dev"

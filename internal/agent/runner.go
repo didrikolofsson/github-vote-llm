@@ -45,7 +45,7 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 		log.Printf("agent: failed to add in-progress label: %v", err)
 	}
 
-	prURL, err := r.implement(ctx, owner, repo, issue, repoCfg)
+	prURL, err := r.implement(ctx, owner, repo, issue)
 	if err != nil {
 		log.Printf("agent: failed to implement issue #%d: %v", issueNum, err)
 		comment := fmt.Sprintf("**vote-llm**: Failed to implement this feature.\n\n```\n%s\n```", err)
@@ -71,7 +71,7 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 	log.Printf("agent: successfully created PR for issue #%d: %s", issueNum, prURL)
 }
 
-func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogithub.Issue, repoCfg *config.RepoConfig) (string, error) {
+func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogithub.Issue) (string, error) {
 	// Prepare workspace
 	workDir := filepath.Join(r.cfg.WorkspaceDir, owner, repo)
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
