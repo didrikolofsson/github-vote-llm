@@ -1,0 +1,29 @@
+github:
+  token: "${GITHUB_TOKEN}"
+  webhook_secret: "${WEBHOOK_SECRET}"
+
+server:
+  port: 8080
+
+repos:
+  - owner: "myorg"
+    name: "myrepo"
+    labels:
+      feature_request: "feature-request"
+      approved: "approved-for-dev"
+      in_progress: "llm-in-progress"
+      done: "llm-pr-created"
+    vote_threshold: 5
+
+agent:
+  command: "claude"
+  max_turns: 25
+  max_budget_usd: 5.00
+  allowed_tools:
+    - "Read"
+    - "Edit"
+    - "Write"
+    - "Bash"
+    - "Glob"
+    - "Grep"
+  workspace_dir: "/tmp/vote-llm-workspaces"
