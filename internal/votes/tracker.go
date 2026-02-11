@@ -3,20 +3,21 @@ package votes
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	gh "github.com/didrikolofsson/github-vote-llm/internal/github"
+	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 )
 
 // Tracker monitors vote counts on issues and applies threshold labels.
 type Tracker struct {
 	client *gh.Client
+	log    *logger.Logger
 }
 
 // NewTracker creates a new vote tracker.
-func NewTracker(client *gh.Client) *Tracker {
-	return &Tracker{client: client}
+func NewTracker(client *gh.Client, log *logger.Logger) *Tracker {
+	return &Tracker{client: client, log: log.Named("votes")}
 }
 
 // CountVotes returns the number of +1 reactions on an issue.
@@ -31,14 +32,14 @@ func (t *Tracker) CheckAndLabel(ctx context.Context, owner, repo string, issueNu
 		return fmt.Errorf("counting votes: %w", err)
 	}
 
-	log.Printf("votes: issue #%d in %s/%s has %d votes (threshold: %d)", issueNumber, owner, repo, count, repoCfg.VoteThreshold)
+	t.log.Infow("vote count", "issue", issueNumber, "repo", owner+"/"+repo, "votes", count, "threshold", repoCfg.VoteThreshold)
 
 	if count >= repoCfg.VoteThreshold {
 		label := fmt.Sprintf("votes:%d+", repoCfg.VoteThreshold)
 		if err := t.client.AddLabel(ctx, owner, repo, issueNumber, label); err != nil {
 			return fmt.Errorf("adding threshold label: %w", err)
 		}
-		log.Printf("votes: labeled issue #%d with %q", issueNumber, label)
+		t.log.Infow("labeled issue", "issue", issueNumber, "label", label)
 	}
 
 	return nil
