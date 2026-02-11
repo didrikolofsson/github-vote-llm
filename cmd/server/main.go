@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,18 +12,19 @@ import (
 	"time"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/agent"
+	"github.com/didrikolofsson/github-vote-llm/internal/cli"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	gh "github.com/didrikolofsson/github-vote-llm/internal/github"
 	gogithub "github.com/google/go-github/v68/github"
 )
 
 func main() {
-	configPath := flag.String("config", "config.yaml", "path to config file")
-	dev := flag.Bool("dev", false, "enable dev mode (auto-starts gh webhook forward)")
-	devRepo := flag.String("repo", "", "owner/repo for dev mode webhook forwarding")
-	flag.Parse()
+	flags, err := cli.ParseFlags()
+	if err != nil {
+		log.Fatalf("failed to parse flags: %v", err)
+	}
 
-	cfg, err := config.Load(*configPath)
+	cfg, err := config.Load(flags.ConfigPath)
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
@@ -60,15 +60,15 @@ func main() {
 
 	// Dev mode: start gh webhook forward as a subprocess
 	var ghCmd *exec.Cmd
-	if *dev {
-		if *devRepo == "" {
+	if flags.DevMode {
+		if flags.DevRepo == "" {
 			log.Fatal("--repo is required in dev mode (e.g. --repo=owner/repo)")
 		}
-		ghCmd, err = startWebhookForward(*devRepo, cfg.Server.Port, cfg.GitHub.WebhookSecret)
+		ghCmd, err = startWebhookForward(flags.DevRepo, cfg.Server.Port, cfg.GitHub.WebhookSecret)
 		if err != nil {
 			log.Fatalf("failed to start gh webhook forward: %v", err)
 		}
-		log.Printf("dev: started gh webhook forward for %s", *devRepo)
+		log.Printf("dev: started gh webhook forward for %s", flags.DevRepo)
 	}
 
 	// Graceful shutdown
