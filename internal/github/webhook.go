@@ -1,10 +1,10 @@
 package github
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
+	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	gh "github.com/google/go-github/v68/github"
 )
 
@@ -13,17 +13,19 @@ type IssueApprovedHandler func(owner, repo string, issue *gh.Issue)
 
 // WebhookHandler handles incoming GitHub webhook events.
 type WebhookHandler struct {
-	secret          []byte
-	cfg             *config.Config
-	onApproved      IssueApprovedHandler
+	secret     []byte
+	cfg        *config.Config
+	onApproved IssueApprovedHandler
+	log        *logger.Logger
 }
 
 // NewWebhookHandler creates a new webhook handler.
-func NewWebhookHandler(cfg *config.Config, onApproved IssueApprovedHandler) *WebhookHandler {
+func NewWebhookHandler(cfg *config.Config, onApproved IssueApprovedHandler, log *logger.Logger) *WebhookHandler {
 	return &WebhookHandler{
 		secret:     []byte(cfg.GitHub.WebhookSecret),
 		cfg:        cfg,
 		onApproved: onApproved,
+		log:        log.Named("webhook"),
 	}
 }
 
@@ -31,14 +33,14 @@ func NewWebhookHandler(cfg *config.Config, onApproved IssueApprovedHandler) *Web
 func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	payload, err := gh.ValidatePayload(r, h.secret)
 	if err != nil {
-		log.Printf("webhook: invalid signature: %v", err)
+		h.log.Warnw("invalid signature", "error", err)
 		http.Error(w, "invalid signature", http.StatusUnauthorized)
 		return
 	}
 
 	event, err := gh.ParseWebHook(gh.WebHookType(r), payload)
 	if err != nil {
-		log.Printf("webhook: failed to parse event: %v", err)
+		h.log.Errorw("failed to parse event", "error", err)
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
@@ -60,11 +62,11 @@ func (h *WebhookHandler) handleIssueEvent(e *gh.IssuesEvent) {
 	owner := repo.GetOwner().GetLogin()
 	repoName := repo.GetName()
 
-	log.Printf("webhook: issues event action=%s issue=#%d repo=%s/%s", action, issue.GetNumber(), owner, repoName)
+	h.log.Infow("issues event", "action", action, "issue", issue.GetNumber(), "repo", owner+"/"+repoName)
 
 	repoConfig := h.cfg.FindRepo(owner, repoName)
 	if repoConfig == nil {
-		log.Printf("webhook: repo %s/%s not configured, ignoring", owner, repoName)
+		h.log.Infow("repo not configured, ignoring", "repo", owner+"/"+repoName)
 		return
 	}
 
@@ -79,7 +81,7 @@ func (h *WebhookHandler) handleLabeled(owner, repo string, issue *gh.Issue, labe
 		return
 	}
 
-	log.Printf("webhook: issue #%d approved for development in %s/%s", issue.GetNumber(), owner, repo)
+	h.log.Infow("issue approved for development", "issue", issue.GetNumber(), "repo", owner+"/"+repo)
 	if h.onApproved != nil {
 		go h.onApproved(owner, repo, issue)
 	}

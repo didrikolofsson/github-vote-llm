@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	gh "github.com/didrikolofsson/github-vote-llm/internal/github"
+	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	gogithub "github.com/google/go-github/v68/github"
 )
 
@@ -22,11 +22,12 @@ import (
 type Runner struct {
 	client *gh.Client
 	cfg    *config.AgentConfig
+	log    *logger.Logger
 }
 
 // NewRunner creates a new agent runner.
-func NewRunner(client *gh.Client, cfg *config.AgentConfig) *Runner {
-	return &Runner{client: client, cfg: cfg}
+func NewRunner(client *gh.Client, cfg *config.AgentConfig, log *logger.Logger) *Runner {
+	return &Runner{client: client, cfg: cfg, log: log.Named("agent")}
 }
 
 // claudeResult represents the JSON output from claude -p.
@@ -38,37 +39,37 @@ type claudeResult struct {
 // Run implements a feature request: clones repo, runs Claude Code, creates a PR.
 func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Issue, repoCfg *config.RepoConfig) {
 	issueNum := issue.GetNumber()
-	log.Printf("agent: starting work on issue #%d in %s/%s", issueNum, owner, repo)
+	r.log.Infow("starting work on issue", "issue", issueNum, "repo", owner+"/"+repo)
 
 	// Mark issue as in-progress
 	if err := r.client.AddLabel(ctx, owner, repo, issueNum, repoCfg.Labels.InProgress); err != nil {
-		log.Printf("agent: failed to add in-progress label: %v", err)
+		r.log.Warnw("failed to add in-progress label", "error", err)
 	}
 
 	prURL, err := r.implement(ctx, owner, repo, issue)
 	if err != nil {
-		log.Printf("agent: failed to implement issue #%d: %v", issueNum, err)
+		r.log.Errorw("failed to implement issue", "issue", issueNum, "error", err)
 		comment := fmt.Sprintf("**vote-llm**: Failed to implement this feature.\n\n```\n%s\n```", err)
 		if cErr := r.client.CreateComment(ctx, owner, repo, issueNum, comment); cErr != nil {
-			log.Printf("agent: failed to comment on issue: %v", cErr)
+			r.log.Warnw("failed to comment on issue", "error", cErr)
 		}
 		return
 	}
 
 	// Mark issue as done and comment with PR link
 	if err := r.client.AddLabel(ctx, owner, repo, issueNum, repoCfg.Labels.Done); err != nil {
-		log.Printf("agent: failed to add done label: %v", err)
+		r.log.Warnw("failed to add done label", "error", err)
 	}
 	if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, repoCfg.Labels.InProgress); err != nil {
-		log.Printf("agent: failed to remove in-progress label: %v", err)
+		r.log.Warnw("failed to remove in-progress label", "error", err)
 	}
 
 	comment := fmt.Sprintf("**vote-llm**: A PR has been created for this feature request: %s\n\nPlease review the changes.", prURL)
 	if err := r.client.CreateComment(ctx, owner, repo, issueNum, comment); err != nil {
-		log.Printf("agent: failed to comment on issue: %v", err)
+		r.log.Warnw("failed to comment on issue", "error", err)
 	}
 
-	log.Printf("agent: successfully created PR for issue #%d: %s", issueNum, prURL)
+	r.log.Infow("successfully created PR", "issue", issueNum, "pr", prURL)
 }
 
 func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogithub.Issue) (string, error) {
@@ -211,7 +212,7 @@ func (r *Runner) runClaude(ctx context.Context, repoDir, prompt string) error {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	log.Printf("agent: running claude in %s", repoDir)
+	r.log.Infow("running claude", "dir", repoDir)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("claude exited with error: %w\nstderr: %s", err, stderr.String())
 	}
@@ -219,9 +220,9 @@ func (r *Runner) runClaude(ctx context.Context, repoDir, prompt string) error {
 	// Parse output to check for success
 	var result claudeResult
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
-		log.Printf("agent: could not parse claude output as JSON (may still have made changes): %v", err)
+		r.log.Warnw("could not parse claude output as JSON (may still have made changes)", "error", err)
 	} else {
-		log.Printf("agent: claude session=%s", result.SessionID)
+		r.log.Infow("claude finished", "session", result.SessionID)
 	}
 
 	return nil

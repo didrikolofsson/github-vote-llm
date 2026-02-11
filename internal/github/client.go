@@ -3,20 +3,22 @@ package github
 import (
 	"context"
 	"fmt"
-	"log"
 
+	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	gh "github.com/google/go-github/v68/github"
 )
 
 // Client wraps the go-github client with methods needed by vote-llm.
 type Client struct {
-	gh *gh.Client
+	gh  *gh.Client
+	log *logger.Logger
 }
 
 // NewClient creates a Client authenticated with the given token.
-func NewClient(token string) *Client {
+func NewClient(token string, log *logger.Logger) *Client {
 	return &Client{
-		gh: gh.NewClient(nil).WithAuthToken(token),
+		gh:  gh.NewClient(nil).WithAuthToken(token),
+		log: log.Named("github"),
 	}
 }
 
@@ -121,7 +123,7 @@ func (c *Client) RemoveLocalRepoWebhooks(ctx context.Context, owner, repo string
 	for _, hook := range hooks {
 		hookConfig := hook.GetConfig()
 		if *hookConfig.URL == "https://webhook-forwarder.github.com/hook" {
-			log.Printf("removing local repo webhook: %d", hook.GetID())
+			c.log.Infow("removing local repo webhook", "hookID", hook.GetID())
 			_, err := c.gh.Repositories.DeleteHook(ctx, owner, repo, hook.GetID())
 			if err != nil {
 				return fmt.Errorf("delete repo webhook: %w", err)
