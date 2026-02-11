@@ -7,8 +7,9 @@ Community-driven feature development powered by GitHub reactions and Claude Code
 1. A feature request is filed as a GitHub issue
 2. Community members vote by adding +1 reactions
 3. A maintainer labels the issue as approved (e.g. `approved-for-dev`)
-4. vote-llm receives the webhook event, clones the repo, and runs Claude Code against the issue
-5. Claude Code implements the feature and vote-llm opens a PR
+4. vote-llm receives the webhook event, adds an `llm-in-progress` label, clones the repo, and runs Claude Code against the issue
+5. Claude Code implements the feature, vote-llm commits, pushes, and opens a PR
+6. The issue is labeled `llm-pr-created` and a comment links to the PR
 
 ## Project structure
 
@@ -19,7 +20,8 @@ internal/
   cli/            CLI flag parsing
   config/         YAML configuration loading with env-var expansion
   github/         GitHub API client and webhook handler
-  votes/          Reaction-based vote counting
+  logger/         Structured logging with colored output (zap)
+  votes/          Reaction-based vote counting (not currently wired into main flow)
 config.yaml       Example configuration
 ```
 
@@ -65,6 +67,7 @@ agent:
     - "Glob"
     - "Grep"
   workspace_dir: "/tmp/vote-llm-workspaces"
+  timeout_minutes: 30
 ```
 
 Environment variables referenced with `${VAR}` syntax are expanded at load time.
