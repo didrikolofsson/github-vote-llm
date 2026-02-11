@@ -81,7 +81,7 @@ func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogit
 	repoDir := filepath.Join(workDir, "repo")
 
 	// Clone or update repo
-	if err := r.ensureRepo(ctx, owner, repo, repoDir); err != nil {
+	if err := r.cloneOrResetRepo(ctx, owner, repo, repoDir); err != nil {
 		return "", fmt.Errorf("ensure repo: %w", err)
 	}
 
@@ -128,7 +128,7 @@ func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogit
 	return pr.GetHTMLURL(), nil
 }
 
-func (r *Runner) ensureRepo(ctx context.Context, owner, repo, repoDir string) error {
+func (r *Runner) cloneOrResetRepo(ctx context.Context, owner, repo, repoDir string) error {
 	if _, err := os.Stat(filepath.Join(repoDir, ".git")); err == nil {
 		// Repo exists, pull latest
 		cmd := exec.CommandContext(ctx, "git", "fetch", "--all", "--prune")
@@ -149,21 +149,27 @@ func (r *Runner) ensureRepo(ctx context.Context, owner, repo, repoDir string) er
 }
 
 func (r *Runner) gitCheckoutNewBranch(ctx context.Context, repoDir, baseBranch, newBranch string) error {
-	// Reset to latest base branch
-	cmd := exec.CommandContext(ctx, "git", "checkout", baseBranch)
+	// Stash any changes (should not be any)
+	cmd := exec.CommandContext(ctx, "git", "stash")
+	cmd.Dir = repoDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git stash: %s: %w", out, err)
+	}
+
+	cmd = exec.CommandContext(ctx, "git", "checkout", baseBranch)
 	cmd.Dir = repoDir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("checkout %s: %s: %w", baseBranch, out, err)
 	}
 
-	cmd = exec.CommandContext(ctx, "git", "pull", "origin", baseBranch)
+	cmd = exec.CommandContext(ctx, "git", "reset", "--hard", "origin/"+baseBranch)
 	cmd.Dir = repoDir
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("pull %s: %s: %w", baseBranch, out, err)
+		return fmt.Errorf("reset to origin/%s: %s: %w", baseBranch, out, err)
 	}
 
 	// Create and checkout new branch
-	cmd = exec.CommandContext(ctx, "git", "checkout", "-b", newBranch)
+	cmd = exec.CommandContext(ctx, "git", "checkout", "-B", newBranch)
 	cmd.Dir = repoDir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("create branch %s: %s: %w", newBranch, out, err)

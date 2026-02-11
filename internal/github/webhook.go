@@ -70,18 +70,17 @@ func (h *WebhookHandler) handleIssueEvent(e *gh.IssuesEvent) {
 
 	switch action {
 	case "labeled":
-		h.handleLabeled(owner, repoName, issue, repoConfig)
+		h.handleLabeled(owner, repoName, issue, e.GetLabel(), repoConfig)
 	}
 }
 
-func (h *WebhookHandler) handleLabeled(owner, repo string, issue *gh.Issue, repoConfig *config.RepoConfig) {
-	for _, label := range issue.Labels {
-		if label.GetName() == repoConfig.Labels.Approved {
-			log.Printf("webhook: issue #%d approved for development in %s/%s", issue.GetNumber(), owner, repo)
-			if h.onApproved != nil {
-				go h.onApproved(owner, repo, issue)
-			}
-			return
-		}
+func (h *WebhookHandler) handleLabeled(owner, repo string, issue *gh.Issue, label *gh.Label, repoConfig *config.RepoConfig) {
+	if label.GetName() != repoConfig.Labels.Approved {
+		return
+	}
+
+	log.Printf("webhook: issue #%d approved for development in %s/%s", issue.GetNumber(), owner, repo)
+	if h.onApproved != nil {
+		go h.onApproved(owner, repo, issue)
 	}
 }
