@@ -1,6 +1,7 @@
 package github
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
@@ -82,7 +83,23 @@ func (h *WebhookHandler) handleLabeled(owner, repo string, issue *gh.Issue, labe
 	}
 
 	h.log.Infow("issue approved for development", "issue", issue.GetNumber(), "repo", owner+"/"+repo)
+	// Skip if already in-progress (prevents duplicate runs from duplicate webhooks)
+	for _, l := range issue.Labels {
+		if l.GetName() == repoConfig.Labels.InProgress {
+			h.log.Infow("issue already in-progress, skipping", "issue", issue.GetNumber())
+			return
+		}
+	}
+
+	h.log.Infow("issue approved for development", "issue", issue.GetNumber(), "repo", owner+"/"+repo)
 	if h.onApproved != nil {
-		go h.onApproved(owner, repo, issue)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("webhook: panic in onApproved for %s/%s#%d: %v", owner, repo, issue.GetNumber(), r)
+				}
+			}()
+			h.onApproved(owner, repo, issue)
+		}()
 	}
 }

@@ -39,11 +39,12 @@ type LabelConfig struct {
 }
 
 type AgentConfig struct {
-	Command      string   `yaml:"command"`
-	MaxTurns     int      `yaml:"max_turns"`
-	MaxBudgetUSD float64  `yaml:"max_budget_usd"`
-	AllowedTools []string `yaml:"allowed_tools"`
-	WorkspaceDir string   `yaml:"workspace_dir"`
+	Command        string   `yaml:"command"`
+	MaxTurns       int      `yaml:"max_turns"`
+	MaxBudgetUSD   float64  `yaml:"max_budget_usd"`
+	AllowedTools   []string `yaml:"allowed_tools"`
+	WorkspaceDir   string   `yaml:"workspace_dir"`
+	TimeoutMinutes int      `yaml:"timeout_minutes"`
 }
 
 var envVarPattern = regexp.MustCompile(`\$\{(\w+)\}`)
@@ -116,6 +117,9 @@ func (c *Config) validate() error {
 	}
 	if c.Agent.WorkspaceDir == "" {
 		c.Agent.WorkspaceDir = "/tmp/vote-llm-workspaces"
+	}
+	if c.Agent.TimeoutMinutes == 0 {
+		c.Agent.TimeoutMinutes = 30
 	}
 	return nil
 }

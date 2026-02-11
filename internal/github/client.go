@@ -98,6 +98,22 @@ func (c *Client) CreatePullRequest(ctx context.Context, owner, repo, head, base,
 	return created, nil
 }
 
+// FindPullRequestByHead finds an open PR with the given head branch.
+// Returns nil if no matching PR is found.
+func (c *Client) FindPullRequestByHead(ctx context.Context, owner, repo, head string) (*gh.PullRequest, error) {
+	prs, _, err := c.gh.PullRequests.List(ctx, owner, repo, &gh.PullRequestListOptions{
+		Head:  owner + ":" + head,
+		State: "open",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list PRs for head %s: %w", head, err)
+	}
+	if len(prs) > 0 {
+		return prs[0], nil
+	}
+	return nil, nil
+}
+
 // GetDefaultBranch returns the default branch name for a repository.
 func (c *Client) GetDefaultBranch(ctx context.Context, owner, repo string) (string, error) {
 	r, _, err := c.gh.Repositories.Get(ctx, owner, repo)
