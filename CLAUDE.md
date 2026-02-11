@@ -7,24 +7,27 @@ A Go service that automates feature implementation for GitHub repos. When an iss
 1. **Webhook** — Listens for GitHub `issues` webhook events (labeled).
 2. **Approval trigger** — When an issue gets the configured "approved" label (e.g. `approved-for-dev`), the agent is triggered.
 3. **Agent flow** — For each approved issue:
-   - Adds `llm-in-progress` label
+   - Adds `llm-in-progress` label, removes `approved` label
    - Clones/updates the repo into a workspace
-   - Creates a branch `vote-llm/issue-{n}-{slug}`
-   - Runs `claude -p` with the issue as the prompt
-   - Commits, pushes, and creates a PR
+   - Creates a branch `vote-llm/issue-{n}-{slug}` from the repo's default branch
+   - Runs `claude -p` with the issue as the prompt (with configurable timeout, default 30 min)
+   - Commits, pushes (with `--force-with-lease`), and creates a PR
    - Adds `llm-pr-created` label, removes in-progress, comments with PR link
+   - On failure: comments with error details, removes in-progress label
 
 ## Project Structure
 
 ```
-cmd/server/main.go     # Entry point: flags, config, HTTP server, webhook forward (dev mode)
+cmd/server/main.go        # Entry point: flags, config, HTTP server, webhook forward (dev mode)
 internal/
-  agent/runner.go      # Orchestrates Claude Code: clone, branch, run claude, commit, PR
-  cli/flag.go          # CLI flags (--config, --dev, --owner, --repo)
-  config/config.go     # YAML config loading, env var expansion, validation
-  github/client.go     # GitHub API: issues, labels, comments, PRs, webhooks
-  github/webhook.go    # Webhook handler: validates payload, handles issues/labeled events
-  votes/tracker.go     # Vote counting (+1 reactions) — NOT currently wired into main flow
+  agent/runner.go         # Orchestrates Claude Code: clone, branch, run claude, commit, PR
+  cli/flag.go             # CLI flags (--config, --dev, --owner, --repo)
+  config/config.go        # YAML config loading, env var expansion, validation
+  github/client.go        # GitHub API: issues, labels, comments, PRs, webhooks
+  github/webhook.go       # Webhook handler: validates payload, handles issues/labeled events
+  logger/logger.go        # Structured logging with colored output (zap)
+  logger/logger_test.go   # Logger tests
+  votes/tracker.go        # Vote counting (+1 reactions) — NOT currently wired into main flow
 ```
 
 ## Configuration
@@ -33,7 +36,7 @@ internal/
 
 - **github.token**, **github.webhook_secret** — Env vars: `${GITHUB_TOKEN}`, `${WEBHOOK_SECRET}`
 - **repos** — Per-repo: owner, name, labels (feature_request, approved, in_progress, done), vote_threshold
-- **agent** — `command` (e.g. `claude`), max_turns, max_budget_usd, allowed_tools, workspace_dir
+- **agent** — `command` (e.g. `claude`), max_turns, max_budget_usd, allowed_tools, workspace_dir, timeout_minutes
 
 ## Dev Mode
 
@@ -56,8 +59,13 @@ go run ./cmd/server --dev --owner=didrikolofsson --repo=github-vote-llm
 ## Key Implementation Details
 
 - **Webhook validation**: Uses `gh.ValidatePayload` and `gh.ParseWebHook` from go-github.
+- **Duplicate prevention**: Webhook handler skips issues that already have the `in-progress` label.
 - **Agent workspace**: `{workspace_dir}/{owner}/{repo}/repo` — reused across runs; `git fetch` before new work.
 - **Branch naming**: `vote-llm/issue-{number}-{slugified-title}` (slug max 40 chars).
+- **Claude invocation**: `claude -p {prompt} --output-format json --allowedTools {tools} --max-turns {n} --max-budget-usd {n} --no-session-persistence`
+- **Existing PR handling**: If PR creation fails, `FindPullRequestByHead` looks up an existing open PR for the branch.
+- **Default branch**: Uses `GetDefaultBranch()` to discover the repo's default branch (not hardcoded to `main`).
+- **Logging**: Structured logging via `go.uber.org/zap` with colored console output and component hierarchy (e.g. `server.http`).
 - **github/client.RemoveLocalRepoWebhooks**: Deletes hooks with URL `https://webhook-forwarder.github.com/hook` (gh webhook forward); used to clean up before creating a new forward.
 
 ## Unused Code
