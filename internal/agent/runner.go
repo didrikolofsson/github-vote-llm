@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -144,7 +143,7 @@ func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogit
 			return "", fmt.Errorf("create PR: %w (also failed to find existing: %v)", err, findErr)
 		}
 		if existing != nil {
-			log.Printf("agent: PR already exists for branch %s, using %s", branchName, existing.GetHTMLURL())
+			r.log.Infow("PR already exists for branch, reusing", "branch", branchName, "pr", existing.GetHTMLURL())
 			return existing.GetHTMLURL(), nil
 		}
 		return "", fmt.Errorf("create PR: %w", err)
