@@ -17,19 +17,21 @@ import (
 	gh "github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/spinner"
+	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	gogithub "github.com/google/go-github/v68/github"
 )
 
 // Runner orchestrates Claude Code to implement approved features.
 type Runner struct {
-	client *gh.Client
+	client gh.ClientAPI
 	cfg    *config.AgentConfig
+	store  *store.Store
 	log    *logger.Logger
 }
 
 // NewRunner creates a new agent runner.
-func NewRunner(client *gh.Client, cfg *config.AgentConfig, log *logger.Logger) *Runner {
-	return &Runner{client: client, cfg: cfg, log: log.Named("agent")}
+func NewRunner(client gh.ClientAPI, cfg *config.AgentConfig, st *store.Store, log *logger.Logger) *Runner {
+	return &Runner{client: client, cfg: cfg, store: st, log: log.Named("agent")}
 }
 
 // claudeResult represents the JSON output from claude -p.
@@ -42,6 +44,40 @@ type claudeResult struct {
 func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Issue, repoCfg *config.RepoConfig) {
 	issueNum := issue.GetNumber()
 	r.log.Infow("starting work on issue", "issue", issueNum, "repo", owner+"/"+repo)
+
+	// Idempotency check via store
+	if r.store != nil {
+		canProcess, err := r.store.CanProcess(ctx, owner, repo, issueNum)
+		if err != nil {
+			r.log.Errorw("failed to check store", "error", err)
+			return
+		}
+		if !canProcess {
+			r.log.Infow("issue already processed, skipping", "issue", issueNum)
+			return
+		}
+	}
+
+	// Create execution record
+	var execID int64
+	branchName := fmt.Sprintf("vote-llm/issue-%d-%s", issueNum, slugify(issue.GetTitle()))
+	if r.store != nil {
+		var err error
+		execID, err = r.store.CreateExecution(ctx, &store.ExecutionRecord{
+			Owner:       owner,
+			Repo:        repo,
+			IssueNumber: issueNum,
+			Status:      "pending",
+			BranchName:  branchName,
+		})
+		if err != nil {
+			r.log.Errorw("failed to create execution record", "error", err)
+			return
+		}
+		if err := r.store.UpdateStatus(ctx, execID, "running", "", ""); err != nil {
+			r.log.Errorw("failed to update execution status", "error", err)
+		}
+	}
 
 	// Mark issue as in-progress
 	if err := r.client.AddLabel(ctx, owner, repo, issueNum, repoCfg.Labels.InProgress); err != nil {
@@ -58,7 +94,7 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 	implCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	prURL, err := r.implement(implCtx, owner, repo, issue)
+	prURL, err := r.implement(implCtx, owner, repo, issue, branchName)
 	if err != nil {
 		r.log.Errorw("failed to implement issue", "issue", issueNum, "error", err)
 		comment := fmt.Sprintf("**vote-llm**: Failed to implement this feature.\n\n```\n%s\n```", err)
@@ -67,6 +103,14 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 		}
 		if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, repoCfg.Labels.InProgress); err != nil {
 			r.log.Warnw("failed to remove in-progress label", "error", err)
+		}
+		if err := r.client.AddLabel(ctx, owner, repo, issueNum, repoCfg.Labels.Failed); err != nil {
+			r.log.Warnw("failed to add failed label", "error", err)
+		}
+		if r.store != nil {
+			if sErr := r.store.UpdateStatus(ctx, execID, "failed", "", err.Error()); sErr != nil {
+				r.log.Errorw("failed to update execution status", "error", sErr)
+			}
 		}
 		return
 	}
@@ -84,10 +128,16 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 		r.log.Warnw("failed to comment on issue", "error", err)
 	}
 
+	if r.store != nil {
+		if err := r.store.UpdateStatus(ctx, execID, "completed", prURL, ""); err != nil {
+			r.log.Errorw("failed to update execution status", "error", err)
+		}
+	}
+
 	r.log.Infow("successfully created PR", "issue", issueNum, "pr", prURL)
 }
 
-func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogithub.Issue) (string, error) {
+func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogithub.Issue, branchName string) (string, error) {
 	// Prepare workspace
 	workDir := filepath.Join(r.cfg.WorkspaceDir, owner, repo)
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
@@ -111,7 +161,6 @@ func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogit
 	}
 
 	// Create feature branch
-	branchName := fmt.Sprintf("vote-llm/issue-%d-%s", issue.GetNumber(), slugify(issue.GetTitle()))
 	if err := r.gitCheckoutNewBranch(ctx, repoDir, defaultBranch, branchName); err != nil {
 		return "", fmt.Errorf("create branch: %w", err)
 	}
@@ -134,7 +183,7 @@ func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogit
 
 	// Stage, commit, push
 	spinner.UpdateMessage(fmt.Sprintf("Pushing changes for issue #%d...", issue.GetNumber()))
-	if err := r.gitCommitAndPush(ctx, repoDir, branchName, issue.GetNumber(), issue.GetTitle()); err != nil {
+	if err := r.gitCommitAndPush(ctx, repoDir, branchName, issue.GetNumber(), issue.GetTitle(), owner, repo); err != nil {
 		return "", fmt.Errorf("commit and push: %w", err)
 	}
 
@@ -164,9 +213,22 @@ func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogit
 }
 
 func (r *Runner) cloneOrResetRepo(ctx context.Context, owner, repo, repoDir string) error {
+	// Get token for authenticated git operations
+	token, err := r.client.GetInstallationToken(ctx)
+	if err != nil {
+		return fmt.Errorf("get token: %w", err)
+	}
+	cloneURL := fmt.Sprintf("https://x-access-token:%s@github.com/%s/%s.git", token, owner, repo)
+
 	if _, err := os.Stat(filepath.Join(repoDir, ".git")); err == nil {
-		// Repo exists, pull latest
-		cmd := exec.CommandContext(ctx, "git", "fetch", "--all", "--prune")
+		// Repo exists — update remote URL with fresh token, then fetch
+		cmd := exec.CommandContext(ctx, "git", "remote", "set-url", "origin", cloneURL)
+		cmd.Dir = repoDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("git set-url: %s: %w", out, err)
+		}
+
+		cmd = exec.CommandContext(ctx, "git", "fetch", "--all", "--prune")
 		cmd.Dir = repoDir
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("git fetch: %s: %w", out, err)
@@ -175,7 +237,6 @@ func (r *Runner) cloneOrResetRepo(ctx context.Context, owner, repo, repoDir stri
 	}
 
 	// Clone fresh
-	cloneURL := fmt.Sprintf("https://github.com/%s/%s.git", owner, repo)
 	cmd := exec.CommandContext(ctx, "git", "clone", cloneURL, repoDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git clone: %s: %w", out, err)
@@ -272,7 +333,7 @@ func (r *Runner) gitHasChanges(ctx context.Context, repoDir string) (bool, error
 	return len(bytes.TrimSpace(out)) > 0, nil
 }
 
-func (r *Runner) gitCommitAndPush(ctx context.Context, repoDir, branch string, issueNum int, title string) error {
+func (r *Runner) gitCommitAndPush(ctx context.Context, repoDir, branch string, issueNum int, title, owner, repo string) error {
 	// Stage all changes
 	cmd := exec.CommandContext(ctx, "git", "add", "-A")
 	cmd.Dir = repoDir
@@ -286,6 +347,18 @@ func (r *Runner) gitCommitAndPush(ctx context.Context, repoDir, branch string, i
 	cmd.Dir = repoDir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git commit: %s: %w", out, err)
+	}
+
+	// Ensure remote URL has fresh token before push
+	token, err := r.client.GetInstallationToken(ctx)
+	if err != nil {
+		return fmt.Errorf("get token for push: %w", err)
+	}
+	pushURL := fmt.Sprintf("https://x-access-token:%s@github.com/%s/%s.git", token, owner, repo)
+	cmd = exec.CommandContext(ctx, "git", "remote", "set-url", "origin", pushURL)
+	cmd.Dir = repoDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git set-url for push: %s: %w", out, err)
 	}
 
 	// Push (force-with-lease: safe for bot-owned vote-llm/* branches, handles remote branch conflicts)

@@ -9,23 +9,28 @@ import (
 )
 
 // IssueApprovedHandler is called when an issue receives the approved label.
-type IssueApprovedHandler func(owner, repo string, issue *gh.Issue)
+type IssueApprovedHandler func(owner, repo string, issue *gh.Issue, installationID int64)
+
+// VoteCheckHandler is called when a vote check should be performed.
+type VoteCheckHandler func(owner, repo string, issue *gh.Issue, installationID int64)
 
 // WebhookHandler handles incoming GitHub webhook events.
 type WebhookHandler struct {
-	secret     []byte
-	cfg        *config.Config
-	onApproved IssueApprovedHandler
-	log        *logger.Logger
+	secret      []byte
+	cfg         *config.Config
+	onApproved  IssueApprovedHandler
+	onVoteCheck VoteCheckHandler
+	log         *logger.Logger
 }
 
 // NewWebhookHandler creates a new webhook handler.
-func NewWebhookHandler(cfg *config.Config, onApproved IssueApprovedHandler, log *logger.Logger) *WebhookHandler {
+func NewWebhookHandler(cfg *config.Config, onApproved IssueApprovedHandler, onVoteCheck VoteCheckHandler, log *logger.Logger) *WebhookHandler {
 	return &WebhookHandler{
-		secret:     []byte(cfg.GitHub.WebhookSecret),
-		cfg:        cfg,
-		onApproved: onApproved,
-		log:        log.Named("webhook"),
+		secret:      []byte(cfg.GitHub.WebhookSecret),
+		cfg:         cfg,
+		onApproved:  onApproved,
+		onVoteCheck: onVoteCheck,
+		log:         log.Named("webhook"),
 	}
 }
 
@@ -48,6 +53,8 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch e := event.(type) {
 	case *gh.IssuesEvent:
 		h.handleIssueEvent(e)
+	case *gh.IssueCommentEvent:
+		h.handleIssueCommentEvent(e)
 	default:
 		// Ignore unhandled event types
 	}
@@ -61,6 +68,10 @@ func (h *WebhookHandler) handleIssueEvent(e *gh.IssuesEvent) {
 	repo := e.GetRepo()
 	owner := repo.GetOwner().GetLogin()
 	repoName := repo.GetName()
+	installationID := int64(0)
+	if e.GetInstallation() != nil {
+		installationID = e.GetInstallation().GetID()
+	}
 
 	h.log.Infow("issues event", "action", action, "issue", issue.GetNumber(), "repo", owner+"/"+repoName)
 
@@ -72,12 +83,34 @@ func (h *WebhookHandler) handleIssueEvent(e *gh.IssuesEvent) {
 
 	switch action {
 	case "labeled":
-		h.handleLabeled(owner, repoName, issue, e.GetLabel(), repoConfig)
+		h.handleLabeled(owner, repoName, issue, e.GetLabel(), repoConfig, installationID)
 	}
 }
 
-func (h *WebhookHandler) handleLabeled(owner, repo string, issue *gh.Issue, label *gh.Label, repoConfig *config.RepoConfig) {
-	if label.GetName() != repoConfig.Labels.Approved {
+func (h *WebhookHandler) handleLabeled(owner, repo string, issue *gh.Issue, label *gh.Label, repoConfig *config.RepoConfig, installationID int64) {
+	labelName := label.GetName()
+
+	// When feature-request label is added, check if it already has enough votes
+	if labelName == repoConfig.Labels.FeatureRequest {
+		h.log.Infow("feature-request label added, checking votes", "issue", issue.GetNumber())
+		h.fireVoteCheck(owner, repo, issue, installationID)
+		return
+	}
+
+	if labelName != repoConfig.Labels.Approved {
+		return
+	}
+
+	// Guard: only process if issue has the feature-request label
+	hasFeatureRequest := false
+	for _, l := range issue.Labels {
+		if l.GetName() == repoConfig.Labels.FeatureRequest {
+			hasFeatureRequest = true
+			break
+		}
+	}
+	if !hasFeatureRequest {
+		h.log.Infow("approved label added but issue lacks feature-request label, skipping", "issue", issue.GetNumber())
 		return
 	}
 
@@ -97,7 +130,50 @@ func (h *WebhookHandler) handleLabeled(owner, repo string, issue *gh.Issue, labe
 					h.log.Errorw("panic in onApproved", "repo", owner+"/"+repo, "issue", issue.GetNumber(), "panic", r)
 				}
 			}()
-			h.onApproved(owner, repo, issue)
+			h.onApproved(owner, repo, issue, installationID)
 		}()
 	}
+}
+
+func (h *WebhookHandler) handleIssueCommentEvent(e *gh.IssueCommentEvent) {
+	if e.GetAction() != "created" {
+		return
+	}
+
+	issue := e.GetIssue()
+	repo := e.GetRepo()
+	owner := repo.GetOwner().GetLogin()
+	repoName := repo.GetName()
+	installationID := int64(0)
+	if e.GetInstallation() != nil {
+		installationID = e.GetInstallation().GetID()
+	}
+
+	repoConfig := h.cfg.FindRepo(owner, repoName)
+	if repoConfig == nil {
+		return
+	}
+
+	// Only check votes on issues with the feature-request label
+	for _, l := range issue.Labels {
+		if l.GetName() == repoConfig.Labels.FeatureRequest {
+			h.log.Infow("comment on feature-request issue, checking votes", "issue", issue.GetNumber(), "repo", owner+"/"+repoName)
+			h.fireVoteCheck(owner, repoName, issue, installationID)
+			return
+		}
+	}
+}
+
+func (h *WebhookHandler) fireVoteCheck(owner, repo string, issue *gh.Issue, installationID int64) {
+	if h.onVoteCheck == nil {
+		return
+	}
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				h.log.Errorw("panic in onVoteCheck", "repo", owner+"/"+repo, "issue", issue.GetNumber(), "panic", r)
+			}
+		}()
+		h.onVoteCheck(owner, repo, issue, installationID)
+	}()
 }

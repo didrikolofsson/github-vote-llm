@@ -15,6 +15,8 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	gh "github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
+	"github.com/didrikolofsson/github-vote-llm/internal/store"
+	"github.com/didrikolofsson/github-vote-llm/internal/votes"
 	gogithub "github.com/google/go-github/v68/github"
 )
 
@@ -32,19 +34,79 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	client := gh.NewClient(cfg.GitHub.Token, log)
-	runner := agent.NewRunner(client, &cfg.Agent, log)
+	// Open SQLite store
+	db, err := store.NewStore(cfg.Database.Path, log)
+	if err != nil {
+		log.Fatalf("failed to open store: %v", err)
+	}
+	defer db.Close()
 
-	onApproved := func(owner, repo string, issue *gogithub.Issue) {
+	// Auth setup: GitHub App or PAT
+	var clientFactory *gh.ClientFactory
+	var defaultClient gh.ClientAPI
+
+	if cfg.GitHub.AppID != 0 {
+		// GitHub App mode
+		factory, err := gh.NewClientFactory(gh.AppConfig{
+			AppID:          cfg.GitHub.AppID,
+			PrivateKeyPath: cfg.GitHub.PrivateKeyPath,
+			WebhookSecret:  cfg.GitHub.WebhookSecret,
+		}, log)
+		if err != nil {
+			log.Fatalf("failed to create GitHub App client factory: %v", err)
+		}
+		clientFactory = factory
+		log.Infow("using GitHub App auth", "appID", cfg.GitHub.AppID)
+	} else {
+		// PAT mode
+		defaultClient = gh.NewClient(cfg.GitHub.Token, log)
+		log.Infow("using PAT auth")
+	}
+
+	// getClient returns a ClientAPI for the given installation.
+	// In PAT mode, always returns the default client.
+	getClient := func(installationID int64) gh.ClientAPI {
+		if clientFactory != nil && installationID != 0 {
+			client, err := clientFactory.ClientForInstallation(installationID)
+			if err != nil {
+				log.Errorw("failed to create installation client, falling back to default", "installationID", installationID, "error", err)
+				return defaultClient
+			}
+			return client
+		}
+		return defaultClient
+	}
+
+	onApproved := func(owner, repo string, issue *gogithub.Issue, installationID int64) {
 		repoCfg := cfg.FindRepo(owner, repo)
 		if repoCfg == nil {
 			log.Infow("no config for repo, skipping", "repo", owner+"/"+repo)
 			return
 		}
+		client := getClient(installationID)
+		runner := agent.NewRunner(client, &cfg.Agent, db, log)
 		runner.Run(context.Background(), owner, repo, issue, repoCfg)
 	}
 
-	webhook := gh.NewWebhookHandler(cfg, onApproved, log)
+	onVoteCheck := func(owner, repo string, issue *gogithub.Issue, installationID int64) {
+		repoCfg := cfg.FindRepo(owner, repo)
+		if repoCfg == nil {
+			log.Infow("no config for repo, skipping vote check", "repo", owner+"/"+repo)
+			return
+		}
+		client := getClient(installationID)
+		tracker := votes.NewTracker(client, log)
+		met, err := tracker.CheckAndLabel(context.Background(), owner, repo, issue.GetNumber(), repoCfg)
+		if err != nil {
+			log.Errorw("vote check failed", "issue", issue.GetNumber(), "error", err)
+			return
+		}
+		if met {
+			log.Infow("vote threshold met", "issue", issue.GetNumber(), "repo", owner+"/"+repo)
+		}
+	}
+
+	webhook := gh.NewWebhookHandler(cfg, onApproved, onVoteCheck, log)
 
 	mux := http.NewServeMux()
 	mux.Handle("/webhook", webhook)
@@ -73,7 +135,9 @@ func main() {
 		if flags.DevRepo == "" {
 			log.Fatalf("--repo is required in dev mode (e.g. --repo=repo)")
 		}
-		ghCmd, err = startWebhookForward(client, flags.DevOwner, flags.DevRepo, cfg.Server.Port, cfg.GitHub.WebhookSecret)
+		// Dev mode uses PAT client for webhook forward cleanup
+		patClient := gh.NewClient(cfg.GitHub.Token, log)
+		ghCmd, err = startWebhookForward(patClient, flags.DevOwner, flags.DevRepo, cfg.Server.Port, cfg.GitHub.WebhookSecret)
 		if err != nil {
 			log.Fatalf("failed to start gh webhook forward: %v", err)
 		}

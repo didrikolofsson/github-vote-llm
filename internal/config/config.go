@@ -9,15 +9,18 @@ import (
 )
 
 type Config struct {
-	GitHub GitHubConfig `yaml:"github"`
-	Server ServerConfig `yaml:"server"`
-	Repos  []RepoConfig `yaml:"repos"`
-	Agent  AgentConfig  `yaml:"agent"`
+	GitHub   GitHubConfig   `yaml:"github"`
+	Server   ServerConfig   `yaml:"server"`
+	Repos    []RepoConfig   `yaml:"repos"`
+	Agent    AgentConfig    `yaml:"agent"`
+	Database DatabaseConfig `yaml:"database"`
 }
 
 type GitHubConfig struct {
-	Token         string `yaml:"token"`
-	WebhookSecret string `yaml:"webhook_secret"`
+	Token          string `yaml:"token"`
+	WebhookSecret  string `yaml:"webhook_secret"`
+	AppID          int64  `yaml:"app_id"`
+	PrivateKeyPath string `yaml:"private_key_path"`
 }
 
 type ServerConfig struct {
@@ -36,6 +39,12 @@ type LabelConfig struct {
 	Approved       string `yaml:"approved"`
 	InProgress     string `yaml:"in_progress"`
 	Done           string `yaml:"done"`
+	Candidate      string `yaml:"candidate"`
+	Failed         string `yaml:"failed"`
+}
+
+type DatabaseConfig struct {
+	Path string `yaml:"path"`
 }
 
 type AgentConfig struct {
@@ -74,11 +83,16 @@ func Load(path string) (*Config, error) {
 }
 
 func (c *Config) validate() error {
-	if c.GitHub.Token == "" {
-		return fmt.Errorf("github.token is required (set GITHUB_TOKEN)")
+	hasToken := c.GitHub.Token != ""
+	hasApp := c.GitHub.AppID != 0 && c.GitHub.PrivateKeyPath != ""
+	if !hasToken && !hasApp {
+		return fmt.Errorf("github: either token (set GITHUB_TOKEN) or app_id + private_key_path is required")
 	}
 	if c.GitHub.WebhookSecret == "" {
 		return fmt.Errorf("github.webhook_secret is required (set WEBHOOK_SECRET)")
+	}
+	if c.Database.Path == "" {
+		c.Database.Path = "vote-llm.db"
 	}
 	if c.Server.Port == 0 {
 		c.Server.Port = 8080
@@ -101,6 +115,12 @@ func (c *Config) validate() error {
 		}
 		if r.Labels.Done == "" {
 			c.Repos[i].Labels.Done = "llm-pr-created"
+		}
+		if r.Labels.Candidate == "" {
+			c.Repos[i].Labels.Candidate = "candidate"
+		}
+		if r.Labels.Failed == "" {
+			c.Repos[i].Labels.Failed = "llm-failed"
 		}
 		if r.VoteThreshold == 0 {
 			c.Repos[i].VoteThreshold = 5

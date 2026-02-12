@@ -8,18 +8,41 @@ import (
 	gh "github.com/google/go-github/v68/github"
 )
 
+// ClientAPI is the interface for GitHub operations needed by vote-llm.
+type ClientAPI interface {
+	GetIssue(ctx context.Context, owner, repo string, number int) (*gh.Issue, error)
+	GetReactionCount(ctx context.Context, owner, repo string, issueNumber int) (int, error)
+	AddLabel(ctx context.Context, owner, repo string, issueNumber int, label string) error
+	RemoveLabel(ctx context.Context, owner, repo string, issueNumber int, label string) error
+	CreateComment(ctx context.Context, owner, repo string, issueNumber int, body string) error
+	CreatePullRequest(ctx context.Context, owner, repo, head, base, title, body string) (*gh.PullRequest, error)
+	FindPullRequestByHead(ctx context.Context, owner, repo, head string) (*gh.PullRequest, error)
+	GetDefaultBranch(ctx context.Context, owner, repo string) (string, error)
+	GetInstallationToken(ctx context.Context) (string, error)
+}
+
+// Compile-time check that Client implements ClientAPI.
+var _ ClientAPI = (*Client)(nil)
+
 // Client wraps the go-github client with methods needed by vote-llm.
 type Client struct {
-	gh  *gh.Client
-	log *logger.Logger
+	gh    *gh.Client
+	token string
+	log   *logger.Logger
 }
 
 // NewClient creates a Client authenticated with the given token.
 func NewClient(token string, log *logger.Logger) *Client {
 	return &Client{
-		gh:  gh.NewClient(nil).WithAuthToken(token),
-		log: log.Named("github"),
+		gh:    gh.NewClient(nil).WithAuthToken(token),
+		token: token,
+		log:   log.Named("github"),
 	}
+}
+
+// GetInstallationToken returns the PAT token (for PAT-based auth).
+func (c *Client) GetInstallationToken(_ context.Context) (string, error) {
+	return c.token, nil
 }
 
 // GetIssue fetches an issue by number.
