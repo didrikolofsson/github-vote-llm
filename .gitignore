@@ -12,3 +12,6 @@ vote-llm
 
 # OS
 .DS_Store
+
+# Misc
+vote-llm.db
