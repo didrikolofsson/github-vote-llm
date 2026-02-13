@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
@@ -63,21 +62,19 @@ func main() {
 
 	serverLog := log.Named("server")
 
-	// Dev mode: start gh webhook forward as a subprocess
-	var ghCmd *exec.Cmd
+	// Dev mode: start gh webhook forward with automatic reconnection
+	var fwd *webhookForwarder
 	if flags.DevMode {
-		devLog := log.Named("dev")
 		if flags.DevOwner == "" {
 			log.Fatalf("--owner is required in dev mode (e.g. --owner=owner)")
 		}
 		if flags.DevRepo == "" {
 			log.Fatalf("--repo is required in dev mode (e.g. --repo=repo)")
 		}
-		ghCmd, err = startWebhookForward(client, flags.DevOwner, flags.DevRepo, cfg.Server.Port, cfg.GitHub.WebhookSecret)
-		if err != nil {
+		fwd = newWebhookForwarder(client, flags.DevOwner, flags.DevRepo, cfg.Server.Port, cfg.GitHub.WebhookSecret, log)
+		if err := fwd.start(context.Background()); err != nil {
 			log.Fatalf("failed to start gh webhook forward: %v", err)
 		}
-		devLog.Infow("started gh webhook forward", "repo", flags.DevRepo)
 	}
 
 	// Graceful shutdown
@@ -94,10 +91,9 @@ func main() {
 	<-stop
 	serverLog.Infow("shutting down")
 
-	if ghCmd != nil && ghCmd.Process != nil {
+	if fwd != nil {
 		log.Named("dev").Infow("stopping gh webhook forward")
-		ghCmd.Process.Signal(syscall.SIGTERM)
-		ghCmd.Wait()
+		fwd.stop()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -109,26 +105,3 @@ func main() {
 	serverLog.Infow("stopped")
 }
 
-func startWebhookForward(client *gh.Client, owner, repo string, port int, secret string) (*exec.Cmd, error) {
-	if err := client.RemoveLocalRepoWebhooks(context.Background(), owner, repo, port); err != nil {
-		return nil, fmt.Errorf("remove local repo webhooks: %w", err)
-	}
-
-	args := []string{
-		"webhook", "forward",
-		"--repo=" + fmt.Sprintf("%s/%s", owner, repo),
-		"--events=issues,issue_comment",
-		fmt.Sprintf("--url=http://localhost:%d/webhook", port),
-		"--secret=" + secret,
-	}
-
-	cmd := exec.Command("gh", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start gh: %w", err)
-	}
-
-	return cmd, nil
-}
