@@ -65,14 +65,18 @@ func main() {
 
 	// getClient returns a ClientAPI for the given installation.
 	// In PAT mode, always returns the default client.
+	// Returns nil if no client could be created.
 	getClient := func(installationID int64) gh.ClientAPI {
 		if clientFactory != nil && installationID != 0 {
 			client, err := clientFactory.ClientForInstallation(installationID)
 			if err != nil {
-				log.Errorw("failed to create installation client, falling back to default", "installationID", installationID, "error", err)
-				return defaultClient
+				log.Errorw("failed to create installation client", "installationID", installationID, "error", err)
+				return nil
 			}
 			return client
+		}
+		if defaultClient == nil {
+			log.Errorw("no client available (App mode requires installation ID)", "installationID", installationID)
 		}
 		return defaultClient
 	}
@@ -84,6 +88,10 @@ func main() {
 			return
 		}
 		client := getClient(installationID)
+		if client == nil {
+			log.Errorw("no GitHub client available, skipping issue", "issue", issue.GetNumber(), "repo", owner+"/"+repo)
+			return
+		}
 		runner := agent.NewRunner(client, &cfg.Agent, db, log)
 		runner.Run(context.Background(), owner, repo, issue, repoCfg)
 	}
@@ -95,6 +103,10 @@ func main() {
 			return
 		}
 		client := getClient(installationID)
+		if client == nil {
+			log.Errorw("no GitHub client available, skipping vote check", "issue", issue.GetNumber(), "repo", owner+"/"+repo)
+			return
+		}
 		tracker := votes.NewTracker(client, log)
 		met, err := tracker.CheckAndLabel(context.Background(), owner, repo, issue.GetNumber(), repoCfg)
 		if err != nil {
