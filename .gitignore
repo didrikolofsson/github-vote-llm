@@ -2,6 +2,9 @@
 vote-llm
 *.exe
 
+# Build
+/tmp/
+
 # Environment
 .env
 
@@ -15,3 +18,4 @@ vote-llm
 
 # Misc
 vote-llm.db
+vote-llm.db*
