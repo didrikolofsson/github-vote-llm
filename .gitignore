@@ -6,7 +6,7 @@ vote-llm
 /tmp/
 
 # Environment
-.env
+**/.env*
 
 # IDE
 .idea/
@@ -19,3 +19,4 @@ vote-llm
 # Misc
 vote-llm.db
 vote-llm.db*
+*.pem

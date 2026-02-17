@@ -4,7 +4,7 @@
 **/*.exe
 
 # Environment
-**/.env
+**/.env*
 
 # IDE
 **/.idea
@@ -17,3 +17,4 @@
 # Misc
 **/vote-llm.db
 fly.toml
+*.pem

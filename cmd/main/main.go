@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -26,13 +25,10 @@ func handleGithubWebhook(c *gin.Context) {
 func main() {
 	if gin.Mode() == gin.DebugMode {
 		// Only load .env file in debug mode, expect env vars in production
-		if err := godotenv.Load(); err != nil {
+		if err := godotenv.Load(".env.development"); err != nil {
 			log.Fatalf("failed to load .env file: %v", err)
 		}
 	}
-
-	log := logger.New()
-	defer log.Sync()
 
 	router := gin.Default()
 	router.SetTrustedProxies(nil)
