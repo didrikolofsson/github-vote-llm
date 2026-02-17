@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/agent"
-	"github.com/didrikolofsson/github-vote-llm/internal/cli"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	gh "github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
@@ -24,12 +22,12 @@ func main() {
 	log := logger.New()
 	defer log.Sync()
 
-	flags, err := cli.ParseFlags()
-	if err != nil {
-		log.Fatalf("failed to parse flags: %v", err)
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		configPath = "config.yaml"
 	}
 
-	cfg, err := config.Load(flags.ConfigPath)
+	cfg, err := config.Load(configPath)
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
@@ -137,28 +135,9 @@ func main() {
 
 	serverLog := log.Named("server")
 
-	// Dev mode: start gh webhook forward as a subprocess
-	var ghCmd *exec.Cmd
-	if flags.DevMode {
-		devLog := log.Named("dev")
-		if flags.DevOwner == "" {
-			log.Fatalf("--owner is required in dev mode (e.g. --owner=owner)")
-		}
-		if flags.DevRepo == "" {
-			log.Fatalf("--repo is required in dev mode (e.g. --repo=repo)")
-		}
-		// Dev mode uses PAT client for webhook forward cleanup
-		patClient := gh.NewClient(cfg.GitHub.Token, log)
-		ghCmd, err = startWebhookForward(patClient, flags.DevOwner, flags.DevRepo, cfg.Server.Port, cfg.GitHub.WebhookSecret)
-		if err != nil {
-			log.Fatalf("failed to start gh webhook forward: %v", err)
-		}
-		devLog.Infow("started gh webhook forward", "repo", flags.DevRepo)
-	}
-
 	// Graceful shutdown
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	go func() {
 		serverLog.Infow("listening", "addr", addr)
@@ -167,44 +146,14 @@ func main() {
 		}
 	}()
 
-	<-stop
+	<-ctx.Done()
 	serverLog.Infow("shutting down")
 
-	if ghCmd != nil && ghCmd.Process != nil {
-		log.Named("dev").Infow("stopping gh webhook forward")
-		ghCmd.Process.Signal(syscall.SIGTERM)
-		ghCmd.Wait()
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		serverLog.Errorw("shutdown error", "error", err)
 	}
 
 	serverLog.Infow("stopped")
-}
-
-func startWebhookForward(client *gh.Client, owner, repo string, port int, secret string) (*exec.Cmd, error) {
-	if err := client.RemoveLocalRepoWebhooks(context.Background(), owner, repo, port); err != nil {
-		return nil, fmt.Errorf("remove local repo webhooks: %w", err)
-	}
-
-	args := []string{
-		"webhook", "forward",
-		"--repo=" + fmt.Sprintf("%s/%s", owner, repo),
-		"--events=issues,issue_comment",
-		fmt.Sprintf("--url=http://localhost:%d/webhook", port),
-		"--secret=" + secret,
-	}
-
-	cmd := exec.Command("gh", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start gh: %w", err)
-	}
-
-	return cmd, nil
 }

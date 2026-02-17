@@ -2,8 +2,8 @@ github:
   token: "${GITHUB_TOKEN}"
   webhook_secret: "${WEBHOOK_SECRET}"
   # GitHub App auth (alternative to token):
-  # app_id: 123456
-  # private_key_path: "/path/to/private-key.pem"
+  app_id: 2883277
+  private_key_path: "/etc/vote-llm/app-key.pem"
 
 server:
   port: 8080

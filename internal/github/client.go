@@ -146,28 +146,3 @@ func (c *Client) GetDefaultBranch(ctx context.Context, owner, repo string) (stri
 	return r.GetDefaultBranch(), nil
 }
 
-func (c *Client) ListRepoWebhooks(ctx context.Context, owner, repo string) ([]*gh.Hook, error) {
-	hooks, _, err := c.gh.Repositories.ListHooks(ctx, owner, repo, nil)
-	if err != nil {
-		return nil, fmt.Errorf("list repo webhooks: %w", err)
-	}
-	return hooks, nil
-}
-
-func (c *Client) RemoveLocalRepoWebhooks(ctx context.Context, owner, repo string, port int) error {
-	hooks, err := c.ListRepoWebhooks(ctx, owner, repo)
-	if err != nil {
-		return fmt.Errorf("list repo webhooks: %w", err)
-	}
-	for _, hook := range hooks {
-		hookConfig := hook.GetConfig()
-		if *hookConfig.URL == "https://webhook-forwarder.github.com/hook" {
-			c.log.Infow("removing local repo webhook", "hookID", hook.GetID())
-			_, err := c.gh.Repositories.DeleteHook(ctx, owner, repo, hook.GetID())
-			if err != nil {
-				return fmt.Errorf("delete repo webhook: %w", err)
-			}
-		}
-	}
-	return nil
-}

@@ -1,0 +1,19 @@
+# flyctl launch added from .gitignore
+# Binaries
+**/vote-llm
+**/*.exe
+
+# Environment
+**/.env
+
+# IDE
+**/.idea
+**/.vscode
+**/*.swp
+
+# OS
+**/.DS_Store
+
+# Misc
+**/vote-llm.db
+fly.toml
