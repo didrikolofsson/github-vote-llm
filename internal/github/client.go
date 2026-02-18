@@ -6,20 +6,52 @@ import (
 
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	gh "github.com/google/go-github/v68/github"
+	"golang.org/x/oauth2"
 )
 
-// Client wraps the go-github client with methods needed by vote-llm.
-type Client struct {
-	gh  *gh.Client
-	log *logger.Logger
+// ClientAPI is the interface for GitHub operations needed by vote-llm.
+type ClientAPI interface {
+	GetIssue(ctx context.Context, owner, repo string, number int) (*gh.Issue, error)
+	GetReactionCount(ctx context.Context, owner, repo string, issueNumber int) (int, error)
+	AddLabel(ctx context.Context, owner, repo string, issueNumber int, label string) error
+	RemoveLabel(ctx context.Context, owner, repo string, issueNumber int, label string) error
+	CreateComment(ctx context.Context, owner, repo string, issueNumber int, body string) error
+	CreatePullRequest(ctx context.Context, owner, repo, head, base, title, body string) (*gh.PullRequest, error)
+	FindPullRequestByHead(ctx context.Context, owner, repo, head string) (*gh.PullRequest, error)
+	GetDefaultBranch(ctx context.Context, owner, repo string) (string, error)
+	GetInstallationToken(ctx context.Context) (string, error)
 }
 
-// NewClient creates a Client authenticated with the given token.
-func NewClient(token string, log *logger.Logger) *Client {
-	return &Client{
-		gh:  gh.NewClient(nil).WithAuthToken(token),
-		log: log.Named("github"),
+// Compile-time check that Client implements ClientAPI.
+var _ ClientAPI = (*Client)(nil)
+
+// Client implements ClientAPI using GitHub App installation tokens.
+type Client struct {
+	gh          *gh.Client
+	tokenSource oauth2.TokenSource
+	log         *logger.Logger
+}
+
+// NewClient creates a Client for a specific GitHub App installation.
+func NewClient(installationID int64, factory *ClientFactory) (*Client, error) {
+	client, tokenSource, err := factory.clientForInstallation(installationID)
+	if err != nil {
+		return nil, err
 	}
+	return &Client{
+		gh:          client,
+		tokenSource: tokenSource,
+		log:         factory.log,
+	}, nil
+}
+
+// GetInstallationToken returns a fresh installation token for git operations.
+func (c *Client) GetInstallationToken(ctx context.Context) (string, error) {
+	token, err := c.tokenSource.Token()
+	if err != nil {
+		return "", fmt.Errorf("get installation token: %w", err)
+	}
+	return token.AccessToken, nil
 }
 
 // GetIssue fetches an issue by number.
@@ -121,30 +153,4 @@ func (c *Client) GetDefaultBranch(ctx context.Context, owner, repo string) (stri
 		return "", fmt.Errorf("get repo %s/%s: %w", owner, repo, err)
 	}
 	return r.GetDefaultBranch(), nil
-}
-
-func (c *Client) ListRepoWebhooks(ctx context.Context, owner, repo string) ([]*gh.Hook, error) {
-	hooks, _, err := c.gh.Repositories.ListHooks(ctx, owner, repo, nil)
-	if err != nil {
-		return nil, fmt.Errorf("list repo webhooks: %w", err)
-	}
-	return hooks, nil
-}
-
-func (c *Client) RemoveLocalRepoWebhooks(ctx context.Context, owner, repo string, port int) error {
-	hooks, err := c.ListRepoWebhooks(ctx, owner, repo)
-	if err != nil {
-		return fmt.Errorf("list repo webhooks: %w", err)
-	}
-	for _, hook := range hooks {
-		hookConfig := hook.GetConfig()
-		if *hookConfig.URL == "https://webhook-forwarder.github.com/hook" {
-			c.log.Infow("removing local repo webhook", "hookID", hook.GetID())
-			_, err := c.gh.Repositories.DeleteHook(ctx, owner, repo, hook.GetID())
-			if err != nil {
-				return fmt.Errorf("delete repo webhook: %w", err)
-			}
-		}
-	}
-	return nil
 }

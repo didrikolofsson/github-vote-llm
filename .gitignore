@@ -2,8 +2,11 @@
 vote-llm
 *.exe
 
+# Build
+/tmp/
+
 # Environment
-.env
+**/.env*
 
 # IDE
 .idea/
@@ -12,3 +15,8 @@ vote-llm
 
 # OS
 .DS_Store
+
+# Misc
+vote-llm.db
+vote-llm.db*
+*.pem
