@@ -13,23 +13,39 @@ import (
 	"strings"
 	"time"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	gh "github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/spinner"
 	gogithub "github.com/google/go-github/v68/github"
 )
 
+// Hardcoded agent defaults.
+const (
+	agentCommand        = "claude"
+	agentMaxTurns       = 25
+	agentMaxBudgetUSD   = 5.00
+	agentTimeoutMinutes = 30
+	agentWorkspaceDir   = "/tmp/vote-llm-workspaces"
+
+	// Label names.
+	LabelApproved       = "approved-for-dev"
+	LabelFeatureRequest = "feature-request"
+	LabelInProgress     = "llm-in-progress"
+	LabelDone           = "llm-pr-created"
+	LabelFailed         = "llm-failed"
+)
+
+var agentAllowedTools = []string{"Read", "Edit", "Write", "Bash", "Glob", "Grep"}
+
 // Runner orchestrates Claude Code to implement approved features.
 type Runner struct {
 	client gh.ClientAPI
-	cfg    *config.AgentConfig
 	log    *logger.Logger
 }
 
 // NewRunner creates a new agent runner.
-func NewRunner(client gh.ClientAPI, cfg *config.AgentConfig, log *logger.Logger) *Runner {
-	return &Runner{client: client, cfg: cfg, log: log.Named("agent")}
+func NewRunner(client gh.ClientAPI, log *logger.Logger) *Runner {
+	return &Runner{client: client, log: log.Named("agent")}
 }
 
 // claudeResult represents the JSON output from claude -p.
@@ -39,24 +55,24 @@ type claudeResult struct {
 }
 
 // Run implements a feature request: clones repo, runs Claude Code, creates a PR.
-func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Issue, repoCfg *config.RepoConfig) {
+func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Issue) {
 	issueNum := issue.GetNumber()
 	r.log.Infow("starting work on issue", "issue", issueNum, "repo", owner+"/"+repo)
 
 	branchName := fmt.Sprintf("vote-llm/issue-%d-%s", issueNum, slugify(issue.GetTitle()))
 
 	// Mark issue as in-progress
-	if err := r.client.AddLabel(ctx, owner, repo, issueNum, repoCfg.Labels.InProgress); err != nil {
+	if err := r.client.AddLabel(ctx, owner, repo, issueNum, LabelInProgress); err != nil {
 		r.log.Warnw("failed to add in-progress label", "error", err)
 	}
 
 	// Remove approved label to prevent re-triggering
-	if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, repoCfg.Labels.Approved); err != nil {
+	if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, LabelApproved); err != nil {
 		r.log.Warnw("failed to remove approved label", "error", err)
 	}
 
 	// Run with timeout
-	timeout := time.Duration(r.cfg.TimeoutMinutes) * time.Minute
+	timeout := time.Duration(agentTimeoutMinutes) * time.Minute
 	implCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -67,20 +83,20 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 		if cErr := r.client.CreateComment(ctx, owner, repo, issueNum, comment); cErr != nil {
 			r.log.Warnw("failed to comment on issue", "error", cErr)
 		}
-		if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, repoCfg.Labels.InProgress); err != nil {
+		if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, LabelInProgress); err != nil {
 			r.log.Warnw("failed to remove in-progress label", "error", err)
 		}
-		if err := r.client.AddLabel(ctx, owner, repo, issueNum, repoCfg.Labels.Failed); err != nil {
+		if err := r.client.AddLabel(ctx, owner, repo, issueNum, LabelFailed); err != nil {
 			r.log.Warnw("failed to add failed label", "error", err)
 		}
 		return
 	}
 
 	// Mark issue as done and comment with PR link
-	if err := r.client.AddLabel(ctx, owner, repo, issueNum, repoCfg.Labels.Done); err != nil {
+	if err := r.client.AddLabel(ctx, owner, repo, issueNum, LabelDone); err != nil {
 		r.log.Warnw("failed to add done label", "error", err)
 	}
-	if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, repoCfg.Labels.InProgress); err != nil {
+	if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, LabelInProgress); err != nil {
 		r.log.Warnw("failed to remove in-progress label", "error", err)
 	}
 
@@ -94,7 +110,7 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 
 func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogithub.Issue, branchName string) (string, error) {
 	// Prepare workspace
-	workDir := filepath.Join(r.cfg.WorkspaceDir, owner, repo)
+	workDir := filepath.Join(agentWorkspaceDir, owner, repo)
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
 		return "", fmt.Errorf("create workspace dir: %w", err)
 	}
@@ -249,13 +265,13 @@ func (r *Runner) runClaude(ctx context.Context, repoDir, prompt string) error {
 	args := []string{
 		"-p", prompt,
 		"--output-format", "json",
-		"--allowedTools", strings.Join(r.cfg.AllowedTools, ","),
-		"--max-turns", strconv.Itoa(r.cfg.MaxTurns),
-		"--max-budget-usd", fmt.Sprintf("%.2f", r.cfg.MaxBudgetUSD),
+		"--allowedTools", strings.Join(agentAllowedTools, ","),
+		"--max-turns", strconv.Itoa(agentMaxTurns),
+		"--max-budget-usd", fmt.Sprintf("%.2f", agentMaxBudgetUSD),
 		"--no-session-persistence",
 	}
 
-	cmd := exec.CommandContext(ctx, r.cfg.Command, args...)
+	cmd := exec.CommandContext(ctx, agentCommand, args...)
 	cmd.Dir = repoDir
 
 	var stdout, stderr bytes.Buffer
