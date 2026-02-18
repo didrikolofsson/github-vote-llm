@@ -5,18 +5,13 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/didrikolofsson/github-vote-llm/internal/handlers"
+	"github.com/didrikolofsson/github-vote-llm/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
 
 func healthCheck(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"status": "ok",
-	})
-}
-
-func handleGithubWebhook(c *gin.Context) {
-	log.Println("Received GitHub webhook")
 	c.JSON(http.StatusOK, gin.H{
 		"status": "ok",
 	})
@@ -30,11 +25,17 @@ func main() {
 		}
 	}
 
-	router := gin.Default()
+	router := gin.New()
 	router.SetTrustedProxies(nil)
 
 	router.GET("/health", healthCheck)
-	router.POST("/github/webhook", handleGithubWebhook)
+
+	// Webhook endpoint
+	webhookHandlers := handlers.NewWebhookHandler()
+
+	webhooks := router.Group("/github")
+	webhooks.Use(middleware.ValidateSignature())
+	webhooks.POST("/webhook", webhookHandlers.HandleGithubWebhook)
 
 	router.Run(":" + os.Getenv("PORT"))
 }
@@ -52,51 +53,24 @@ func main() {
 // 	log.Fatalf("failed to load config: %v", err)
 // }
 
-// // Open SQLite store
-// db, err := store.NewStore(cfg.Database.Path, log)
+// // Auth setup: GitHub App
+// clientFactory, err := gh.NewClientFactory(gh.AppConfig{
+// 	AppID:          cfg.GitHub.AppID,
+// 	PrivateKeyPath: cfg.GitHub.PrivateKeyPath,
+// 	WebhookSecret:  cfg.GitHub.WebhookSecret,
+// }, log)
 // if err != nil {
-// 	log.Fatalf("failed to open store: %v", err)
-// }
-// defer db.Close()
-
-// // Auth setup: GitHub App or PAT
-// var clientFactory *gh.ClientFactory
-// var defaultClient gh.ClientAPI
-
-// if cfg.GitHub.AppID != 0 {
-// 	// GitHub App mode
-// 	factory, err := gh.NewClientFactory(gh.AppConfig{
-// 		AppID:          cfg.GitHub.AppID,
-// 		PrivateKeyPath: cfg.GitHub.PrivateKeyPath,
-// 		WebhookSecret:  cfg.GitHub.WebhookSecret,
-// 	}, log)
-// 	if err != nil {
-// 		log.Fatalf("failed to create GitHub App client factory: %v", err)
-// 	}
-// 	clientFactory = factory
-// 	log.Infow("using GitHub App auth", "appID", cfg.GitHub.AppID)
-// } else {
-// 	// PAT mode
-// 	defaultClient = gh.NewClient(cfg.GitHub.Token, log)
-// 	log.Infow("using PAT auth")
+// 	log.Fatalf("failed to create GitHub App client factory: %v", err)
 // }
 
 // // getClient returns a ClientAPI for the given installation.
-// // In PAT mode, always returns the default client.
-// // Returns nil if no client could be created.
 // getClient := func(installationID int64) gh.ClientAPI {
-// 	if clientFactory != nil && installationID != 0 {
-// 		client, err := clientFactory.ClientForInstallation(installationID)
-// 		if err != nil {
-// 			log.Errorw("failed to create installation client", "installationID", installationID, "error", err)
-// 			return nil
-// 		}
-// 		return client
+// 	client, err := gh.NewClient(installationID, clientFactory)
+// 	if err != nil {
+// 		log.Errorw("failed to create installation client", "installationID", installationID, "error", err)
+// 		return nil
 // 	}
-// 	if defaultClient == nil {
-// 		log.Errorw("no client available (App mode requires installation ID)", "installationID", installationID)
-// 	}
-// 	return defaultClient
+// 	return client
 // }
 
 // onApproved := func(owner, repo string, issue *gogithub.Issue, installationID int64) {
@@ -110,7 +84,7 @@ func main() {
 // 		log.Errorw("no GitHub client available, skipping issue", "issue", issue.GetNumber(), "repo", owner+"/"+repo)
 // 		return
 // 	}
-// 	runner := agent.NewRunner(client, &cfg.Agent, db, log)
+// 	runner := agent.NewRunner(client, &cfg.Agent, log)
 // 	runner.Run(context.Background(), owner, repo, issue, repoCfg)
 // }
 

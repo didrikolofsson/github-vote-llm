@@ -17,7 +17,6 @@ import (
 	gh "github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/spinner"
-	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	gogithub "github.com/google/go-github/v68/github"
 )
 
@@ -25,13 +24,12 @@ import (
 type Runner struct {
 	client gh.ClientAPI
 	cfg    *config.AgentConfig
-	store  *store.Store
 	log    *logger.Logger
 }
 
 // NewRunner creates a new agent runner.
-func NewRunner(client gh.ClientAPI, cfg *config.AgentConfig, st *store.Store, log *logger.Logger) *Runner {
-	return &Runner{client: client, cfg: cfg, store: st, log: log.Named("agent")}
+func NewRunner(client gh.ClientAPI, cfg *config.AgentConfig, log *logger.Logger) *Runner {
+	return &Runner{client: client, cfg: cfg, log: log.Named("agent")}
 }
 
 // claudeResult represents the JSON output from claude -p.
@@ -45,39 +43,7 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 	issueNum := issue.GetNumber()
 	r.log.Infow("starting work on issue", "issue", issueNum, "repo", owner+"/"+repo)
 
-	// Idempotency check via store
-	if r.store != nil {
-		canProcess, err := r.store.CanProcess(ctx, owner, repo, issueNum)
-		if err != nil {
-			r.log.Errorw("failed to check store", "error", err)
-			return
-		}
-		if !canProcess {
-			r.log.Infow("issue already processed, skipping", "issue", issueNum)
-			return
-		}
-	}
-
-	// Create execution record
-	var execID int64
 	branchName := fmt.Sprintf("vote-llm/issue-%d-%s", issueNum, slugify(issue.GetTitle()))
-	if r.store != nil {
-		var err error
-		execID, err = r.store.CreateExecution(ctx, &store.ExecutionRecord{
-			Owner:       owner,
-			Repo:        repo,
-			IssueNumber: issueNum,
-			Status:      "pending",
-			BranchName:  branchName,
-		})
-		if err != nil {
-			r.log.Errorw("failed to create execution record", "error", err)
-			return
-		}
-		if err := r.store.UpdateStatus(ctx, execID, "running", "", ""); err != nil {
-			r.log.Errorw("failed to update execution status", "error", err)
-		}
-	}
 
 	// Mark issue as in-progress
 	if err := r.client.AddLabel(ctx, owner, repo, issueNum, repoCfg.Labels.InProgress); err != nil {
@@ -107,11 +73,6 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 		if err := r.client.AddLabel(ctx, owner, repo, issueNum, repoCfg.Labels.Failed); err != nil {
 			r.log.Warnw("failed to add failed label", "error", err)
 		}
-		if r.store != nil {
-			if sErr := r.store.UpdateStatus(ctx, execID, "failed", "", err.Error()); sErr != nil {
-				r.log.Errorw("failed to update execution status", "error", sErr)
-			}
-		}
 		return
 	}
 
@@ -126,12 +87,6 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 	comment := fmt.Sprintf("**vote-llm**: A PR has been created for this feature request: %s\n\nPlease review the changes.", prURL)
 	if err := r.client.CreateComment(ctx, owner, repo, issueNum, comment); err != nil {
 		r.log.Warnw("failed to comment on issue", "error", err)
-	}
-
-	if r.store != nil {
-		if err := r.store.UpdateStatus(ctx, execID, "completed", prURL, ""); err != nil {
-			r.log.Errorw("failed to update execution status", "error", err)
-		}
 	}
 
 	r.log.Infow("successfully created PR", "issue", issueNum, "pr", prURL)

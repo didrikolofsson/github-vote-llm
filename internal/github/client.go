@@ -6,6 +6,7 @@ import (
 
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	gh "github.com/google/go-github/v68/github"
+	"golang.org/x/oauth2"
 )
 
 // ClientAPI is the interface for GitHub operations needed by vote-llm.
@@ -24,25 +25,33 @@ type ClientAPI interface {
 // Compile-time check that Client implements ClientAPI.
 var _ ClientAPI = (*Client)(nil)
 
-// Client wraps the go-github client with methods needed by vote-llm.
+// Client implements ClientAPI using GitHub App installation tokens.
 type Client struct {
-	gh    *gh.Client
-	token string
-	log   *logger.Logger
+	gh          *gh.Client
+	tokenSource oauth2.TokenSource
+	log         *logger.Logger
 }
 
-// NewClient creates a Client authenticated with the given token.
-func NewClient(token string, log *logger.Logger) *Client {
-	return &Client{
-		gh:    gh.NewClient(nil).WithAuthToken(token),
-		token: token,
-		log:   log.Named("github"),
+// NewClient creates a Client for a specific GitHub App installation.
+func NewClient(installationID int64, factory *ClientFactory) (*Client, error) {
+	client, tokenSource, err := factory.clientForInstallation(installationID)
+	if err != nil {
+		return nil, err
 	}
+	return &Client{
+		gh:          client,
+		tokenSource: tokenSource,
+		log:         factory.log,
+	}, nil
 }
 
-// GetInstallationToken returns the PAT token (for PAT-based auth).
-func (c *Client) GetInstallationToken(_ context.Context) (string, error) {
-	return c.token, nil
+// GetInstallationToken returns a fresh installation token for git operations.
+func (c *Client) GetInstallationToken(ctx context.Context) (string, error) {
+	token, err := c.tokenSource.Token()
+	if err != nil {
+		return "", fmt.Errorf("get installation token: %w", err)
+	}
+	return token.AccessToken, nil
 }
 
 // GetIssue fetches an issue by number.
@@ -145,4 +154,3 @@ func (c *Client) GetDefaultBranch(ctx context.Context, owner, repo string) (stri
 	}
 	return r.GetDefaultBranch(), nil
 }
-
