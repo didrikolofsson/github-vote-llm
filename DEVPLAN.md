@@ -6,7 +6,7 @@ The current codebase is a minimal MVP:
 - Webhook handler triggers the agent when `approved-for-dev` label is added to a `feature-request` issue
 - Agent clones the repo, runs `claude -p`, commits, pushes, opens a PR
 - GitHub App auth only (no PAT mode, no dev mode)
-- No persistence (no SQLite store)
+- No persistence (no database)
 - No config system (all labels and agent settings hardcoded in `runner.go`)
 - No vote tracking (referenced in CLAUDE.md but not implemented)
 
@@ -24,9 +24,11 @@ cmd := exec.CommandContext(ctx, "git", "clone", "--filter=blob:none", cloneURL, 
 
 ---
 
-## 2. Persistence layer (SQLite)
+## 2. Persistence layer (PostgreSQL)
 
-Add `internal/store` package with SQLite-backed storage for two concerns:
+Add `internal/store` package backed by PostgreSQL. Using Postgres from the start avoids a SQLite→Postgres migration later and fits naturally with a deployed service (connection pooling, concurrent writes from multiple goroutines, hosted options like Supabase/RDS/Fly Postgres).
+
+Connection string via env var `DATABASE_URL`. Use `pgx/v5` as the driver with `pgxpool` for connection pooling. Schema managed with sequential migration files (no ORM).
 
 **Execution records** — idempotency and run status tracking:
 ```
@@ -129,7 +131,7 @@ Dev mode (`gh webhook forward` subprocess, `--dev` flag) is already absent from 
 
 ```
 1. Blobless clone          — small, self-contained, do first
-2. SQLite store            — unblocks everything else
+2. PostgreSQL store        — unblocks everything else
 3. Per-client API keys     — depends on store (config table)
 4. Sandbox cleanup         — small, parallel with store
 5. Vote tracking           — depends on store
