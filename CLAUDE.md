@@ -4,15 +4,14 @@ A Go service that automates feature implementation for GitHub repos. When an iss
 
 ## How It Works
 
-1. **Webhook** — Listens for GitHub `issues` and `issue_comment` webhook events.
-2. **Vote counting** — When a `feature-request` issue gets comments or reactions, votes (+1 reactions) are checked. If the threshold is met, a `candidate` label is added.
-3. **Approval trigger** — When an issue gets the configured "approved" label (e.g. `approved-for-dev`), the agent is triggered (requires `feature-request` label).
-4. **Agent flow** — For each approved issue:
-   - Checks SQLite store for idempotency (skips if already processing/completed)
-   - Creates execution record, adds `llm-in-progress` label, removes `approved` label
+1. **Webhook** — Listens for GitHub `issues` webhook events at `/github/webhook`.
+2. **Approval trigger** — When an issue gets the `approved-for-dev` label (requires `feature-request` label), the agent is triggered.
+3. **Agent flow** — For each approved issue:
+   - Guards: skips if already has `llm-in-progress` label or lacks `feature-request` label
+   - Adds `llm-in-progress` label, removes `approved-for-dev` label
    - Clones/updates the repo into a workspace (using installation token for auth)
    - Creates a branch `vote-llm/issue-{n}-{slug}` from the repo's default branch
-   - Runs `claude -p` with the issue as the prompt (with configurable timeout, default 30 min)
+   - Runs `claude -p` with the issue as the prompt (30 min timeout, $5 budget cap)
    - Commits, pushes (with `--force-with-lease`), and creates a PR
    - Adds `llm-pr-created` label, removes in-progress, comments with PR link
    - On failure: comments with error details, adds `llm-failed` label, removes in-progress label
@@ -20,71 +19,63 @@ A Go service that automates feature implementation for GitHub repos. When an iss
 ## Project Structure
 
 ```
-cmd/server/main.go          # Entry point: flags, config, HTTP server, auth mode selection, webhook forward (dev mode)
+cmd/main/main.go              # Entry point: env var config, Gin router, GitHub App auth
 internal/
-  agent/runner.go           # Orchestrates Claude Code: clone, branch, run claude, commit, PR (with store + ClientAPI)
-  cli/flag.go               # CLI flags (--config, --dev, --owner, --repo)
-  config/config.go          # YAML config loading, env var expansion, validation
-  github/auth.go            # GitHub App auth: ClientFactory, AppClient (installation tokens via go-githubauth)
-  github/client.go          # ClientAPI interface + PAT-based Client implementation
-  github/webhook.go         # Webhook handler: issues/labeled + issue_comment events, vote check + approval callbacks
-  logger/logger.go          # Structured logging with colored output (zap)
-  logger/logger_test.go     # Logger tests
-  store/store.go            # SQLite persistence: execution records for idempotency
-  store/migrations.go       # Database schema migrations
-  store/store_test.go       # Store tests (7 tests)
-  votes/tracker.go          # Vote counting (+1 reactions), wired into webhook handler
+  agent/runner.go             # Orchestrates Claude Code: clone, branch, run claude, commit, PR
+  agent/runner_test.go        # Agent tests
+  github/auth.go              # GitHub App auth: ClientFactory (installation tokens via go-githubauth)
+  github/client.go            # ClientAPI interface + App-based Client implementation
+  handlers/webhook.go         # Webhook handler: issues/labeled event, approval callback
+  logger/logger.go            # Structured logging with colored output (zap)
+  logger/logger_test.go       # Logger tests
+  middleware/middleware.go     # HMAC-SHA256 webhook signature validation
+  spinner/spinner.go          # Terminal progress spinner
 ```
 
 ## Configuration
 
-`config.yaml`:
+All configuration via environment variables (no config file):
 
-- **github.token** — PAT auth (env var: `${GITHUB_TOKEN}`)
-- **github.webhook_secret** — Webhook secret (env var: `${WEBHOOK_SECRET}`)
-- **github.app_id**, **github.private_key_path** — GitHub App auth (alternative to token)
-- **database.path** — SQLite database path (default: `vote-llm.db`)
-- **repos** — Per-repo: owner, name, labels (feature_request, approved, in_progress, done, candidate, failed), vote_threshold
-- **agent** — `command` (e.g. `claude`), max_turns, max_budget_usd, allowed_tools, workspace_dir, timeout_minutes
+| Variable | Required | Description |
+|---|---|---|
+| `GITHUB_APP_ID` | yes | GitHub App numeric ID |
+| `GITHUB_PRIVATE_KEY_PATH` | yes | Path to the App's `.pem` private key |
+| `PORT` | no | HTTP listen port (default: `8080`) |
+| `WEBHOOK_SECRET` | yes | HMAC secret for webhook signature validation |
 
-## Auth Modes
+In `GIN_MODE=debug`, env vars are loaded from `.env.development` via godotenv.
 
-- **PAT mode** (default for dev): Set `github.token` in config. All API calls use the same token.
-- **GitHub App mode**: Set `github.app_id` + `github.private_key_path`. Creates per-installation clients with short-lived tokens. Git clone/push uses `x-access-token:{token}@github.com` URLs.
+## Auth
 
-## Dev Mode
+**GitHub App only.** Set `GITHUB_APP_ID` + `GITHUB_PRIVATE_KEY_PATH`. Creates per-installation clients with short-lived tokens. Git clone/push uses `x-access-token:{token}@github.com` URLs.
 
-For local development without a real webhook:
+## Planned (see DEVPLAN.md)
 
-```bash
-go run ./cmd/server --dev --owner=didrikolofsson --repo=github-vote-llm
-```
-
-- Starts `gh webhook forward` as a subprocess to forward GitHub webhooks to `localhost`
-- **Before** creating a new forward, removes existing `gh webhook forward` webhooks (avoids "Hook already exists" when a previous run was killed)
-- On shutdown (SIGINT/SIGTERM), sends SIGTERM to the `gh` process and shuts down the server
-- Dev mode always uses PAT auth for webhook forward cleanup
+- **PostgreSQL store** (`internal/store/`) with sqlc — idempotency, execution records, per-repo config
+- **Per-client API keys** — `ANTHROPIC_API_KEY` injected per-repo from store
+- **Vote tracking** — +1 reactions on `feature-request` issues, `candidate` label at threshold
+- **REST API** — `/api` route group for run management and repo config
+- **Minimal UI** — SPA in `ui/`, embedded into binary via `go:embed`, served at `/ui`
+- **Blobless clone** — `git clone --filter=blob:none`
 
 ## Dependencies
 
-- **gh** CLI — Required for dev mode (`gh webhook forward`). Must be logged in.
 - **claude** CLI — The agent command; must be installed and configured.
 - **git** — Used by agent for clone, branch, commit, push.
 - **github.com/jferrl/go-githubauth** — GitHub App JWT + installation token auth.
-- **modernc.org/sqlite** — Pure-Go SQLite driver (no CGO).
+- **github.com/gin-gonic/gin** — HTTP router.
+- **go.uber.org/zap** — Structured logging.
 
 ## Key Implementation Details
 
-- **ClientAPI interface**: All GitHub operations go through `github.ClientAPI`. Two implementations: `Client` (PAT) and `AppClient` (GitHub App installation tokens).
-- **Webhook validation**: Uses `gh.ValidatePayload` and `gh.ParseWebHook` from go-github.
-- **Duplicate prevention**: Webhook handler skips issues that already have the `in-progress` label. SQLite store provides idempotency across restarts.
-- **Label state machine**: `feature-request` → (votes) → `candidate` → (manual) → `approved-for-dev` → `llm-in-progress` → `llm-pr-created` or `llm-failed`.
+- **ClientAPI interface**: All GitHub operations go through `github.ClientAPI`. One implementation: `Client` (GitHub App installation tokens).
+- **Webhook validation**: HMAC-SHA256 signature checked in `middleware.ValidateSignature()` before the handler sees the payload. Parsing via `gh.ParseWebHook` from go-github.
+- **Duplicate prevention**: Webhook handler skips issues that already have the `llm-in-progress` label.
+- **Label state machine**: `feature-request` → (manual) → `approved-for-dev` → `llm-in-progress` → `llm-pr-created` or `llm-failed`.
 - **Feature-request guard**: `approved-for-dev` label is only processed if the issue also has `feature-request`.
-- **Vote wiring**: `IssueCommentEvent` on feature-request issues and `feature-request` label addition trigger vote checks.
-- **Agent workspace**: `{workspace_dir}/{owner}/{repo}/repo` — reused across runs; `git fetch` before new work.
+- **Agent workspace**: `{workspace_dir}/{owner}/{repo}/repo` — reused across runs; `git fetch --all --prune` before new work.
 - **Branch naming**: `vote-llm/issue-{number}-{slugified-title}` (slug max 40 chars).
-- **Claude invocation**: `claude -p {prompt} --output-format json --allowedTools {tools} --max-turns {n} --max-budget-usd {n} --no-session-persistence`
+- **Claude invocation**: `claude -p {prompt} --output-format json --allowedTools {tools} --max-turns 25 --max-budget-usd 5.00 --no-session-persistence`
 - **Existing PR handling**: If PR creation fails, `FindPullRequestByHead` looks up an existing open PR for the branch.
 - **Default branch**: Uses `GetDefaultBranch()` to discover the repo's default branch (not hardcoded to `main`).
-- **Logging**: Structured logging via `go.uber.org/zap` with colored console output and component hierarchy (e.g. `server.http`).
-- **github/client.RemoveLocalRepoWebhooks**: Deletes hooks with URL `https://webhook-forwarder.github.com/hook` (gh webhook forward); used to clean up before creating a new forward.
+- **Logging**: Structured logging via `go.uber.org/zap` with colored console output and component hierarchy (e.g. `webhook`, `agent`).
