@@ -111,6 +111,18 @@ The retry endpoint re-runs the agent for the same issue; cancel sets a context c
 
 ## 6. Minimal UI
 
+**Monorepo** — frontend lives in `ui/` at the repo root alongside the Go code. Built assets are embedded into the Go binary via `go:embed` and served at `/ui`. Single binary deployment, no separate hosting, no CORS config.
+
+```
+ui/
+  package.json
+  vite.config.ts       # or equivalent bundler config
+  src/
+    ...
+cmd/server/
+  ui_embed.go          # //go:embed all:../../ui/dist
+```
+
 A single-page frontend served by the Go server at `/ui`. Scope for the test cohort:
 
 **Dashboard**
