@@ -24,7 +24,30 @@ cmd := exec.CommandContext(ctx, "git", "clone", "--filter=blob:none", cloneURL, 
 
 ---
 
-## 2. Persistence layer (PostgreSQL)
+## 2. Private key via environment variable
+
+**File:** `cmd/main/main.go`
+
+Support `GITHUB_PRIVATE_KEY` as an alternative to `GITHUB_PRIVATE_KEY_PATH`. When set, the PEM bytes are read directly from the env var instead of the filesystem. This is the preferred approach on hosted platforms (Fly.io, Render, Railway) where secrets are injected as env vars and writing files to disk is unnecessary.
+
+```go
+var privateKeyBytes []byte
+if key := os.Getenv("GITHUB_PRIVATE_KEY"); key != "" {
+    privateKeyBytes = []byte(key)
+} else {
+    path := os.Getenv("GITHUB_PRIVATE_KEY_PATH")
+    privateKeyBytes, err = os.ReadFile(path)
+    if err != nil {
+        log.Fatalf("failed to read private key: %v", err)
+    }
+}
+```
+
+When both vars are set, `GITHUB_PRIVATE_KEY` takes precedence. Update the config table in CLAUDE.md to document the new var.
+
+---
+
+## 3. Persistence layer (PostgreSQL)
 
 Add `internal/store` package backed by PostgreSQL. Using Postgres from the start avoids a SQLite→Postgres migration later and fits naturally with a deployed service (connection pooling, concurrent writes from multiple goroutines, hosted options like Supabase/RDS/Fly Postgres).
 
@@ -65,7 +88,7 @@ Wire the store into `WebhookHandler` and `Runner`. On label event: create execut
 
 ---
 
-## 3. Per-client API keys
+## 4. Per-client API keys
 
 Currently `claude` is invoked without an explicit API key, relying on the server's environment. This won't work for multi-client deployments.
 
@@ -81,7 +104,7 @@ cmd.Env = append(os.Environ(), "ANTHROPIC_API_KEY="+apiKey)
 
 ---
 
-## 4. Sandbox cleanup
+## 5. Sandbox cleanup
 
 `gitCheckoutNewBranch` already runs `git clean -fd` before each run — this handles leftover files from the previous run on the same repo.
 
@@ -89,7 +112,7 @@ Ensure `implement()` cleans up on failure paths too: if the run fails after the 
 
 ---
 
-## 5. REST API
+## 6. REST API
 
 Add an `/api` route group to the existing Gin server, protected by a shared-secret middleware (header: `X-API-Key`).
 
@@ -109,7 +132,7 @@ The retry endpoint re-runs the agent for the same issue; cancel sets a context c
 
 ---
 
-## 6. Minimal UI
+## 7. Minimal UI
 
 **Monorepo** — frontend lives in `ui/` at the repo root alongside the Go code. Built assets are embedded into the Go binary via `go:embed` and served at `/ui`. Single binary deployment, no separate hosting, no CORS config.
 
@@ -139,7 +162,7 @@ A single-page frontend served by the Go server at `/ui`. Scope for the test coho
 
 ---
 
-## 7. Vote tracking
+## 8. Vote tracking
 
 Implement the vote counting logic referenced in CLAUDE.md but not yet built:
 - Listen for `issue_comment` events and `feature-request` label additions in the webhook handler
@@ -151,7 +174,7 @@ This is a prerequisite for the UI voting panel to be meaningful.
 
 ---
 
-## 8. Dev mode removal
+## 9. Dev mode removal
 
 Dev mode (`gh webhook forward` subprocess, `--dev` flag) is already absent from the actual codebase. Remove references from CLAUDE.md and ensure no dead code paths remain.
 
@@ -161,10 +184,11 @@ Dev mode (`gh webhook forward` subprocess, `--dev` flag) is already absent from 
 
 ```
 1. Blobless clone          — small, self-contained, do first
-2. PostgreSQL store        — unblocks everything else
-3. Per-client API keys     — depends on store (config table)
-4. Sandbox cleanup         — small, parallel with store
-5. Vote tracking           — depends on store
-6. REST API                — depends on store
-7. Minimal UI              — depends on REST API
+2. Private key env var     — small, self-contained, improves deploy security
+3. PostgreSQL store        — unblocks everything else
+4. Per-client API keys     — depends on store (config table)
+5. Sandbox cleanup         — small, parallel with store
+6. Vote tracking           — depends on store
+7. REST API                — depends on store
+8. Minimal UI              — depends on REST API
 ```
