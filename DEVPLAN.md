@@ -180,6 +180,188 @@ Dev mode (`gh webhook forward` subprocess, `--dev` flag) is already absent from 
 
 ---
 
+## 10. Community voting portal
+
+A public-facing voting portal — think Canny, but the backlog is a live queue for the agentic builder. The full workflow:
+
+```
+Portal user submits feature
+        ↓
+GitHub issue created (feature-request label)
+        ↓
+Others vote on portal
+        ↓
+Vote threshold hit → candidate label auto-added
+        ↓
+Admin approves → approved-for-dev label
+        ↓
+←── existing agent flow kicks in ───→
+Claude Code implements → PR opened
+        ↓
+Portal shows "In Review" + emails voters
+        ↓
+Dev team reviews, tweaks, merges
+        ↓
+merge webhook → portal shows "Shipped" → emails voters
+```
+
+GitHub is the system of record. The portal is a friendly layer on top; users never touch GitHub directly.
+
+---
+
+### 10.1 Portal routes
+
+Extend the Gin router with a `/vote/:tenant` route group (tenant = `{owner}/{repo}` slug). All portal pages are server-rendered or SPA-within-the-existing-UI — either works, but keeping it inside `ui/` with a separate route prefix is cleanest.
+
+| Route | Description |
+|-------|-------------|
+| `GET /vote/:tenant` | Feature list (filtered by status, sortable by votes) |
+| `GET /vote/:tenant/new` | Submit a feature request |
+| `GET /vote/:tenant/:issueNumber` | Single feature detail + comment thread |
+| `GET /vote/:tenant/roadmap` | Kanban view: Popular → Building → In Review → Shipped |
+
+---
+
+### 10.2 Status mapping
+
+Portal statuses map to GitHub labels. No portal-specific status column in the DB — derive it from the issue's labels on sync:
+
+| GitHub label(s) | Portal status |
+|-----------------|---------------|
+| `feature-request` only | **Proposed** |
+| `candidate` | **Popular** |
+| `approved-for-dev` | **Queued** |
+| `llm-in-progress` | **Building** |
+| `llm-pr-created` | **In Review** |
+| `llm-failed` | **Failed** |
+| PR merged (no label needed) | **Shipped** |
+
+Sync on each webhook event that touches labels (`issues/labeled`, `issues/unlabeled`) and on PR merge. Cache the derived status in the `portal_issues` table (below) to avoid fetching labels from GitHub on every page load.
+
+---
+
+### 10.3 Database additions
+
+Add to the existing store schema (section 3):
+
+```sql
+-- portal_issues: mirror of GitHub issues the portal cares about
+CREATE TABLE portal_issues (
+    id              BIGSERIAL PRIMARY KEY,
+    owner           TEXT NOT NULL,
+    repo            TEXT NOT NULL,
+    issue_number    BIGINT NOT NULL,
+    title           TEXT NOT NULL,
+    body            TEXT,
+    status          TEXT NOT NULL DEFAULT 'proposed',  -- derived from labels
+    vote_count      INT NOT NULL DEFAULT 0,
+    pr_url          TEXT,
+    merged_at       TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (owner, repo, issue_number)
+);
+
+-- portal_votes: one row per (user, issue)
+CREATE TABLE portal_votes (
+    id              BIGSERIAL PRIMARY KEY,
+    issue_id        BIGINT NOT NULL REFERENCES portal_issues(id),
+    user_id         BIGINT NOT NULL REFERENCES portal_users(id),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (issue_id, user_id)
+);
+
+-- portal_users: lightweight end-user accounts
+CREATE TABLE portal_users (
+    id              BIGSERIAL PRIMARY KEY,
+    email           TEXT NOT NULL UNIQUE,
+    display_name    TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- portal_magic_links: one-time tokens for email auth
+CREATE TABLE portal_magic_links (
+    token           TEXT PRIMARY KEY,
+    user_id         BIGINT NOT NULL REFERENCES portal_users(id),
+    expires_at      TIMESTAMPTZ NOT NULL,
+    used_at         TIMESTAMPTZ
+);
+```
+
+---
+
+### 10.4 End-user auth (magic link)
+
+No passwords, no OAuth. Email + magic link only.
+
+Flow:
+1. User enters email on `/vote/:tenant/login`
+2. Server creates a `portal_magic_links` token (UUID, 15-min TTL), sends email
+3. User clicks link → `GET /vote/:tenant/auth?token=...`
+4. Server validates token (not expired, not used), marks `used_at`, sets a signed session cookie
+5. Cookie is a short JWT (`user_id`, `exp`) signed with a server secret (`PORTAL_JWT_SECRET` env var)
+
+Use a transactional email provider (Resend or Postmark) via a thin `internal/mailer/` package with a single `Send(to, subject, html string) error` interface. The provider is selected via `MAILER_PROVIDER` env var; credentials via `MAILER_API_KEY`.
+
+---
+
+### 10.5 Feature submission and dedup
+
+Submission form at `/vote/:tenant/new`:
+- **Title** (required) — triggers dedup search on blur
+- **Description** (optional) — rendered as the GitHub issue body
+- Submitting creates a real GitHub issue via the installation client (`issues.Create`), then inserts a `portal_issues` row
+
+**Dedup:** As the user types the title, debounce a `GET /vote/:tenant/search?q=...` call. Server does a full-text search over `portal_issues.title` (Postgres `tsvector` or `ILIKE` for MVP). Return top 5 similar open issues. Display them inline: "These might be the same — upvote instead?" Only show if similarity score is above a threshold.
+
+---
+
+### 10.6 Vote threshold → candidate label
+
+Currently section 8 (vote tracking) listens for GitHub reactions. For the portal, votes are stored in `portal_votes` — so the threshold check happens in the vote endpoint, not the webhook.
+
+When `INSERT INTO portal_votes` succeeds, check `COUNT(*) WHERE issue_id = ?`. If the count crosses `repo_config.vote_threshold`, call `issues.AddLabels(["candidate"])` via the installation client. No GitHub reaction polling needed for portal-originated votes.
+
+---
+
+### 10.7 Admin approval flow
+
+Thin admin view (within the existing `/ui` dashboard, gate it behind the `X-API-Key` auth):
+
+- Lists issues with status `popular` (has `candidate` label, not yet `approved-for-dev`)
+- Shows title, vote count, description
+- Two buttons: **Approve** (adds `approved-for-dev`, removes `candidate`) and **Reject** (closes the GitHub issue, sets portal status to `rejected`)
+- Approve triggers the existing agent flow immediately
+
+Optional: add a `vote_threshold_auto_approve` boolean to `repo_config`. When true, skip the manual step and auto-add `approved-for-dev` when the threshold is hit — fully automated pipeline.
+
+---
+
+### 10.8 Merge detection and "Shipped" status
+
+Add `pull_request` to the webhook's subscribed events. In the webhook handler, handle `pull_request` events where `action == "closed"` and `merged == true`.
+
+Match the PR to a `portal_issues` row via `head.ref` (branch name contains the issue number: `vote-llm/issue-{n}-...`). Update `portal_issues.status = 'shipped'` and `merged_at = NOW()`.
+
+Notify all voters (see 10.9).
+
+---
+
+### 10.9 Email notifications
+
+Notify portal voters at two status transitions:
+
+| Trigger | Email subject |
+|---------|---------------|
+| `llm-pr-created` label added | "Your feature is being reviewed — [{title}]" |
+| PR merged | "Your feature shipped! — [{title}]" |
+
+Fan-out: query `portal_votes JOIN portal_users WHERE issue_id = ?`, send one email per voter. For the MVP this runs inline in the webhook handler goroutine; move to a background job queue if fanout becomes large.
+
+Email template includes: feature title, one-sentence description, link to the portal issue page, and (for shipped) link to the merged PR.
+
+---
+
 ## Work order
 
 ```
@@ -191,4 +373,14 @@ Dev mode (`gh webhook forward` subprocess, `--dev` flag) is already absent from 
 6. Vote tracking           — depends on store
 7. REST API                — depends on store
 8. Minimal UI              — depends on REST API
+9. Community voting portal — depends on store, REST API, UI, vote tracking
+   9a. DB schema additions (portal_issues, portal_votes, portal_users, portal_magic_links)
+   9b. Status sync (webhook → portal_issues.status)
+   9c. End-user auth (magic link + JWT session)
+   9d. Feature submission + dedup search
+   9e. Portal pages (list, detail, roadmap)
+   9f. Vote endpoint + threshold → candidate label
+   9g. Admin approval view
+   9h. Merge detection → shipped status
+   9i. Email notifications (mailer package + fanout)
 ```
