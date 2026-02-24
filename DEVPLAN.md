@@ -3,6 +3,7 @@
 ## Context
 
 The current codebase is a minimal MVP:
+
 - Webhook handler triggers the agent when `approved-for-dev` label is added to a `feature-request` issue
 - Agent clones the repo, runs `claude -p`, commits, pushes, opens a PR
 - GitHub App auth only (no PAT mode, no dev mode)
@@ -24,26 +25,11 @@ cmd := exec.CommandContext(ctx, "git", "clone", "--filter=blob:none", cloneURL, 
 
 ---
 
-## 2. Private key via environment variable
+## 2. Private key via environment variable ✓
 
 **File:** `cmd/main/main.go`
 
-Support `GITHUB_PRIVATE_KEY` as an alternative to `GITHUB_PRIVATE_KEY_PATH`. When set, the PEM bytes are read directly from the env var instead of the filesystem. This is the preferred approach on hosted platforms (Fly.io, Render, Railway) where secrets are injected as env vars and writing files to disk is unnecessary.
-
-```go
-var privateKeyBytes []byte
-if key := os.Getenv("GITHUB_PRIVATE_KEY"); key != "" {
-    privateKeyBytes = []byte(key)
-} else {
-    path := os.Getenv("GITHUB_PRIVATE_KEY_PATH")
-    privateKeyBytes, err = os.ReadFile(path)
-    if err != nil {
-        log.Fatalf("failed to read private key: %v", err)
-    }
-}
-```
-
-When both vars are set, `GITHUB_PRIVATE_KEY` takes precedence. Update the config table in CLAUDE.md to document the new var.
+Private key is read only from `GITHUB_PRIVATE_KEY` (PEM bytes as a string). No file path option. Preferred on hosted platforms (Fly.io, Render, Railway) where secrets are injected as env vars.
 
 ---
 
@@ -54,6 +40,7 @@ Add `internal/store` package backed by PostgreSQL. Using Postgres from the start
 Connection string via env var `DATABASE_URL`. Use `pgx/v5` as the driver with `pgxpool` for connection pooling. Schema managed with sequential migration files; queries generated with **sqlc** (type-safe, no reflection ORM).
 
 Layout:
+
 ```
 internal/store/
   sqlc.yaml              # sqlc config (engine: postgresql, pgx/v5)
@@ -72,12 +59,14 @@ internal/store/
 Run `sqlc generate` from `internal/store/` to regenerate after schema or query changes.
 
 **Execution records** — idempotency and run status tracking:
+
 ```
 id, owner, repo, issue_number, branch, status (pending|running|done|failed),
 pr_url, error_message, created_at, updated_at
 ```
 
 **Repo config** — per-repo settings editable via UI:
+
 ```
 owner, repo, label_approved, label_feature_request, label_in_progress,
 label_done, label_failed, vote_threshold, agent_timeout_minutes,
@@ -118,15 +107,15 @@ Add an `/api` route group to the existing Gin server, protected by a shared-secr
 
 Endpoints:
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/runs` | List all execution records (filterable by repo/status) |
-| `GET` | `/api/runs/:id` | Single run detail (status, error, PR URL, logs) |
-| `POST` | `/api/runs/:id/retry` | Re-queue a failed run |
-| `POST` | `/api/runs/:id/cancel` | Cancel an in-progress run |
-| `GET` | `/api/repos` | List repos seen by the server |
-| `GET` | `/api/repos/:owner/:repo/config` | Get repo config |
-| `PUT` | `/api/repos/:owner/:repo/config` | Update repo config (labels, threshold, API key, timeout) |
+| Method | Path                             | Description                                              |
+| ------ | -------------------------------- | -------------------------------------------------------- |
+| `GET`  | `/api/runs`                      | List all execution records (filterable by repo/status)   |
+| `GET`  | `/api/runs/:id`                  | Single run detail (status, error, PR URL, logs)          |
+| `POST` | `/api/runs/:id/retry`            | Re-queue a failed run                                    |
+| `POST` | `/api/runs/:id/cancel`           | Cancel an in-progress run                                |
+| `GET`  | `/api/repos`                     | List repos seen by the server                            |
+| `GET`  | `/api/repos/:owner/:repo/config` | Get repo config                                          |
+| `PUT`  | `/api/repos/:owner/:repo/config` | Update repo config (labels, threshold, API key, timeout) |
 
 The retry endpoint re-runs the agent for the same issue; cancel sets a context cancellation and updates the record status.
 
@@ -149,12 +138,15 @@ cmd/server/
 A single-page frontend served by the Go server at `/ui`. Scope for the test cohort:
 
 **Dashboard**
+
 - List of runs across repos: repo, issue number + title, status badge, timestamp, link to PR
 
 **Run detail**
+
 - Status, error message (on failure), link to PR or branch, retry/cancel buttons
 
 **Config panel**
+
 - Per-repo: trigger label (`approved-for-dev`), vote threshold, timeout, API key (masked input)
 - Changes POST to `/api/repos/:owner/:repo/config`
 
@@ -165,6 +157,7 @@ A single-page frontend served by the Go server at `/ui`. Scope for the test coho
 ## 8. Vote tracking
 
 Implement the vote counting logic referenced in CLAUDE.md but not yet built:
+
 - Listen for `issue_comment` events and `feature-request` label additions in the webhook handler
 - Count +1 reactions via `GetReactionCount`
 - Add `candidate` label when threshold is met
@@ -182,17 +175,18 @@ Dev mode (`gh webhook forward` subprocess, `--dev` flag) is already absent from 
 
 ## Work order
 
-| # | Item | Status |
-|---|------|--------|
-| 1 | Blobless clone | DONE |
-| 2 | Private key env var | DONE |
-| 3 | PostgreSQL store | TODO |
-| 4 | Per-client API keys | TODO |
-| 5 | Sandbox cleanup | TODO |
-| 6 | Vote tracking | TODO |
-| 7 | REST API | TODO |
-| 8 | Minimal UI | TODO |
+| #   | Item                | Status |
+| --- | ------------------- | ------ |
+| 1   | Blobless clone      | DONE   |
+| 2   | Private key env var | DONE   |
+| 3   | PostgreSQL store    | TODO   |
+| 4   | Per-client API keys | TODO   |
+| 5   | Sandbox cleanup     | TODO   |
+| 6   | Vote tracking       | TODO   |
+| 7   | REST API            | TODO   |
+| 8   | Minimal UI          | TODO   |
 
 Dependencies:
+
 - 3 (PostgreSQL store) unblocks 4, 6, 7
 - 7 (REST API) unblocks 8

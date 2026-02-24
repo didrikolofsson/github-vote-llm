@@ -3,7 +3,6 @@ package github
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/jferrl/go-githubauth"
@@ -14,8 +13,7 @@ import (
 // AppConfig holds GitHub App authentication configuration.
 type AppConfig struct {
 	AppID           int64
-	PrivateKeyPath  string
-	PrivateKeyBytes []byte // takes precedence over PrivateKeyPath when set
+	PrivateKeyBytes []byte // PEM bytes from GITHUB_PRIVATE_KEY env var
 	WebhookSecret   string
 }
 
@@ -27,16 +25,11 @@ type ClientFactory struct {
 
 // NewClientFactory creates a ClientFactory from a GitHub App private key.
 func NewClientFactory(cfg AppConfig, log *logger.Logger) (*ClientFactory, error) {
-	key := cfg.PrivateKeyBytes
-	if len(key) == 0 {
-		var err error
-		key, err = os.ReadFile(cfg.PrivateKeyPath)
-		if err != nil {
-			return nil, fmt.Errorf("read private key %s: %w", cfg.PrivateKeyPath, err)
-		}
+	if len(cfg.PrivateKeyBytes) == 0 {
+		return nil, fmt.Errorf("private key is required (set GITHUB_PRIVATE_KEY)")
 	}
 
-	appTokenSource, err := githubauth.NewApplicationTokenSource(cfg.AppID, key)
+	appTokenSource, err := githubauth.NewApplicationTokenSource(cfg.AppID, cfg.PrivateKeyBytes)
 	if err != nil {
 		return nil, fmt.Errorf("create app token source: %w", err)
 	}

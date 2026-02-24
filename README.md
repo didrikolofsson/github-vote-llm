@@ -33,14 +33,13 @@ internal/
 
 All config is via environment variables:
 
-| Variable | Required | Description |
-|---|---|---|
-| `GITHUB_APP_ID` | yes | GitHub App numeric ID |
-| `GITHUB_PRIVATE_KEY_PATH` | yes | Path to the App's `.pem` private key |
-| `GITHUB_PRIVATE_KEY` | no | PEM bytes as a string (planned alternative to `GITHUB_PRIVATE_KEY_PATH`; takes precedence when set) |
-| `WEBHOOK_SECRET` | yes | HMAC secret matching the App's webhook config |
-| `ANTHROPIC_API_KEY` | yes | API key passed to the `claude` CLI |
-| `PORT` | no | HTTP listen port (default: `8080`) |
+| Variable             | Required | Description                                   |
+| -------------------- | -------- | --------------------------------------------- |
+| `GITHUB_APP_ID`      | yes      | GitHub App numeric ID                         |
+| `GITHUB_PRIVATE_KEY` | yes      | PEM bytes as a string                         |
+| `WEBHOOK_SECRET`     | yes      | HMAC secret matching the App's webhook config |
+| `ANTHROPIC_API_KEY`  | yes      | API key passed to the `claude` CLI            |
+| `PORT`               | no       | HTTP listen port (default: `8080`)            |
 
 For local development, put these in `.env.development` — they are loaded automatically when `GIN_MODE=debug`.
 
@@ -49,27 +48,27 @@ For local development, put these in `.env.development` — they are loaded autom
 ```bash
 go build -o vote-llm ./cmd/main
 export GITHUB_APP_ID=123456
-export GITHUB_PRIVATE_KEY_PATH=/path/to/key.pem
+export GITHUB_PRIVATE_KEY=pem-string
 export WEBHOOK_SECRET=your-secret
 ./vote-llm
 ```
 
 ## Endpoints
 
-| Path | Description |
-|---|---|
-| `POST /github/webhook` | Receives GitHub webhook events |
-| `GET /health` | Health check (returns `{"status":"ok"}`) |
+| Path                   | Description                              |
+| ---------------------- | ---------------------------------------- |
+| `POST /github/webhook` | Receives GitHub webhook events           |
+| `GET /health`          | Health check (returns `{"status":"ok"}`) |
 
 ## Labels
 
-| Label | Meaning |
-|---|---|
-| `feature-request` | Marks an issue as eligible for automated implementation |
-| `approved-for-dev` | Triggers the agent (also requires `feature-request`) |
-| `llm-in-progress` | Agent is currently working on this issue |
-| `llm-pr-created` | PR has been opened successfully |
-| `llm-failed` | Agent run failed; error details in issue comment |
+| Label              | Meaning                                                 |
+| ------------------ | ------------------------------------------------------- |
+| `feature-request`  | Marks an issue as eligible for automated implementation |
+| `approved-for-dev` | Triggers the agent (also requires `feature-request`)    |
+| `llm-in-progress`  | Agent is currently working on this issue                |
+| `llm-pr-created`   | PR has been opened successfully                         |
+| `llm-failed`       | Agent run failed; error details in issue comment        |
 
 ## License
 

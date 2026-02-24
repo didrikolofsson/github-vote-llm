@@ -30,20 +30,12 @@ func main() {
 		log.Fatalf("GITHUB_APP_ID must be a number: %v", err)
 	}
 
-	var privateKeyBytes []byte
-	if key := os.Getenv("GITHUB_PRIVATE_KEY"); key != "" {
-		privateKeyBytes = []byte(key)
-	} else {
-		path := os.Getenv("GITHUB_PRIVATE_KEY_PATH")
-		if path == "" {
-			log.Fatal("GITHUB_PRIVATE_KEY or GITHUB_PRIVATE_KEY_PATH is required")
-		}
-		var err error
-		privateKeyBytes, err = os.ReadFile(path)
-		if err != nil {
-			log.Fatalf("failed to read private key: %v", err)
-		}
+	key := os.Getenv("GITHUB_PRIVATE_KEY")
+	if key == "" {
+		log.Fatal("GITHUB_PRIVATE_KEY is required")
 	}
+
+	privateKeyBytes := []byte(key)
 
 	appLog := logger.New()
 	defer appLog.Sync()
