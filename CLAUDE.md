@@ -36,20 +36,19 @@ internal/
 
 All configuration via environment variables (no config file):
 
-| Variable | Required | Description |
-|---|---|---|
-| `GITHUB_APP_ID` | yes | GitHub App numeric ID |
-| `GITHUB_PRIVATE_KEY_PATH` | yes | Path to the App's `.pem` private key |
-| `GITHUB_PRIVATE_KEY` | no | PEM bytes as a string (planned alternative to `GITHUB_PRIVATE_KEY_PATH`; takes precedence when set) |
-| `WEBHOOK_SECRET` | yes | HMAC secret for webhook signature validation |
-| `ANTHROPIC_API_KEY` | yes | API key passed to the `claude` CLI |
-| `PORT` | no | HTTP listen port (default: `8080`) |
+| Variable             | Required | Description                                  |
+| -------------------- | -------- | -------------------------------------------- |
+| `GITHUB_APP_ID`      | yes      | GitHub App numeric ID                        |
+| `GITHUB_PRIVATE_KEY` | yes      | PEM bytes as a string (no file path option)  |
+| `WEBHOOK_SECRET`     | yes      | HMAC secret for webhook signature validation |
+| `ANTHROPIC_API_KEY`  | yes      | API key passed to the `claude` CLI           |
+| `PORT`               | no       | HTTP listen port (default: `8080`)           |
 
 In `GIN_MODE=debug`, env vars are loaded from `.env.development` via godotenv.
 
 ## Auth
 
-**GitHub App only.** Set `GITHUB_APP_ID` + `GITHUB_PRIVATE_KEY_PATH`. Creates per-installation clients with short-lived tokens. Git clone/push uses `x-access-token:{token}@github.com` URLs.
+**GitHub App only.** Set `GITHUB_APP_ID` + `GITHUB_PRIVATE_KEY`. Creates per-installation clients with short-lived tokens. Git clone/push uses `x-access-token:{token}@github.com` URLs.
 
 ## Planned (see DEVPLAN.md)
 

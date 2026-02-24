@@ -208,7 +208,7 @@ func (r *Runner) cloneOrResetRepo(ctx context.Context, owner, repo, repoDir stri
 	}
 
 	// Clone fresh
-	cmd := exec.CommandContext(ctx, "git", "clone", cloneURL, repoDir)
+	cmd := exec.CommandContext(ctx, "git", "clone", "--filter=blob:none", cloneURL, repoDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git clone: %s: %w", out, err)
 	}

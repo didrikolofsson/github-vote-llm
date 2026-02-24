@@ -30,17 +30,19 @@ func main() {
 		log.Fatalf("GITHUB_APP_ID must be a number: %v", err)
 	}
 
-	privateKeyPath := os.Getenv("GITHUB_PRIVATE_KEY_PATH")
-	if privateKeyPath == "" {
-		log.Fatal("GITHUB_PRIVATE_KEY_PATH is required")
+	key := os.Getenv("GITHUB_PRIVATE_KEY")
+	if key == "" {
+		log.Fatal("GITHUB_PRIVATE_KEY is required")
 	}
+
+	privateKeyBytes := []byte(key)
 
 	appLog := logger.New()
 	defer appLog.Sync()
 
 	factory, err := ghclient.NewClientFactory(ghclient.AppConfig{
-		AppID:          appID,
-		PrivateKeyPath: privateKeyPath,
+		AppID:           appID,
+		PrivateKeyBytes: privateKeyBytes,
 	}, appLog)
 	if err != nil {
 		log.Fatalf("failed to create GitHub App client factory: %v", err)
