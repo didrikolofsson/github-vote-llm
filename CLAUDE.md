@@ -40,8 +40,10 @@ All configuration via environment variables (no config file):
 |---|---|---|
 | `GITHUB_APP_ID` | yes | GitHub App numeric ID |
 | `GITHUB_PRIVATE_KEY_PATH` | yes | Path to the App's `.pem` private key |
-| `PORT` | no | HTTP listen port (default: `8080`) |
+| `GITHUB_PRIVATE_KEY` | no | PEM bytes as a string (planned alternative to `GITHUB_PRIVATE_KEY_PATH`; takes precedence when set) |
 | `WEBHOOK_SECRET` | yes | HMAC secret for webhook signature validation |
+| `ANTHROPIC_API_KEY` | yes | API key passed to the `claude` CLI |
+| `PORT` | no | HTTP listen port (default: `8080`) |
 
 In `GIN_MODE=debug`, env vars are loaded from `.env.development` via godotenv.
 
