@@ -182,13 +182,17 @@ Dev mode (`gh webhook forward` subprocess, `--dev` flag) is already absent from 
 
 ## Work order
 
-```
-1. Blobless clone          — small, self-contained, do first
-2. Private key env var     — small, self-contained, improves deploy security
-3. PostgreSQL store        — unblocks everything else
-4. Per-client API keys     — depends on store (config table)
-5. Sandbox cleanup         — small, parallel with store
-6. Vote tracking           — depends on store
-7. REST API                — depends on store
-8. Minimal UI              — depends on REST API
-```
+| # | Item | Status |
+|---|------|--------|
+| 1 | Blobless clone | TODO |
+| 2 | Private key env var | TODO |
+| 3 | PostgreSQL store | TODO |
+| 4 | Per-client API keys | TODO |
+| 5 | Sandbox cleanup | TODO |
+| 6 | Vote tracking | TODO |
+| 7 | REST API | TODO |
+| 8 | Minimal UI | TODO |
+
+Dependencies:
+- 3 (PostgreSQL store) unblocks 4, 6, 7
+- 7 (REST API) unblocks 8

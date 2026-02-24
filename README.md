@@ -37,7 +37,9 @@ All config is via environment variables:
 |---|---|---|
 | `GITHUB_APP_ID` | yes | GitHub App numeric ID |
 | `GITHUB_PRIVATE_KEY_PATH` | yes | Path to the App's `.pem` private key |
+| `GITHUB_PRIVATE_KEY` | no | PEM bytes as a string (planned alternative to `GITHUB_PRIVATE_KEY_PATH`; takes precedence when set) |
 | `WEBHOOK_SECRET` | yes | HMAC secret matching the App's webhook config |
+| `ANTHROPIC_API_KEY` | yes | API key passed to the `claude` CLI |
 | `PORT` | no | HTTP listen port (default: `8080`) |
 
 For local development, put these in `.env.development` — they are loaded automatically when `GIN_MODE=debug`.
