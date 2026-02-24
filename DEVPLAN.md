@@ -184,8 +184,8 @@ Dev mode (`gh webhook forward` subprocess, `--dev` flag) is already absent from 
 
 | # | Item | Status |
 |---|------|--------|
-| 1 | Blobless clone | TODO |
-| 2 | Private key env var | TODO |
+| 1 | Blobless clone | DONE |
+| 2 | Private key env var | DONE |
 | 3 | PostgreSQL store | TODO |
 | 4 | Per-client API keys | TODO |
 | 5 | Sandbox cleanup | TODO |

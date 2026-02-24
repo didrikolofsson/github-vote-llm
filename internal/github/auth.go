@@ -13,9 +13,10 @@ import (
 
 // AppConfig holds GitHub App authentication configuration.
 type AppConfig struct {
-	AppID          int64
-	PrivateKeyPath string
-	WebhookSecret  string
+	AppID           int64
+	PrivateKeyPath  string
+	PrivateKeyBytes []byte // takes precedence over PrivateKeyPath when set
+	WebhookSecret   string
 }
 
 // ClientFactory creates per-installation GitHub clients for a GitHub App.
@@ -26,9 +27,13 @@ type ClientFactory struct {
 
 // NewClientFactory creates a ClientFactory from a GitHub App private key.
 func NewClientFactory(cfg AppConfig, log *logger.Logger) (*ClientFactory, error) {
-	key, err := os.ReadFile(cfg.PrivateKeyPath)
-	if err != nil {
-		return nil, fmt.Errorf("read private key %s: %w", cfg.PrivateKeyPath, err)
+	key := cfg.PrivateKeyBytes
+	if len(key) == 0 {
+		var err error
+		key, err = os.ReadFile(cfg.PrivateKeyPath)
+		if err != nil {
+			return nil, fmt.Errorf("read private key %s: %w", cfg.PrivateKeyPath, err)
+		}
 	}
 
 	appTokenSource, err := githubauth.NewApplicationTokenSource(cfg.AppID, key)
