@@ -13,39 +13,26 @@ import (
 	"strings"
 	"time"
 
+	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	gh "github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/spinner"
 	gogithub "github.com/google/go-github/v68/github"
 )
 
-// Hardcoded agent defaults.
-const (
-	agentCommand        = "claude"
-	agentMaxTurns       = 25
-	agentMaxBudgetUSD   = 5.00
-	agentTimeoutMinutes = 30
-	agentWorkspaceDir   = "/tmp/vote-llm-workspaces"
-
-	// Label names.
-	LabelApproved       = "approved-for-dev"
-	LabelFeatureRequest = "feature-request"
-	LabelInProgress     = "llm-in-progress"
-	LabelDone           = "llm-pr-created"
-	LabelFailed         = "llm-failed"
-)
-
 var agentAllowedTools = []string{"Read", "Edit", "Write", "Bash", "Glob", "Grep"}
 
 // Runner orchestrates Claude Code to implement approved features.
 type Runner struct {
-	client gh.ClientAPI
-	log    *logger.Logger
+	client       gh.ClientAPI
+	log          *logger.Logger
+	workspaceDir string
 }
 
-// NewRunner creates a new agent runner.
-func NewRunner(client gh.ClientAPI, log *logger.Logger) *Runner {
-	return &Runner{client: client, log: log.Named("agent")}
+// NewRunner creates a new agent runner. workspaceDir is the base directory for
+// repo clones; use DefaultWorkspaceDir as the fallback.
+func NewRunner(client gh.ClientAPI, log *logger.Logger, workspaceDir string) *Runner {
+	return &Runner{client: client, log: log.Named("agent"), workspaceDir: workspaceDir}
 }
 
 // claudeResult represents the JSON output from claude -p.
@@ -62,17 +49,17 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 	branchName := fmt.Sprintf("vote-llm/issue-%d-%s", issueNum, slugify(issue.GetTitle()))
 
 	// Mark issue as in-progress
-	if err := r.client.AddLabel(ctx, owner, repo, issueNum, LabelInProgress); err != nil {
+	if err := r.client.AddLabel(ctx, owner, repo, issueNum, config.LabelInProgress); err != nil {
 		r.log.Warnw("failed to add in-progress label", "error", err)
 	}
 
 	// Remove approved label to prevent re-triggering
-	if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, LabelApproved); err != nil {
+	if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, config.LabelApproved); err != nil {
 		r.log.Warnw("failed to remove approved label", "error", err)
 	}
 
 	// Run with timeout
-	timeout := time.Duration(agentTimeoutMinutes) * time.Minute
+	timeout := time.Duration(config.AgentTimeoutMinutes) * time.Minute
 	implCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -83,20 +70,20 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 		if cErr := r.client.CreateComment(ctx, owner, repo, issueNum, comment); cErr != nil {
 			r.log.Warnw("failed to comment on issue", "error", cErr)
 		}
-		if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, LabelInProgress); err != nil {
+		if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, config.LabelInProgress); err != nil {
 			r.log.Warnw("failed to remove in-progress label", "error", err)
 		}
-		if err := r.client.AddLabel(ctx, owner, repo, issueNum, LabelFailed); err != nil {
+		if err := r.client.AddLabel(ctx, owner, repo, issueNum, config.LabelFailed); err != nil {
 			r.log.Warnw("failed to add failed label", "error", err)
 		}
 		return
 	}
 
 	// Mark issue as done and comment with PR link
-	if err := r.client.AddLabel(ctx, owner, repo, issueNum, LabelDone); err != nil {
+	if err := r.client.AddLabel(ctx, owner, repo, issueNum, config.LabelDone); err != nil {
 		r.log.Warnw("failed to add done label", "error", err)
 	}
-	if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, LabelInProgress); err != nil {
+	if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, config.LabelInProgress); err != nil {
 		r.log.Warnw("failed to remove in-progress label", "error", err)
 	}
 
@@ -110,7 +97,7 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 
 func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogithub.Issue, branchName string) (string, error) {
 	// Prepare workspace
-	workDir := filepath.Join(agentWorkspaceDir, owner, repo)
+	workDir := filepath.Join(r.workspaceDir, owner, repo)
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
 		return "", fmt.Errorf("create workspace dir: %w", err)
 	}
@@ -266,12 +253,12 @@ func (r *Runner) runClaude(ctx context.Context, repoDir, prompt string) error {
 		"-p", prompt,
 		"--output-format", "json",
 		"--allowedTools", strings.Join(agentAllowedTools, ","),
-		"--max-turns", strconv.Itoa(agentMaxTurns),
-		"--max-budget-usd", fmt.Sprintf("%.2f", agentMaxBudgetUSD),
+		"--max-turns", strconv.Itoa(config.AgentMaxTurns),
+		"--max-budget-usd", fmt.Sprintf("%.2f", config.AgentMaxBudgetUSD),
 		"--no-session-persistence",
 	}
 
-	cmd := exec.CommandContext(ctx, agentCommand, args...)
+	cmd := exec.CommandContext(ctx, config.AgentCommand, args...)
 	cmd.Dir = repoDir
 
 	var stdout, stderr bytes.Buffer

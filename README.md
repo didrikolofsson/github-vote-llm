@@ -40,6 +40,7 @@ All config is via environment variables:
 | `WEBHOOK_SECRET`     | yes      | HMAC secret matching the App's webhook config |
 | `ANTHROPIC_API_KEY`  | yes      | API key passed to the `claude` CLI            |
 | `PORT`               | no       | HTTP listen port (default: `8080`)            |
+| `WORKSPACE_DIR`      | no       | Base dir for repo clones (default: `/tmp/vote-llm-workspaces`). Point this at a persistent volume in production. |
 
 For local development, put these in `.env.development` — they are loaded automatically when `GIN_MODE=debug`.
 

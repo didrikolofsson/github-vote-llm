@@ -43,6 +43,7 @@ All configuration via environment variables (no config file):
 | `WEBHOOK_SECRET`     | yes      | HMAC secret for webhook signature validation |
 | `ANTHROPIC_API_KEY`  | yes      | API key passed to the `claude` CLI           |
 | `PORT`               | no       | HTTP listen port (default: `8080`)           |
+| `WORKSPACE_DIR`      | no       | Base dir for repo clones (default: `/tmp/vote-llm-workspaces`). Point this at a persistent volume in production. |
 
 In `GIN_MODE=debug`, env vars are loaded from `.env.development` via godotenv.
 
@@ -65,7 +66,7 @@ In `GIN_MODE=debug`, env vars are loaded from `.env.development` via godotenv.
 - **Duplicate prevention**: Webhook handler skips issues that already have the `llm-in-progress` label.
 - **Label state machine**: `feature-request` → (manual) → `approved-for-dev` → `llm-in-progress` → `llm-pr-created` or `llm-failed`.
 - **Feature-request guard**: `approved-for-dev` label is only processed if the issue also has `feature-request`.
-- **Agent workspace**: `{workspace_dir}/{owner}/{repo}/repo` — reused across runs; `git fetch --all --prune` before new work.
+- **Agent workspace**: `$WORKSPACE_DIR/{owner}/{repo}/repo` — reused across runs; `git fetch --all --prune` before new work.
 - **Branch naming**: `vote-llm/issue-{number}-{slugified-title}` (slug max 40 chars).
 - **Claude invocation**: `claude -p {prompt} --output-format json --allowedTools {tools} --max-turns 25 --max-budget-usd 5.00 --no-session-persistence`
 - **Existing PR handling**: If PR creation fails, `FindPullRequestByHead` looks up an existing open PR for the branch.
