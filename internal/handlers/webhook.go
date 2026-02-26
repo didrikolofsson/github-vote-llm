@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	ghclient "github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
+	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
 	gh "github.com/google/go-github/v68/github"
 )
@@ -17,13 +19,15 @@ type WebhookHandler struct {
 	factory      *ghclient.ClientFactory
 	log          *logger.Logger
 	workspaceDir string
+	store        store.Store
 }
 
-func NewWebhookHandler(factory *ghclient.ClientFactory, log *logger.Logger, workspaceDir string) *WebhookHandler {
+func NewWebhookHandler(factory *ghclient.ClientFactory, log *logger.Logger, workspaceDir string, st store.Store) *WebhookHandler {
 	return &WebhookHandler{
 		factory:      factory,
 		log:          log.Named("webhook"),
 		workspaceDir: workspaceDir,
+		store:        st,
 	}
 }
 
@@ -85,13 +89,26 @@ func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
 		return
 	}
 
-	// Guard: issue must not already have in-progress label
+	// Guard: issue must not already have in-progress label (fast pre-check before DB)
 	for _, l := range issue.Labels {
 		if l.GetName() == config.LabelInProgress {
 			h.log.Infow("issue already in-progress, skipping", "issue", issueNum)
 			c.JSON(http.StatusOK, gin.H{"status": "ok"})
 			return
 		}
+	}
+
+	// Create execution record — authoritative deduplication via DB unique constraint.
+	execution, err := h.store.CreateExecution(c.Request.Context(), owner, repoName, issueNum)
+	if err != nil {
+		if errors.Is(err, store.ErrAlreadyExists) {
+			h.log.Infow("execution already exists for issue, skipping", "issue", issueNum)
+			c.JSON(http.StatusOK, gin.H{"status": "ok"})
+			return
+		}
+		h.log.Errorw("failed to create execution record", "issue", issueNum, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		return
 	}
 
 	// Get installation ID from the event
@@ -122,8 +139,8 @@ func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
 				h.log.Errorw("panic in agent runner", "repo", owner+"/"+repoName, "issue", issueNum, "panic", r)
 			}
 		}()
-		runner := agent.NewRunner(client, h.log, h.workspaceDir)
-		runner.Run(context.Background(), owner, repoName, issue)
+		runner := agent.NewRunner(client, h.log, h.workspaceDir, h.store)
+		runner.Run(context.Background(), owner, repoName, issue, execution.ID)
 	}()
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "agent started"})

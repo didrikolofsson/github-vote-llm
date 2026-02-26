@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -11,7 +12,9 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/middleware"
+	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
@@ -41,10 +44,28 @@ func main() {
 		log.Fatalf("GITHUB_APP_ID must be a number: %v", err)
 	}
 
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		log.Fatal("DATABASE_URL is required")
+	}
+
 	privateKeyBytes := []byte(key)
 
 	appLog := logger.New()
 	defer appLog.Sync()
+
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		log.Fatalf("failed to create database pool: %v", err)
+	}
+	defer pool.Close()
+
+	if err := pool.Ping(ctx); err != nil {
+		log.Fatalf("failed to connect to database: %v", err)
+	}
+
+	st := store.NewPostgresStore(pool)
 
 	factory, err := ghclient.NewClientFactory(ghclient.AppConfig{
 		AppID:           appID,
@@ -54,7 +75,7 @@ func main() {
 		log.Fatalf("failed to create GitHub App client factory: %v", err)
 	}
 
-	webhookHandler := handlers.NewWebhookHandler(factory, appLog, workspaceDir)
+	webhookHandler := handlers.NewWebhookHandler(factory, appLog, workspaceDir, st)
 
 	router := gin.New()
 	router.SetTrustedProxies(nil)
