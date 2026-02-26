@@ -20,3 +20,6 @@ vote-llm
 vote-llm.db
 vote-llm.db*
 *.pem
+
+# Claude
+.claude/worktrees/
