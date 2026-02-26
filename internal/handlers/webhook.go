@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/agent"
+	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	ghclient "github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/gin-gonic/gin"
@@ -13,14 +14,16 @@ import (
 )
 
 type WebhookHandler struct {
-	factory *ghclient.ClientFactory
-	log     *logger.Logger
+	factory      *ghclient.ClientFactory
+	log          *logger.Logger
+	workspaceDir string
 }
 
-func NewWebhookHandler(factory *ghclient.ClientFactory, log *logger.Logger) *WebhookHandler {
+func NewWebhookHandler(factory *ghclient.ClientFactory, log *logger.Logger, workspaceDir string) *WebhookHandler {
 	return &WebhookHandler{
-		factory: factory,
-		log:     log.Named("webhook"),
+		factory:      factory,
+		log:          log.Named("webhook"),
+		workspaceDir: workspaceDir,
 	}
 }
 
@@ -56,7 +59,7 @@ func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
 	}
 
 	labelName := e.GetLabel().GetName()
-	if labelName != agent.LabelApproved {
+	if labelName != config.LabelApproved {
 		h.log.Infow("label added but not approval label, ignoring", "label", labelName)
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		return
@@ -71,7 +74,7 @@ func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
 	// Guard: issue must have feature-request label
 	hasFeatureRequest := false
 	for _, l := range issue.Labels {
-		if l.GetName() == agent.LabelFeatureRequest {
+		if l.GetName() == config.LabelFeatureRequest {
 			hasFeatureRequest = true
 			break
 		}
@@ -84,7 +87,7 @@ func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
 
 	// Guard: issue must not already have in-progress label
 	for _, l := range issue.Labels {
-		if l.GetName() == agent.LabelInProgress {
+		if l.GetName() == config.LabelInProgress {
 			h.log.Infow("issue already in-progress, skipping", "issue", issueNum)
 			c.JSON(http.StatusOK, gin.H{"status": "ok"})
 			return
@@ -119,7 +122,7 @@ func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
 				h.log.Errorw("panic in agent runner", "repo", owner+"/"+repoName, "issue", issueNum, "panic", r)
 			}
 		}()
-		runner := agent.NewRunner(client, h.log)
+		runner := agent.NewRunner(client, h.log, h.workspaceDir)
 		runner.Run(context.Background(), owner, repoName, issue)
 	}()
 

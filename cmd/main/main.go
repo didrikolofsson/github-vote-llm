@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	ghclient "github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
@@ -21,6 +22,16 @@ func main() {
 		}
 	}
 
+	key := os.Getenv("GITHUB_PRIVATE_KEY")
+	if key == "" {
+		log.Fatal("GITHUB_PRIVATE_KEY is required")
+	}
+
+	workspaceDir := os.Getenv("WORKSPACE_DIR")
+	if workspaceDir == "" {
+		workspaceDir = config.DefaultWorkspaceDir
+	}
+
 	appIDStr := os.Getenv("GITHUB_APP_ID")
 	if appIDStr == "" {
 		log.Fatal("GITHUB_APP_ID is required")
@@ -28,11 +39,6 @@ func main() {
 	appID, err := strconv.ParseInt(appIDStr, 10, 64)
 	if err != nil {
 		log.Fatalf("GITHUB_APP_ID must be a number: %v", err)
-	}
-
-	key := os.Getenv("GITHUB_PRIVATE_KEY")
-	if key == "" {
-		log.Fatal("GITHUB_PRIVATE_KEY is required")
 	}
 
 	privateKeyBytes := []byte(key)
@@ -48,7 +54,7 @@ func main() {
 		log.Fatalf("failed to create GitHub App client factory: %v", err)
 	}
 
-	webhookHandler := handlers.NewWebhookHandler(factory, appLog)
+	webhookHandler := handlers.NewWebhookHandler(factory, appLog, workspaceDir)
 
 	router := gin.New()
 	router.SetTrustedProxies(nil)
