@@ -50,15 +50,6 @@ In `GIN_MODE=debug`, env vars are loaded from `.env.development` via godotenv.
 
 **GitHub App only.** Set `GITHUB_APP_ID` + `GITHUB_PRIVATE_KEY`. Creates per-installation clients with short-lived tokens. Git clone/push uses `x-access-token:{token}@github.com` URLs.
 
-## Planned (see DEVPLAN.md)
-
-- **PostgreSQL store** (`internal/store/`) with sqlc — idempotency, execution records, per-repo config
-- **Per-client API keys** — `ANTHROPIC_API_KEY` injected per-repo from store
-- **Vote tracking** — +1 reactions on `feature-request` issues, `candidate` label at threshold
-- **REST API** — `/api` route group for run management and repo config
-- **Minimal UI** — SPA in `ui/`, embedded into binary via `go:embed`, served at `/ui`
-- **Blobless clone** — `git clone --filter=blob:none`
-
 ## Dependencies
 
 - **claude** CLI — The agent command; must be installed and configured.
