@@ -40,14 +40,14 @@ internal/
 
 All config is via environment variables:
 
-| Variable             | Required | Description                                   |
-| -------------------- | -------- | --------------------------------------------- |
-| `GITHUB_APP_ID`      | yes      | GitHub App numeric ID                         |
-| `GITHUB_PRIVATE_KEY` | yes      | PEM bytes as a string                         |
-| `WEBHOOK_SECRET`     | yes      | HMAC secret matching the App's webhook config |
-| `ANTHROPIC_API_KEY`  | yes      | API key passed to the `claude` CLI            |
-| `DATABASE_URL`       | yes      | PostgreSQL connection string (e.g. `postgres://user:pass@localhost:5432/dbname`) |
-| `PORT`               | no       | HTTP listen port (default: `8080`)            |
+| Variable             | Required | Description                                                                                                      |
+| -------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
+| `GITHUB_APP_ID`      | yes      | GitHub App numeric ID                                                                                            |
+| `GITHUB_PRIVATE_KEY` | yes      | PEM bytes as a string                                                                                            |
+| `WEBHOOK_SECRET`     | yes      | HMAC secret matching the App's webhook config                                                                    |
+| `ANTHROPIC_API_KEY`  | yes      | API key passed to the `claude` CLI                                                                               |
+| `DATABASE_URL`       | yes      | PostgreSQL connection string (e.g. `postgres://user:pass@localhost:5432/dbname`)                                 |
+| `PORT`               | no       | HTTP listen port (default: `8080`)                                                                               |
 | `WORKSPACE_DIR`      | no       | Base dir for repo clones (default: `/tmp/vote-llm-workspaces`). Point this at a persistent volume in production. |
 
 For local development, put these in `.env.development` — they are loaded automatically when `GIN_MODE=debug`.
@@ -69,10 +69,10 @@ migrate -source file://db/migrations -database "$DATABASE_URL" down 1
 
 ### Tables
 
-| Table        | Purpose                                                            |
-| ------------ | ------------------------------------------------------------------ |
-| `executions` | Tracks every agent run — status, branch, PR URL, error, timestamps |
-| `repo_config`| Per-repo overrides for labels, timeout, budget, and API key        |
+| Table         | Purpose                                                            |
+| ------------- | ------------------------------------------------------------------ |
+| `executions`  | Tracks every agent run — status, branch, PR URL, error, timestamps |
+| `repo_config` | Per-repo overrides for labels, timeout, budget, and API key        |
 
 `executions` enforces a `UNIQUE(owner, repo, issue_number)` constraint so each issue is processed at most once, even across restarts.
 

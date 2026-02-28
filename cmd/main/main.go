@@ -25,9 +25,24 @@ func main() {
 		}
 	}
 
-	key := os.Getenv("GITHUB_PRIVATE_KEY")
-	if key == "" {
-		log.Fatal("GITHUB_PRIVATE_KEY is required")
+	// Handle github app private key
+	// Debugger needs local file to work
+	var privateKey []byte = nil
+	privateKeyPath := os.Getenv("GITHUB_PRIVATE_KEY_PATH")
+	privateKeyString := os.Getenv("GITHUB_PRIVATE_KEY")
+
+	if privateKeyPath == "" && privateKeyString == "" {
+		log.Fatal("GITHUB_PRIVATE_KEY_PATH or GITHUB_PRIVATE_KEY is required")
+	}
+	if privateKeyPath != "" {
+		privateKeyBytes, err := os.ReadFile(privateKeyPath)
+		if err != nil {
+			log.Fatalf("failed to read private key file: %v", err)
+		}
+		privateKey = privateKeyBytes
+	}
+	if privateKey == nil && privateKeyString != "" {
+		privateKey = []byte(privateKeyString)
 	}
 
 	workspaceDir := os.Getenv("WORKSPACE_DIR")
@@ -49,8 +64,6 @@ func main() {
 		log.Fatal("DATABASE_URL is required")
 	}
 
-	privateKeyBytes := []byte(key)
-
 	appLog := logger.New()
 	defer appLog.Sync()
 
@@ -69,7 +82,7 @@ func main() {
 
 	factory, err := ghclient.NewClientFactory(ghclient.AppConfig{
 		AppID:           appID,
-		PrivateKeyBytes: privateKeyBytes,
+		PrivateKeyBytes: privateKey,
 	}, appLog)
 	if err != nil {
 		log.Fatalf("failed to create GitHub App client factory: %v", err)

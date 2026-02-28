@@ -23,9 +23,6 @@ type Store interface {
 	UpsertRepoConfig(ctx context.Context, params UpsertRepoConfigParams) (*RepoConfig, error)
 }
 
-// compile-time interface check
-var _ Store = (*PostgresStore)(nil)
-
 // PostgresStore implements Store backed by a pgxpool.Pool.
 type PostgresStore struct {
 	q *Queries
