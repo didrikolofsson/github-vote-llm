@@ -200,8 +200,17 @@ func (r *Runner) cloneOrResetRepo(ctx context.Context, owner, repo, repoDir stri
 	}
 	cloneURL := fmt.Sprintf("https://x-access-token:%s@github.com/%s/%s.git", token, owner, repo)
 
-	if _, err := os.Stat(filepath.Join(repoDir, ".git")); err == nil {
-		// Repo exists — update remote URL with fresh token, then fetch
+	// Validate that repoDir is a usable git repository. os.Stat(".git") is not
+	// sufficient — a previous interrupted clone can leave a partial .git directory
+	// that passes the stat check but causes git commands to fail.
+	repoValid := func() bool {
+		cmd := exec.CommandContext(ctx, "git", "rev-parse", "--git-dir")
+		cmd.Dir = repoDir
+		return cmd.Run() == nil
+	}()
+
+	if repoValid {
+		// Repo is intact — refresh the remote URL (token rotates) then fetch.
 		cmd := exec.CommandContext(ctx, "git", "remote", "set-url", "origin", cloneURL)
 		cmd.Dir = repoDir
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -216,7 +225,11 @@ func (r *Runner) cloneOrResetRepo(ctx context.Context, owner, repo, repoDir stri
 		return nil
 	}
 
-	// Clone fresh
+	// No valid repo — remove any partial directory left by a failed clone and start fresh.
+	if err := os.RemoveAll(repoDir); err != nil {
+		return fmt.Errorf("remove partial repo dir: %w", err)
+	}
+
 	cmd := exec.CommandContext(ctx, "git", "clone", "--filter=blob:none", cloneURL, repoDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git clone: %s: %w", out, err)

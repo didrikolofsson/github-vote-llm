@@ -63,15 +63,19 @@ func buildLabeledIssuePayload(t *testing.T, installationID int64) []byte {
 
 var errDBFailure = errors.New("db connection lost")
 
-func TestHandleIssueEvent_AlreadyExists_Returns200(t *testing.T) {
+func TestHandleIssueEvent_AlreadyExists_NotRetryable_Returns200(t *testing.T) {
 	mockStore := &store.MockStore{
 		CreateExecutionFn: func(ctx context.Context, owner, repo string, issueNumber int) (*store.Execution, error) {
-			return nil, store.ErrAlreadyExists
+			return nil, errors.New("execution already exists for this issue")
+		},
+		// Execution exists but is not in failed state (e.g. in_progress or succeeded).
+		ResetFailedExecutionFn: func(ctx context.Context, owner, repo string, issueNumber int) (*store.Execution, error) {
+			return nil, nil
 		},
 	}
 
 	// WebhookHandler requires a ClientFactory — pass nil; the handler returns
-	// before reaching the factory when CreateExecution returns ErrAlreadyExists.
+	// before reaching the factory when the execution is not retryable.
 	handler := handlers.NewWebhookHandler(nil, logger.New(), "/tmp", mockStore)
 
 	router := gin.New()
@@ -87,6 +91,34 @@ func TestHandleIssueEvent_AlreadyExists_Returns200(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleIssueEvent_AlreadyExists_ResetDBError_Returns500(t *testing.T) {
+	mockStore := &store.MockStore{
+		CreateExecutionFn: func(ctx context.Context, owner, repo string, issueNumber int) (*store.Execution, error) {
+			return nil, errors.New("execution already exists for this issue")
+		},
+		ResetFailedExecutionFn: func(ctx context.Context, owner, repo string, issueNumber int) (*store.Execution, error) {
+			return nil, errDBFailure
+		},
+	}
+
+	handler := handlers.NewWebhookHandler(nil, logger.New(), "/tmp", mockStore)
+
+	router := gin.New()
+	router.POST("/webhook", handler.HandleGithubWebhook)
+
+	payload := buildLabeledIssuePayload(t, 123)
+	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(payload))
+	req.Header.Set("X-GitHub-Event", "issues")
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

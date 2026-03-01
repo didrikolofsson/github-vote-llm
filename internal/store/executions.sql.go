@@ -39,9 +39,106 @@ func (q *Queries) CreateExecution(ctx context.Context, arg CreateExecutionParams
 	return i, err
 }
 
+const getExecutionByOwnerRepoIssueNumber = `-- name: GetExecutionByOwnerRepoIssueNumber :one
+SELECT id, owner, repo, issue_number, status, branch, pr_url, error, created_at, updated_at
+FROM executions
+WHERE owner = $1
+    AND repo = $2
+    AND issue_number = $3
+`
+
+type GetExecutionByOwnerRepoIssueNumberParams struct {
+	Owner       string
+	Repo        string
+	IssueNumber int32
+}
+
+func (q *Queries) GetExecutionByOwnerRepoIssueNumber(ctx context.Context, arg GetExecutionByOwnerRepoIssueNumberParams) (Execution, error) {
+	row := q.db.QueryRow(ctx, getExecutionByOwnerRepoIssueNumber, arg.Owner, arg.Repo, arg.IssueNumber)
+	var i Execution
+	err := row.Scan(
+		&i.ID,
+		&i.Owner,
+		&i.Repo,
+		&i.IssueNumber,
+		&i.Status,
+		&i.Branch,
+		&i.PrUrl,
+		&i.Error,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const resetExecution = `-- name: ResetExecution :one
+UPDATE executions
+SET status = 'pending'
+WHERE id = $1
+RETURNING id, owner, repo, issue_number, status, branch, pr_url, error, created_at, updated_at
+`
+
+func (q *Queries) ResetExecution(ctx context.Context, id int64) (Execution, error) {
+	row := q.db.QueryRow(ctx, resetExecution, id)
+	var i Execution
+	err := row.Scan(
+		&i.ID,
+		&i.Owner,
+		&i.Repo,
+		&i.IssueNumber,
+		&i.Status,
+		&i.Branch,
+		&i.PrUrl,
+		&i.Error,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const resetFailedExecution = `-- name: ResetFailedExecution :one
+UPDATE executions
+SET status = 'pending',
+    branch = NULL,
+    pr_url = NULL,
+    error = NULL,
+    updated_at = now()
+WHERE owner = $1
+    AND repo = $2
+    AND issue_number = $3
+    AND status = 'failed'
+RETURNING id, owner, repo, issue_number, status, branch, pr_url, error, created_at, updated_at
+`
+
+type ResetFailedExecutionParams struct {
+	Owner       string
+	Repo        string
+	IssueNumber int32
+}
+
+func (q *Queries) ResetFailedExecution(ctx context.Context, arg ResetFailedExecutionParams) (Execution, error) {
+	row := q.db.QueryRow(ctx, resetFailedExecution, arg.Owner, arg.Repo, arg.IssueNumber)
+	var i Execution
+	err := row.Scan(
+		&i.ID,
+		&i.Owner,
+		&i.Repo,
+		&i.IssueNumber,
+		&i.Status,
+		&i.Branch,
+		&i.PrUrl,
+		&i.Error,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateExecutionFailed = `-- name: UpdateExecutionFailed :one
 UPDATE executions
-SET status = 'failed', error = $1, updated_at = now()
+SET status = 'failed',
+    error = $1,
+    updated_at = now()
 WHERE id = $2
 RETURNING id, owner, repo, issue_number, status, branch, pr_url, error, created_at, updated_at
 `
@@ -71,7 +168,9 @@ func (q *Queries) UpdateExecutionFailed(ctx context.Context, arg UpdateExecution
 
 const updateExecutionInProgress = `-- name: UpdateExecutionInProgress :one
 UPDATE executions
-SET status = 'in_progress', branch = $1, updated_at = now()
+SET status = 'in_progress',
+    branch = $1,
+    updated_at = now()
 WHERE id = $2
 RETURNING id, owner, repo, issue_number, status, branch, pr_url, error, created_at, updated_at
 `
@@ -101,7 +200,9 @@ func (q *Queries) UpdateExecutionInProgress(ctx context.Context, arg UpdateExecu
 
 const updateExecutionSuccess = `-- name: UpdateExecutionSuccess :one
 UPDATE executions
-SET status = 'success', pr_url = $1, updated_at = now()
+SET status = 'success',
+    pr_url = $1,
+    updated_at = now()
 WHERE id = $2
 RETURNING id, owner, repo, issue_number, status, branch, pr_url, error, created_at, updated_at
 `

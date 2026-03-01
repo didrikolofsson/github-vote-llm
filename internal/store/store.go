@@ -9,13 +9,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ErrAlreadyExists is returned by CreateExecution when a row for the same
-// (owner, repo, issue_number) already exists.
-var ErrAlreadyExists = errors.New("execution already exists for this issue")
-
 // Store is the interface for all database operations used by this service.
 type Store interface {
+	GetExecutionByOwnerRepoIssueNumber(ctx context.Context, owner, repo string, issueNumber int) (*Execution, error)
 	CreateExecution(ctx context.Context, owner, repo string, issueNumber int) (*Execution, error)
+	ResetFailedExecution(ctx context.Context, owner, repo string, issueNumber int) (*Execution, error)
+	ResetExecution(ctx context.Context, id int64) (*Execution, error)
 	SetInProgress(ctx context.Context, id int64, branch string) (*Execution, error)
 	SetSuccess(ctx context.Context, id int64, prURL string) (*Execution, error)
 	SetFailed(ctx context.Context, id int64, errMsg string) (*Execution, error)
@@ -33,6 +32,18 @@ func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
 	return &PostgresStore{q: New(pool)}
 }
 
+func (s *PostgresStore) GetExecutionByOwnerRepoIssueNumber(ctx context.Context, owner, repo string, issueNumber int) (*Execution, error) {
+	exec, err := s.q.GetExecutionByOwnerRepoIssueNumber(ctx, GetExecutionByOwnerRepoIssueNumberParams{
+		Owner:       owner,
+		Repo:        repo,
+		IssueNumber: int32(issueNumber),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &exec, nil
+}
+
 func (s *PostgresStore) CreateExecution(ctx context.Context, owner, repo string, issueNumber int) (*Execution, error) {
 	exec, err := s.q.CreateExecution(ctx, CreateExecutionParams{
 		Owner:       owner,
@@ -42,8 +53,31 @@ func (s *PostgresStore) CreateExecution(ctx context.Context, owner, repo string,
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return nil, ErrAlreadyExists
+			return nil, errors.New("execution already exists for this issue")
 		}
+		return nil, err
+	}
+	return &exec, nil
+}
+
+func (s *PostgresStore) ResetFailedExecution(ctx context.Context, owner, repo string, issueNumber int) (*Execution, error) {
+	exec, err := s.q.ResetFailedExecution(ctx, ResetFailedExecutionParams{
+		Owner:       owner,
+		Repo:        repo,
+		IssueNumber: int32(issueNumber),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &exec, nil
+}
+
+func (s *PostgresStore) ResetExecution(ctx context.Context, id int64) (*Execution, error) {
+	exec, err := s.q.ResetExecution(ctx, id)
+	if err != nil {
 		return nil, err
 	}
 	return &exec, nil

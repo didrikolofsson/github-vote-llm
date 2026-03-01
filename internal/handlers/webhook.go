@@ -15,6 +15,8 @@ import (
 	gh "github.com/google/go-github/v68/github"
 )
 
+var errExecutionAlreadyExists = errors.New("execution already exists for this issue")
+
 type WebhookHandler struct {
 	factory      *ghclient.ClientFactory
 	log          *logger.Logger
@@ -55,6 +57,15 @@ func (h *WebhookHandler) HandleGithubWebhook(c *gin.Context) {
 	}
 }
 
+func hasInProgressLabel(issue *gh.Issue) bool {
+	for _, l := range issue.Labels {
+		if l.GetName() == config.LabelInProgress {
+			return true
+		}
+	}
+	return false
+}
+
 func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
 	if e.GetAction() != "labeled" {
 		h.log.Infow("unhandled issues event action", "action", e.GetAction())
@@ -89,25 +100,45 @@ func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
 		return
 	}
 
-	// Guard: issue must not already have in-progress label (fast pre-check before DB)
-	for _, l := range issue.Labels {
-		if l.GetName() == config.LabelInProgress {
-			h.log.Infow("issue already in-progress, skipping", "issue", issueNum)
-			c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	if hasInProgressLabel(issue) {
+		h.log.Infow("issue already in-progress, skipping", "issue", issueNum)
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		return
+	}
+
+	// Check if execution record exists. If none exists, create a new one. If it exists, check if it failed. If it failed, reset it.
+	// If it exists and was already successful, skip.
+	// TODO: Enable retry logic as a user action.
+	execution, err := h.store.GetExecutionByOwnerRepoIssueNumber(c.Request.Context(), owner, repoName, issueNum)
+	if err != nil {
+		h.log.Errorw("failed to get execution record", "issue", issueNum, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		return
+	}
+
+	if execution == nil {
+		h.log.Infow("no execution record found, creating new one", "issue", issueNum)
+		execution, err = h.store.CreateExecution(c.Request.Context(), owner, repoName, issueNum)
+		if err != nil {
+			h.log.Errorw("failed to create execution record", "issue", issueNum, "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
 	}
 
-	// Create execution record — authoritative deduplication via DB unique constraint.
-	execution, err := h.store.CreateExecution(c.Request.Context(), owner, repoName, issueNum)
-	if err != nil {
-		if errors.Is(err, store.ErrAlreadyExists) {
-			h.log.Infow("execution already exists for issue, skipping", "issue", issueNum)
-			c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	if execution.Status == "failed" {
+		h.log.Infow("execution failed, resetting", "issue", issueNum)
+		execution, err = h.store.ResetFailedExecution(c.Request.Context(), owner, repoName, issueNum)
+		if err != nil {
+			h.log.Errorw("failed to reset execution record", "issue", issueNum, "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		h.log.Errorw("failed to create execution record", "issue", issueNum, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+	}
+
+	if execution.Status == "success" {
+		h.log.Infow("execution already successful, skipping", "issue", issueNum)
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		return
 	}
 
