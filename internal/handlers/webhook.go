@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net/http"
 
@@ -15,7 +14,6 @@ import (
 	gh "github.com/google/go-github/v68/github"
 )
 
-var errExecutionAlreadyExists = errors.New("execution already exists for this issue")
 
 type WebhookHandler struct {
 	factory      *ghclient.ClientFactory
@@ -57,9 +55,9 @@ func (h *WebhookHandler) HandleGithubWebhook(c *gin.Context) {
 	}
 }
 
-func hasInProgressLabel(issue *gh.Issue) bool {
+func hasInProgressLabel(issue *gh.Issue, labelInProgress string) bool {
 	for _, l := range issue.Labels {
-		if l.GetName() == config.LabelInProgress {
+		if l.GetName() == labelInProgress {
 			return true
 		}
 	}
@@ -73,17 +71,28 @@ func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
 		return
 	}
 
+	// Extract repo identity early so we can load per-repo config.
+	repo := e.GetRepo()
+	owner := repo.GetOwner().GetLogin()
+	repoName := repo.GetName()
+
+	// Load per-repo label overrides (best-effort; nil means use global defaults).
+	repoConfig, err := h.store.GetRepoConfig(c.Request.Context(), owner, repoName)
+	if err != nil {
+		h.log.Warnw("failed to fetch repo config, using defaults", "owner", owner, "repo", repoName, "error", err)
+	}
+
+	labelApproved   := resolveLabelApproved(repoConfig)
+	labelInProgress := resolveLabelInProgress(repoConfig)
+
 	labelName := e.GetLabel().GetName()
-	if labelName != config.LabelApproved {
+	if labelName != labelApproved {
 		h.log.Infow("label added but not approval label, ignoring", "label", labelName)
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		return
 	}
 
 	issue := e.GetIssue()
-	repo := e.GetRepo()
-	owner := repo.GetOwner().GetLogin()
-	repoName := repo.GetName()
 	issueNum := issue.GetNumber()
 
 	// Guard: issue must have feature-request label
@@ -100,7 +109,7 @@ func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
 		return
 	}
 
-	if hasInProgressLabel(issue) {
+	if hasInProgressLabel(issue, labelInProgress) {
 		h.log.Infow("issue already in-progress, skipping", "issue", issueNum)
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		return
@@ -175,4 +184,18 @@ func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
 	}()
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "agent started"})
+}
+
+func resolveLabelApproved(cfg *store.RepoConfig) string {
+	if cfg != nil && cfg.LabelApproved != nil {
+		return *cfg.LabelApproved
+	}
+	return config.LabelApproved
+}
+
+func resolveLabelInProgress(cfg *store.RepoConfig) string {
+	if cfg != nil && cfg.LabelInProgress != nil {
+		return *cfg.LabelInProgress
+	}
+	return config.LabelInProgress
 }
