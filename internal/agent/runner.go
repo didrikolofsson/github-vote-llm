@@ -17,6 +17,7 @@ import (
 	gh "github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/spinner"
+	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	gogithub "github.com/google/go-github/v68/github"
 )
 
@@ -27,12 +28,13 @@ type Runner struct {
 	client       gh.ClientAPI
 	log          *logger.Logger
 	workspaceDir string
+	store        store.Store
 }
 
 // NewRunner creates a new agent runner. workspaceDir is the base directory for
 // repo clones; use DefaultWorkspaceDir as the fallback.
-func NewRunner(client gh.ClientAPI, log *logger.Logger, workspaceDir string) *Runner {
-	return &Runner{client: client, log: log.Named("agent"), workspaceDir: workspaceDir}
+func NewRunner(client gh.ClientAPI, log *logger.Logger, workspaceDir string, st store.Store) *Runner {
+	return &Runner{client: client, log: log.Named("agent"), workspaceDir: workspaceDir, store: st}
 }
 
 // claudeResult represents the JSON output from claude -p.
@@ -42,13 +44,18 @@ type claudeResult struct {
 }
 
 // Run implements a feature request: clones repo, runs Claude Code, creates a PR.
-func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Issue) {
+func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Issue, executionID int64) {
 	issueNum := issue.GetNumber()
 	r.log.Infow("starting work on issue", "issue", issueNum, "repo", owner+"/"+repo)
 
 	branchName := fmt.Sprintf("vote-llm/issue-%d-%s", issueNum, slugify(issue.GetTitle()))
 
-	// Mark issue as in-progress
+	// Mark in-progress in DB
+	if _, err := r.store.SetInProgress(ctx, executionID, branchName); err != nil {
+		r.log.Warnw("failed to set execution in-progress", "error", err)
+	}
+
+	// Mark issue as in-progress on GitHub
 	if err := r.client.AddLabel(ctx, owner, repo, issueNum, config.LabelInProgress); err != nil {
 		r.log.Warnw("failed to add in-progress label", "error", err)
 	}
@@ -58,14 +65,25 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 		r.log.Warnw("failed to remove approved label", "error", err)
 	}
 
+	// Fetch per-repo config to resolve timeout and budget overrides
+	repoConfig, err := r.store.GetRepoConfig(ctx, owner, repo)
+	if err != nil {
+		r.log.Warnw("failed to fetch repo config, using defaults", "error", err)
+	}
+
 	// Run with timeout
-	timeout := time.Duration(config.AgentTimeoutMinutes) * time.Minute
+	timeout := resolveTimeout(repoConfig)
 	implCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	prURL, err := r.implement(implCtx, owner, repo, issue, branchName)
+	prURL, err := r.implement(implCtx, owner, repo, issue, branchName, repoConfig)
 	if err != nil {
 		r.log.Errorw("failed to implement issue", "issue", issueNum, "error", err)
+
+		if _, dbErr := r.store.SetFailed(ctx, executionID, err.Error()); dbErr != nil {
+			r.log.Warnw("failed to set execution failed", "error", dbErr)
+		}
+
 		comment := fmt.Sprintf("**vote-llm**: Failed to implement this feature.\n\n```\n%s\n```", err)
 		if cErr := r.client.CreateComment(ctx, owner, repo, issueNum, comment); cErr != nil {
 			r.log.Warnw("failed to comment on issue", "error", cErr)
@@ -77,6 +95,10 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 			r.log.Warnw("failed to add failed label", "error", err)
 		}
 		return
+	}
+
+	if _, dbErr := r.store.SetSuccess(ctx, executionID, prURL); dbErr != nil {
+		r.log.Warnw("failed to set execution success", "error", dbErr)
 	}
 
 	// Mark issue as done and comment with PR link
@@ -95,7 +117,7 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 	r.log.Infow("successfully created PR", "issue", issueNum, "pr", prURL)
 }
 
-func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogithub.Issue, branchName string) (string, error) {
+func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogithub.Issue, branchName string, repoConfig *store.RepoConfig) (string, error) {
 	// Prepare workspace
 	workDir := filepath.Join(r.workspaceDir, owner, repo)
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
@@ -126,7 +148,7 @@ func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogit
 
 	// Build prompt and run Claude Code
 	prompt := r.buildPrompt(issue, owner, repo)
-	if err := r.runClaude(ctx, repoDir, prompt); err != nil {
+	if err := r.runClaude(ctx, repoDir, prompt, repoConfig); err != nil {
 		return "", fmt.Errorf("claude code: %w", err)
 	}
 
@@ -178,8 +200,17 @@ func (r *Runner) cloneOrResetRepo(ctx context.Context, owner, repo, repoDir stri
 	}
 	cloneURL := fmt.Sprintf("https://x-access-token:%s@github.com/%s/%s.git", token, owner, repo)
 
-	if _, err := os.Stat(filepath.Join(repoDir, ".git")); err == nil {
-		// Repo exists — update remote URL with fresh token, then fetch
+	// Validate that repoDir is a usable git repository. os.Stat(".git") is not
+	// sufficient — a previous interrupted clone can leave a partial .git directory
+	// that passes the stat check but causes git commands to fail.
+	repoValid := func() bool {
+		cmd := exec.CommandContext(ctx, "git", "rev-parse", "--git-dir")
+		cmd.Dir = repoDir
+		return cmd.Run() == nil
+	}()
+
+	if repoValid {
+		// Repo is intact — refresh the remote URL (token rotates) then fetch.
 		cmd := exec.CommandContext(ctx, "git", "remote", "set-url", "origin", cloneURL)
 		cmd.Dir = repoDir
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -194,7 +225,11 @@ func (r *Runner) cloneOrResetRepo(ctx context.Context, owner, repo, repoDir stri
 		return nil
 	}
 
-	// Clone fresh
+	// No valid repo — remove any partial directory left by a failed clone and start fresh.
+	if err := os.RemoveAll(repoDir); err != nil {
+		return fmt.Errorf("remove partial repo dir: %w", err)
+	}
+
 	cmd := exec.CommandContext(ctx, "git", "clone", "--filter=blob:none", cloneURL, repoDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git clone: %s: %w", out, err)
@@ -248,13 +283,20 @@ func (r *Runner) buildPrompt(issue *gogithub.Issue, owner, repo string) string {
 	return b.String()
 }
 
-func (r *Runner) runClaude(ctx context.Context, repoDir, prompt string) error {
+func (r *Runner) runClaude(ctx context.Context, repoDir, prompt string, repoConfig *store.RepoConfig) error {
+	maxBudget := config.AgentMaxBudgetUSD
+	if repoConfig != nil && repoConfig.MaxBudgetUsd.Valid {
+		if f, err := repoConfig.MaxBudgetUsd.Float64Value(); err == nil && f.Valid {
+			maxBudget = f.Float64
+		}
+	}
+
 	args := []string{
 		"-p", prompt,
 		"--output-format", "json",
 		"--allowedTools", strings.Join(agentAllowedTools, ","),
 		"--max-turns", strconv.Itoa(config.AgentMaxTurns),
-		"--max-budget-usd", fmt.Sprintf("%.2f", config.AgentMaxBudgetUSD),
+		"--max-budget-usd", fmt.Sprintf("%.2f", maxBudget),
 		"--no-session-persistence",
 	}
 
@@ -352,4 +394,13 @@ func slugify(s string) string {
 		slug = strings.TrimRight(slug, "-")
 	}
 	return slug
+}
+
+// resolveTimeout returns the agent timeout duration, using the per-repo override
+// if available, otherwise falling back to the global default.
+func resolveTimeout(cfg *store.RepoConfig) time.Duration {
+	if cfg != nil && cfg.TimeoutMinutes != nil {
+		return time.Duration(*cfg.TimeoutMinutes) * time.Minute
+	}
+	return time.Duration(config.AgentTimeoutMinutes) * time.Minute
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -11,7 +12,9 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/middleware"
+	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
@@ -22,9 +25,24 @@ func main() {
 		}
 	}
 
-	key := os.Getenv("GITHUB_PRIVATE_KEY")
-	if key == "" {
-		log.Fatal("GITHUB_PRIVATE_KEY is required")
+	// Handle github app private key
+	// Debugger needs local file to work
+	var privateKey []byte = nil
+	privateKeyPath := os.Getenv("GITHUB_PRIVATE_KEY_PATH")
+	privateKeyString := os.Getenv("GITHUB_PRIVATE_KEY")
+
+	if privateKeyPath == "" && privateKeyString == "" {
+		log.Fatal("GITHUB_PRIVATE_KEY_PATH or GITHUB_PRIVATE_KEY is required")
+	}
+	if privateKeyPath != "" {
+		privateKeyBytes, err := os.ReadFile(privateKeyPath)
+		if err != nil {
+			log.Fatalf("failed to read private key file: %v", err)
+		}
+		privateKey = privateKeyBytes
+	}
+	if privateKey == nil && privateKeyString != "" {
+		privateKey = []byte(privateKeyString)
 	}
 
 	workspaceDir := os.Getenv("WORKSPACE_DIR")
@@ -41,20 +59,36 @@ func main() {
 		log.Fatalf("GITHUB_APP_ID must be a number: %v", err)
 	}
 
-	privateKeyBytes := []byte(key)
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		log.Fatal("DATABASE_URL is required")
+	}
 
 	appLog := logger.New()
 	defer appLog.Sync()
 
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		log.Fatalf("failed to create database pool: %v", err)
+	}
+	defer pool.Close()
+
+	if err := pool.Ping(ctx); err != nil {
+		log.Fatalf("failed to connect to database: %v", err)
+	}
+
+	st := store.NewPostgresStore(pool)
+
 	factory, err := ghclient.NewClientFactory(ghclient.AppConfig{
 		AppID:           appID,
-		PrivateKeyBytes: privateKeyBytes,
+		PrivateKeyBytes: privateKey,
 	}, appLog)
 	if err != nil {
 		log.Fatalf("failed to create GitHub App client factory: %v", err)
 	}
 
-	webhookHandler := handlers.NewWebhookHandler(factory, appLog, workspaceDir)
+	webhookHandler := handlers.NewWebhookHandler(factory, appLog, workspaceDir, st)
 
 	router := gin.New()
 	router.SetTrustedProxies(nil)
