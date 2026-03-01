@@ -50,25 +50,30 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 
 	branchName := fmt.Sprintf("vote-llm/issue-%d-%s", issueNum, slugify(issue.GetTitle()))
 
+	// Fetch per-repo config first so all label names and agent settings are resolved.
+	repoConfig, err := r.store.GetRepoConfig(ctx, owner, repo)
+	if err != nil {
+		r.log.Warnw("failed to fetch repo config, using defaults", "error", err)
+	}
+
+	labelApproved   := resolveLabelApproved(repoConfig)
+	labelInProgress := resolveLabelInProgress(repoConfig)
+	labelDone       := resolveLabelDone(repoConfig)
+	labelFailed     := resolveLabelFailed(repoConfig)
+
 	// Mark in-progress in DB
 	if _, err := r.store.SetInProgress(ctx, executionID, branchName); err != nil {
 		r.log.Warnw("failed to set execution in-progress", "error", err)
 	}
 
 	// Mark issue as in-progress on GitHub
-	if err := r.client.AddLabel(ctx, owner, repo, issueNum, config.LabelInProgress); err != nil {
+	if err := r.client.AddLabel(ctx, owner, repo, issueNum, labelInProgress); err != nil {
 		r.log.Warnw("failed to add in-progress label", "error", err)
 	}
 
 	// Remove approved label to prevent re-triggering
-	if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, config.LabelApproved); err != nil {
+	if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, labelApproved); err != nil {
 		r.log.Warnw("failed to remove approved label", "error", err)
-	}
-
-	// Fetch per-repo config to resolve timeout and budget overrides
-	repoConfig, err := r.store.GetRepoConfig(ctx, owner, repo)
-	if err != nil {
-		r.log.Warnw("failed to fetch repo config, using defaults", "error", err)
 	}
 
 	// Run with timeout
@@ -88,10 +93,10 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 		if cErr := r.client.CreateComment(ctx, owner, repo, issueNum, comment); cErr != nil {
 			r.log.Warnw("failed to comment on issue", "error", cErr)
 		}
-		if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, config.LabelInProgress); err != nil {
+		if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, labelInProgress); err != nil {
 			r.log.Warnw("failed to remove in-progress label", "error", err)
 		}
-		if err := r.client.AddLabel(ctx, owner, repo, issueNum, config.LabelFailed); err != nil {
+		if err := r.client.AddLabel(ctx, owner, repo, issueNum, labelFailed); err != nil {
 			r.log.Warnw("failed to add failed label", "error", err)
 		}
 		return
@@ -102,10 +107,10 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 	}
 
 	// Mark issue as done and comment with PR link
-	if err := r.client.AddLabel(ctx, owner, repo, issueNum, config.LabelDone); err != nil {
+	if err := r.client.AddLabel(ctx, owner, repo, issueNum, labelDone); err != nil {
 		r.log.Warnw("failed to add done label", "error", err)
 	}
-	if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, config.LabelInProgress); err != nil {
+	if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, labelInProgress); err != nil {
 		r.log.Warnw("failed to remove in-progress label", "error", err)
 	}
 
@@ -403,4 +408,32 @@ func resolveTimeout(cfg *store.RepoConfig) time.Duration {
 		return time.Duration(*cfg.TimeoutMinutes) * time.Minute
 	}
 	return time.Duration(config.AgentTimeoutMinutes) * time.Minute
+}
+
+func resolveLabelApproved(cfg *store.RepoConfig) string {
+	if cfg != nil && cfg.LabelApproved != nil {
+		return *cfg.LabelApproved
+	}
+	return config.LabelApproved
+}
+
+func resolveLabelInProgress(cfg *store.RepoConfig) string {
+	if cfg != nil && cfg.LabelInProgress != nil {
+		return *cfg.LabelInProgress
+	}
+	return config.LabelInProgress
+}
+
+func resolveLabelDone(cfg *store.RepoConfig) string {
+	if cfg != nil && cfg.LabelDone != nil {
+		return *cfg.LabelDone
+	}
+	return config.LabelDone
+}
+
+func resolveLabelFailed(cfg *store.RepoConfig) string {
+	if cfg != nil && cfg.LabelFailed != nil {
+		return *cfg.LabelFailed
+	}
+	return config.LabelFailed
 }

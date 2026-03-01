@@ -9,6 +9,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// ErrAlreadyExists is returned by CreateExecution when an execution record for
+// the given (owner, repo, issue_number) already exists in the database.
+var ErrAlreadyExists = errors.New("execution already exists for this issue")
+
 // Store is the interface for all database operations used by this service.
 type Store interface {
 	GetExecutionByOwnerRepoIssueNumber(ctx context.Context, owner, repo string, issueNumber int) (*Execution, error)
@@ -53,7 +57,7 @@ func (s *PostgresStore) CreateExecution(ctx context.Context, owner, repo string,
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return nil, errors.New("execution already exists for this issue")
+			return nil, ErrAlreadyExists
 		}
 		return nil, err
 	}

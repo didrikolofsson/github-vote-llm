@@ -20,16 +20,24 @@ A Go service that automates feature implementation for GitHub repos. When an iss
 
 ```
 cmd/main/main.go              # Entry point: env var config, Gin router, GitHub App auth
+db/
+  migrations/                 # SQL migration files (apply with migrate CLI)
+  queries/                    # sqlc query definitions
+  sqlc.yaml                   # sqlc config
 internal/
   agent/runner.go             # Orchestrates Claude Code: clone, branch, run claude, commit, PR
   agent/runner_test.go        # Agent tests
   github/auth.go              # GitHub App auth: ClientFactory (installation tokens via go-githubauth)
   github/client.go            # ClientAPI interface + App-based Client implementation
   handlers/webhook.go         # Webhook handler: issues/labeled event, approval callback
+  handlers/webhook_test.go    # Webhook handler tests (MockStore, deduplication paths)
   logger/logger.go            # Structured logging with colored output (zap)
   logger/logger_test.go       # Logger tests
   middleware/middleware.go     # HMAC-SHA256 webhook signature validation
   spinner/spinner.go          # Terminal progress spinner
+  store/store.go              # Store interface + PostgresStore (pgx/v5 + sqlc)
+  store/models.go             # sqlc-generated model types (Execution, RepoConfig)
+  store/mock_store.go         # MockStore for tests
 ```
 
 ## Configuration
@@ -43,6 +51,7 @@ All configuration via environment variables (no config file):
 | `WEBHOOK_SECRET`     | yes      | HMAC secret for webhook signature validation |
 | `ANTHROPIC_API_KEY`  | yes      | API key passed to the `claude` CLI           |
 | `PORT`               | no       | HTTP listen port (default: `8080`)           |
+| `DATABASE_URL`       | yes      | PostgreSQL connection string (e.g. `postgres://user:pass@localhost:5432/dbname`) |
 | `WORKSPACE_DIR`      | no       | Base dir for repo clones (default: `/tmp/vote-llm-workspaces`). Point this at a persistent volume in production. |
 
 In `GIN_MODE=debug`, env vars are loaded from `.env.development` via godotenv.
@@ -58,12 +67,17 @@ In `GIN_MODE=debug`, env vars are loaded from `.env.development` via godotenv.
 - **github.com/jferrl/go-githubauth** — GitHub App JWT + installation token auth.
 - **github.com/gin-gonic/gin** — HTTP router.
 - **go.uber.org/zap** — Structured logging.
+- **github.com/jackc/pgx/v5** — PostgreSQL driver and connection pool.
+- **sqlc** — Generates type-safe Go from SQL queries (`db/queries/`). Run `sqlc generate` to regenerate `internal/store/*.sql.go`.
+- **golang-migrate** CLI — Applies migrations in `db/migrations/`.
 
 ## Key Implementation Details
 
 - **ClientAPI interface**: All GitHub operations go through `github.ClientAPI`. One implementation: `Client` (GitHub App installation tokens).
 - **Webhook validation**: HMAC-SHA256 signature checked in `middleware.ValidateSignature()` before the handler sees the payload. Parsing via `gh.ParseWebHook` from go-github.
-- **Duplicate prevention**: Webhook handler skips issues that already have the `llm-in-progress` label.
+- **Duplicate prevention**: DB-enforced via `UNIQUE(owner, repo, issue_number)` on the `executions` table — `CreateExecution` returns an error on conflict, preventing re-processing even across restarts.
+- **Execution lifecycle**: `executions` rows transition through `pending → in_progress → success/failed`; runner calls `SetInProgress`, `SetSuccess`, or `SetFailed` at each step.
+- **Per-repo config**: `GetRepoConfig` looks up `repo_config` for a (owner, repo) pair; `timeout_minutes`, `max_budget_usd`, labels, `vote_threshold`, and `anthropic_api_key` all override service-level defaults. `NULL` columns fall back to defaults.
 - **Label state machine**: `feature-request` → (manual) → `approved-for-dev` → `llm-in-progress` → `llm-pr-created` or `llm-failed`.
 - **Feature-request guard**: `approved-for-dev` label is only processed if the issue also has `feature-request`.
 - **Agent workspace**: `$WORKSPACE_DIR/{owner}/{repo}/repo` — reused across runs; `git fetch --all --prune` before new work.

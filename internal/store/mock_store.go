@@ -43,6 +43,9 @@ func (m *MockStore) SetFailed(ctx context.Context, id int64, errMsg string) (*Ex
 }
 
 func (m *MockStore) GetRepoConfig(ctx context.Context, owner, repo string) (*RepoConfig, error) {
+	if m.GetRepoConfigFn == nil {
+		return nil, nil
+	}
 	return m.GetRepoConfigFn(ctx, owner, repo)
 }
 
