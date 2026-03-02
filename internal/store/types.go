@@ -30,10 +30,21 @@ type RepoConfig struct {
 	LabelDone           *string
 	LabelFailed         *string
 	LabelFeatureRequest *string
+	LabelCandidate      *string
 	VoteThreshold       *int32
 	TimeoutMinutes      *int32
 	MaxBudgetUsd        pgtype.Numeric
 	AnthropicApiKey     *string
 	CreatedAt           pgtype.Timestamptz
 	UpdatedAt           pgtype.Timestamptz
+}
+
+type IssueVote struct {
+	ID          int64
+	Owner       string
+	Repo        string
+	IssueNumber int32
+	VoteCount   int32
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
 }

@@ -27,6 +27,7 @@ type Store interface {
 	SetSuccess(ctx context.Context, id int64, prURL string) (*ExecutionModel, error)
 	SetFailed(ctx context.Context, id int64, errMsg string) (*ExecutionModel, error)
 	GetRepoConfig(ctx context.Context, owner, repo string) (*RepoConfigModel, error)
+	IncrementIssueVote(ctx context.Context, owner, repo string, issueNumber int) (*IssueVoteModel, error)
 }
 
 // PostgresStore implements Store backed by a pgxpool.Pool.
@@ -253,6 +254,7 @@ func (s *PostgresStore) GetRepoConfig(ctx context.Context, owner, repo string) (
 	repoConfig.LabelDone = ptrOr(cfg.LabelDone, config.LabelDone)
 	repoConfig.LabelFailed = ptrOr(cfg.LabelFailed, config.LabelFailed)
 	repoConfig.LabelFeatureRequest = ptrOr(cfg.LabelFeatureRequest, config.LabelFeatureRequest)
+	repoConfig.LabelCandidate = ptrOr(cfg.LabelCandidate, config.LabelCandidate)
 	repoConfig.VoteThreshold = ptrOr(cfg.VoteThreshold, int32(config.AgentMaxTurns))
 	repoConfig.TimeoutMinutes = ptrOr(cfg.TimeoutMinutes, int32(config.AgentTimeoutMinutes))
 	repoConfig.MaxBudgetUsd = numericOr(cfg.MaxBudgetUsd, config.AgentMaxBudgetUSD)
@@ -261,6 +263,26 @@ func (s *PostgresStore) GetRepoConfig(ctx context.Context, owner, repo string) (
 	repoConfig.UpdatedAt = cfg.UpdatedAt.Time
 
 	return &repoConfig, nil
+}
+
+func (s *PostgresStore) IncrementIssueVote(ctx context.Context, owner, repo string, issueNumber int) (*IssueVoteModel, error) {
+	vote, err := s.q.IncrementIssueVote(ctx, IncrementIssueVoteParams{
+		Owner:       owner,
+		Repo:        repo,
+		IssueNumber: int32(issueNumber),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &IssueVoteModel{
+		ID:          vote.ID,
+		Owner:       vote.Owner,
+		Repo:        vote.Repo,
+		IssueNumber: vote.IssueNumber,
+		VoteCount:   vote.VoteCount,
+		CreatedAt:   vote.CreatedAt.Time,
+		UpdatedAt:   vote.UpdatedAt.Time,
+	}, nil
 }
 
 // func (s *PostgresStore) UpsertRepoConfig(ctx context.Context, params UpsertRepoConfigParams) (*RepoConfigModel, error) {

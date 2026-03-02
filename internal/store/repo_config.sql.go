@@ -12,7 +12,7 @@ import (
 )
 
 const getRepoConfig = `-- name: GetRepoConfig :one
-SELECT id, owner, repo, label_approved, label_in_progress, label_done, label_failed, label_feature_request, vote_threshold, timeout_minutes, max_budget_usd, anthropic_api_key, created_at, updated_at FROM repo_config
+SELECT id, owner, repo, label_approved, label_in_progress, label_done, label_failed, label_feature_request, label_candidate, vote_threshold, timeout_minutes, max_budget_usd, anthropic_api_key, created_at, updated_at FROM repo_config
 WHERE owner = $1 AND repo = $2
 `
 
@@ -33,6 +33,7 @@ func (q *Queries) GetRepoConfig(ctx context.Context, arg GetRepoConfigParams) (R
 		&i.LabelDone,
 		&i.LabelFailed,
 		&i.LabelFeatureRequest,
+		&i.LabelCandidate,
 		&i.VoteThreshold,
 		&i.TimeoutMinutes,
 		&i.MaxBudgetUsd,
