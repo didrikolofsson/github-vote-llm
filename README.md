@@ -72,7 +72,7 @@ migrate -source file://db/migrations -database "$DATABASE_URL" down 1
 | Table         | Purpose                                                            |
 | ------------- | ------------------------------------------------------------------ |
 | `executions`  | Tracks every agent run — status, branch, PR URL, error, timestamps |
-| `repo_config` | Per-repo overrides for labels, timeout, budget, and API key        |
+| `repo_config` | Per-repo overrides for all labels, timeout, budget, and Anthropic API key |
 
 `executions` enforces a `UNIQUE(owner, repo, issue_number)` constraint so each issue is processed at most once, even across restarts.
 
@@ -81,14 +81,25 @@ migrate -source file://db/migrations -database "$DATABASE_URL" down 1
 Insert a row into `repo_config` to override defaults for a specific repo:
 
 ```sql
-INSERT INTO repo_config (owner, repo, timeout_minutes, max_budget_usd)
-VALUES ('my-org', 'my-repo', 60, 10.00)
+INSERT INTO repo_config (owner, repo, timeout_minutes, max_budget_usd, anthropic_api_key)
+VALUES ('my-org', 'my-repo', 60, 10.00, 'sk-ant-...')
 ON CONFLICT (owner, repo) DO UPDATE
-  SET timeout_minutes = EXCLUDED.timeout_minutes,
-      max_budget_usd  = EXCLUDED.max_budget_usd;
+  SET timeout_minutes   = EXCLUDED.timeout_minutes,
+      max_budget_usd    = EXCLUDED.max_budget_usd,
+      anthropic_api_key = EXCLUDED.anthropic_api_key;
 ```
 
-Any column left `NULL` falls back to the service default (`30` min / `$5.00`).
+Any column left `NULL` falls back to the service default (`30` min / `$5.00` / `ANTHROPIC_API_KEY` env var).
+
+All five labels are also overridable per repo:
+
+| Column                  | Default              |
+| ----------------------- | -------------------- |
+| `label_approved`        | `approved-for-dev`   |
+| `label_feature_request` | `feature-request`    |
+| `label_in_progress`     | `llm-in-progress`    |
+| `label_done`            | `llm-pr-created`     |
+| `label_failed`          | `llm-failed`         |
 
 ## Running
 

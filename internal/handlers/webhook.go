@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/agent"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
@@ -13,7 +15,6 @@ import (
 	"github.com/gin-gonic/gin"
 	gh "github.com/google/go-github/v68/github"
 )
-
 
 type WebhookHandler struct {
 	factory      *ghclient.ClientFactory
@@ -64,60 +65,82 @@ func hasInProgressLabel(issue *gh.Issue, labelInProgress string) bool {
 	return false
 }
 
-func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
-	if e.GetAction() != "labeled" {
-		h.log.Infow("unhandled issues event action", "action", e.GetAction())
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-		return
-	}
-
-	// Extract repo identity early so we can load per-repo config.
+func (h *WebhookHandler) handleGithubIssueLabeledEvent(c *gin.Context, e *gh.IssuesEvent) {
+	issue := e.GetIssue()
+	issueNum := issue.GetNumber()
+	labelName := e.GetLabel().GetName()
 	repo := e.GetRepo()
+	repoLabels := issue.Labels
 	owner := repo.GetOwner().GetLogin()
 	repoName := repo.GetName()
 
-	// Load per-repo label overrides (best-effort; nil means use global defaults).
+	h.log.Infow("issue labeled", "issue", issueNum, "label", labelName)
+
 	repoConfig, err := h.store.GetRepoConfig(c.Request.Context(), owner, repoName)
 	if err != nil {
-		h.log.Warnw("failed to fetch repo config, using defaults", "owner", owner, "repo", repoName, "error", err)
+		h.log.Errorw("failed to get repo config", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get repo config"})
+		return
 	}
 
-	labelApproved   := resolveLabelApproved(repoConfig)
-	labelInProgress := resolveLabelInProgress(repoConfig)
+	if repoConfig == nil {
+		h.log.Warnw("no repo config found, using defaults", "owner", owner, "repo", repoName)
+		repoConfig = &store.RepoConfigModel{
+			Owner:               owner,
+			Repo:                repoName,
+			LabelApproved:       config.LabelApproved,
+			LabelFeatureRequest: config.LabelFeatureRequest,
+			LabelInProgress:     config.LabelInProgress,
+			LabelDone:           config.LabelDone,
+			LabelFailed:         config.LabelFailed,
+			VoteThreshold:       config.AgentMaxTurns,
+			TimeoutMinutes:      config.AgentTimeoutMinutes,
+			MaxBudgetUsd:        config.AgentMaxBudgetUSD,
+			AnthropicAPIKey:     os.Getenv("ANTHROPIC_API_KEY"),
+			CreatedAt:           time.Now(),
+			UpdatedAt:           time.Now(),
+		}
+	}
 
-	labelName := e.GetLabel().GetName()
-	if labelName != labelApproved {
-		h.log.Infow("label added but not approval label, ignoring", "label", labelName)
+	if labelName != repoConfig.LabelApproved {
+		h.log.Infow("incoming label is not the approved label, skipping", "issue", issueNum, "label", labelName)
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		return
 	}
 
-	issue := e.GetIssue()
-	issueNum := issue.GetNumber()
-
-	// Guard: issue must have feature-request label
+	// Does the issue have the feature-request label?
+	// Does the issue already have the in-progress label?
 	hasFeatureRequest := false
-	for _, l := range issue.Labels {
-		if l.GetName() == config.LabelFeatureRequest {
+	hasInProgress := false
+
+	for _, l := range repoLabels {
+		if l.GetName() == repoConfig.LabelFeatureRequest {
 			hasFeatureRequest = true
 			break
 		}
+		if l.GetName() == repoConfig.LabelInProgress {
+			hasInProgress = true
+			break
+		}
 	}
+
 	if !hasFeatureRequest {
-		h.log.Infow("approved label added but issue lacks feature-request label, skipping", "issue", issueNum)
+		h.log.Infow("issue lacks feature-request label, skipping", "issue", issueNum)
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		return
 	}
 
-	if hasInProgressLabel(issue, labelInProgress) {
+	if hasInProgress {
 		h.log.Infow("issue already in-progress, skipping", "issue", issueNum)
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		return
 	}
 
-	// Check if execution record exists. If none exists, create a new one. If it exists, check if it failed. If it failed, reset it.
-	// If it exists and was already successful, skip.
-	// TODO: Enable retry logic as a user action.
+	// Here we have an approved label added under the right conditions.
+	// Now we check for an existing execution record for this issue.
+	// If an execution record exists, we check if it failed.
+	// If it failed, we reset and launch the agent again.
+
 	execution, err := h.store.GetExecutionByOwnerRepoIssueNumber(c.Request.Context(), owner, repoName, issueNum)
 	if err != nil {
 		h.log.Errorw("failed to get execution record", "issue", issueNum, "error", err)
@@ -151,10 +174,11 @@ func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
 		return
 	}
 
-	// Get installation ID from the event
-	installationID := int64(0)
+	// Here we have an execution record that is pending
+	// Launch agent for implementation in this case
+	var installationID int64
 	if e.GetInstallation() != nil {
-		installationID = e.GetInstallation().GetID()
+		installationID = *e.GetInstallation().ID
 	}
 	if installationID == 0 {
 		h.log.Errorw("no installation ID in webhook event", "issue", issueNum)
@@ -162,7 +186,6 @@ func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
 		return
 	}
 
-	// Create client for this installation
 	client, err := ghclient.NewClient(installationID, h.factory)
 	if err != nil {
 		h.log.Errorw("failed to create installation client", "installationID", installationID, "error", err)
@@ -172,7 +195,6 @@ func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
 
 	h.log.Infow("issue approved for development, starting agent", "issue", issueNum, "repo", owner+"/"+repoName)
 
-	// Run agent in background goroutine
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -180,22 +202,19 @@ func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
 			}
 		}()
 		runner := agent.NewRunner(client, h.log, h.workspaceDir, h.store)
-		runner.Run(context.Background(), owner, repoName, issue, execution.ID)
+		runner.Run(context.Background(), owner, repoName, issue, execution.ID, *repoConfig)
 	}()
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "agent started"})
 }
 
-func resolveLabelApproved(cfg *store.RepoConfig) string {
-	if cfg != nil && cfg.LabelApproved != nil {
-		return *cfg.LabelApproved
+func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
+	switch e.GetAction() {
+	case "labeled":
+		h.handleGithubIssueLabeledEvent(c, e)
+	default:
+		h.log.Infow("unhandled issues event action", "action", e.GetAction())
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		return
 	}
-	return config.LabelApproved
-}
-
-func resolveLabelInProgress(cfg *store.RepoConfig) string {
-	if cfg != nil && cfg.LabelInProgress != nil {
-		return *cfg.LabelInProgress
-	}
-	return config.LabelInProgress
 }

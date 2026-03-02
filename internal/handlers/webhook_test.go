@@ -65,7 +65,7 @@ var errDBFailure = errors.New("db connection lost")
 
 // noExecution is a GetExecutionByOwnerRepoIssueNumber stub that returns nil (no
 // existing record), causing the handler to proceed to CreateExecution.
-func noExecution(ctx context.Context, owner, repo string, issueNumber int) (*store.Execution, error) {
+func noExecution(ctx context.Context, owner, repo string, issueNumber int) (*store.ExecutionModel, error) {
 	return nil, nil
 }
 
@@ -88,8 +88,8 @@ func postWebhook(t *testing.T, handler *handlers.WebhookHandler, payload []byte)
 func TestHandleIssueEvent_AlreadySucceeded_Returns200(t *testing.T) {
 	status := "success"
 	mockStore := &store.MockStore{
-		GetExecutionByOwnerRepoIssueNumberFn: func(ctx context.Context, owner, repo string, issueNumber int) (*store.Execution, error) {
-			return &store.Execution{Status: status}, nil
+		GetExecutionByOwnerRepoIssueNumberFn: func(ctx context.Context, owner, repo string, issueNumber int) (*store.ExecutionModel, error) {
+			return &store.ExecutionModel{Status: status}, nil
 		},
 	}
 
@@ -106,10 +106,10 @@ func TestHandleIssueEvent_AlreadySucceeded_Returns200(t *testing.T) {
 func TestHandleIssueEvent_FailedExecution_ResetDBError_Returns500(t *testing.T) {
 	status := "failed"
 	mockStore := &store.MockStore{
-		GetExecutionByOwnerRepoIssueNumberFn: func(ctx context.Context, owner, repo string, issueNumber int) (*store.Execution, error) {
-			return &store.Execution{Status: status}, nil
+		GetExecutionByOwnerRepoIssueNumberFn: func(ctx context.Context, owner, repo string, issueNumber int) (*store.ExecutionModel, error) {
+			return &store.ExecutionModel{Status: status}, nil
 		},
-		ResetFailedExecutionFn: func(ctx context.Context, owner, repo string, issueNumber int) (*store.Execution, error) {
+		ResetFailedExecutionFn: func(ctx context.Context, owner, repo string, issueNumber int) (*store.ExecutionModel, error) {
 			return nil, errDBFailure
 		},
 	}
@@ -126,7 +126,7 @@ func TestHandleIssueEvent_FailedExecution_ResetDBError_Returns500(t *testing.T) 
 // when looking up an existing execution results in a 500.
 func TestHandleIssueEvent_GetExecutionDBError_Returns500(t *testing.T) {
 	mockStore := &store.MockStore{
-		GetExecutionByOwnerRepoIssueNumberFn: func(ctx context.Context, owner, repo string, issueNumber int) (*store.Execution, error) {
+		GetExecutionByOwnerRepoIssueNumberFn: func(ctx context.Context, owner, repo string, issueNumber int) (*store.ExecutionModel, error) {
 			return nil, errDBFailure
 		},
 	}
@@ -144,7 +144,7 @@ func TestHandleIssueEvent_GetExecutionDBError_Returns500(t *testing.T) {
 func TestHandleIssueEvent_CreateExecutionDBError_Returns500(t *testing.T) {
 	mockStore := &store.MockStore{
 		GetExecutionByOwnerRepoIssueNumberFn: noExecution,
-		CreateExecutionFn: func(ctx context.Context, owner, repo string, issueNumber int) (*store.Execution, error) {
+		CreateExecutionFn: func(ctx context.Context, owner, repo string, issueNumber int) (*store.ExecutionModel, error) {
 			return nil, errDBFailure
 		},
 	}

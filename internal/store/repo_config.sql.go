@@ -12,7 +12,7 @@ import (
 )
 
 const getRepoConfig = `-- name: GetRepoConfig :one
-SELECT id, owner, repo, label_approved, label_in_progress, label_done, label_failed, vote_threshold, timeout_minutes, max_budget_usd, anthropic_api_key, created_at, updated_at FROM repo_config
+SELECT id, owner, repo, label_approved, label_in_progress, label_done, label_failed, label_feature_request, vote_threshold, timeout_minutes, max_budget_usd, anthropic_api_key, created_at, updated_at FROM repo_config
 WHERE owner = $1 AND repo = $2
 `
 
@@ -32,6 +32,7 @@ func (q *Queries) GetRepoConfig(ctx context.Context, arg GetRepoConfigParams) (R
 		&i.LabelInProgress,
 		&i.LabelDone,
 		&i.LabelFailed,
+		&i.LabelFeatureRequest,
 		&i.VoteThreshold,
 		&i.TimeoutMinutes,
 		&i.MaxBudgetUsd,
@@ -59,7 +60,7 @@ ON CONFLICT (owner, repo) DO UPDATE SET
     max_budget_usd    = EXCLUDED.max_budget_usd,
     anthropic_api_key = EXCLUDED.anthropic_api_key,
     updated_at        = now()
-RETURNING id, owner, repo, label_approved, label_in_progress, label_done, label_failed, vote_threshold, timeout_minutes, max_budget_usd, anthropic_api_key, created_at, updated_at
+RETURNING id, owner, repo, label_approved, label_in_progress, label_done, label_failed, label_feature_request, vote_threshold, timeout_minutes, max_budget_usd, anthropic_api_key, created_at, updated_at
 `
 
 type UpsertRepoConfigParams struct {
@@ -97,6 +98,7 @@ func (q *Queries) UpsertRepoConfig(ctx context.Context, arg UpsertRepoConfigPara
 		&i.LabelInProgress,
 		&i.LabelDone,
 		&i.LabelFailed,
+		&i.LabelFeatureRequest,
 		&i.VoteThreshold,
 		&i.TimeoutMinutes,
 		&i.MaxBudgetUsd,

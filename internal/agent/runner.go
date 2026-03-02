@@ -16,7 +16,6 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	gh "github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
-	"github.com/didrikolofsson/github-vote-llm/internal/spinner"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	gogithub "github.com/google/go-github/v68/github"
 )
@@ -44,22 +43,11 @@ type claudeResult struct {
 }
 
 // Run implements a feature request: clones repo, runs Claude Code, creates a PR.
-func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Issue, executionID int64) {
+func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Issue, executionID int64, repoConfig store.RepoConfigModel) {
 	issueNum := issue.GetNumber()
 	r.log.Infow("starting work on issue", "issue", issueNum, "repo", owner+"/"+repo)
 
 	branchName := fmt.Sprintf("vote-llm/issue-%d-%s", issueNum, slugify(issue.GetTitle()))
-
-	// Fetch per-repo config first so all label names and agent settings are resolved.
-	repoConfig, err := r.store.GetRepoConfig(ctx, owner, repo)
-	if err != nil {
-		r.log.Warnw("failed to fetch repo config, using defaults", "error", err)
-	}
-
-	labelApproved   := resolveLabelApproved(repoConfig)
-	labelInProgress := resolveLabelInProgress(repoConfig)
-	labelDone       := resolveLabelDone(repoConfig)
-	labelFailed     := resolveLabelFailed(repoConfig)
 
 	// Mark in-progress in DB
 	if _, err := r.store.SetInProgress(ctx, executionID, branchName); err != nil {
@@ -67,21 +55,20 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 	}
 
 	// Mark issue as in-progress on GitHub
-	if err := r.client.AddLabel(ctx, owner, repo, issueNum, labelInProgress); err != nil {
+	if err := r.client.AddLabel(ctx, owner, repo, issueNum, repoConfig.LabelInProgress); err != nil {
 		r.log.Warnw("failed to add in-progress label", "error", err)
 	}
 
 	// Remove approved label to prevent re-triggering
-	if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, labelApproved); err != nil {
+	if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, repoConfig.LabelApproved); err != nil {
 		r.log.Warnw("failed to remove approved label", "error", err)
 	}
 
 	// Run with timeout
-	timeout := resolveTimeout(repoConfig)
-	implCtx, cancel := context.WithTimeout(ctx, timeout)
+	implCtx, cancel := context.WithTimeout(ctx, time.Duration(repoConfig.TimeoutMinutes)*time.Minute)
 	defer cancel()
 
-	prURL, err := r.implement(implCtx, owner, repo, issue, branchName, repoConfig)
+	prURL, err := r.implement(implCtx, owner, repo, issue, branchName, repoConfig.MaxBudgetUsd, repoConfig.AnthropicAPIKey)
 	if err != nil {
 		r.log.Errorw("failed to implement issue", "issue", issueNum, "error", err)
 
@@ -93,10 +80,10 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 		if cErr := r.client.CreateComment(ctx, owner, repo, issueNum, comment); cErr != nil {
 			r.log.Warnw("failed to comment on issue", "error", cErr)
 		}
-		if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, labelInProgress); err != nil {
+		if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, repoConfig.LabelInProgress); err != nil {
 			r.log.Warnw("failed to remove in-progress label", "error", err)
 		}
-		if err := r.client.AddLabel(ctx, owner, repo, issueNum, labelFailed); err != nil {
+		if err := r.client.AddLabel(ctx, owner, repo, issueNum, repoConfig.LabelFailed); err != nil {
 			r.log.Warnw("failed to add failed label", "error", err)
 		}
 		return
@@ -107,10 +94,10 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 	}
 
 	// Mark issue as done and comment with PR link
-	if err := r.client.AddLabel(ctx, owner, repo, issueNum, labelDone); err != nil {
+	if err := r.client.AddLabel(ctx, owner, repo, issueNum, repoConfig.LabelDone); err != nil {
 		r.log.Warnw("failed to add done label", "error", err)
 	}
-	if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, labelInProgress); err != nil {
+	if err := r.client.RemoveLabel(ctx, owner, repo, issueNum, repoConfig.LabelInProgress); err != nil {
 		r.log.Warnw("failed to remove in-progress label", "error", err)
 	}
 
@@ -122,7 +109,7 @@ func (r *Runner) Run(ctx context.Context, owner, repo string, issue *gogithub.Is
 	r.log.Infow("successfully created PR", "issue", issueNum, "pr", prURL)
 }
 
-func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogithub.Issue, branchName string, repoConfig *store.RepoConfig) (string, error) {
+func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogithub.Issue, branchName string, maxBudget float64, anthropicAPIKey string) (string, error) {
 	// Prepare workspace
 	workDir := filepath.Join(r.workspaceDir, owner, repo)
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
@@ -130,9 +117,6 @@ func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogit
 	}
 
 	repoDir := filepath.Join(workDir, "repo")
-
-	spinner := spinner.NewSpinner()
-	spinner.Start(fmt.Sprintf("Preparing workspace for issue #%d...", issue.GetNumber()))
 
 	// Clone or update repo
 	if err := r.cloneOrResetRepo(ctx, owner, repo, repoDir); err != nil {
@@ -149,11 +133,10 @@ func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogit
 	if err := r.gitCheckoutNewBranch(ctx, repoDir, defaultBranch, branchName); err != nil {
 		return "", fmt.Errorf("create branch: %w", err)
 	}
-	spinner.UpdateMessage(fmt.Sprintf("Running Claude Code on issue #%d...", issue.GetNumber()))
 
 	// Build prompt and run Claude Code
 	prompt := r.buildPrompt(issue, owner, repo)
-	if err := r.runClaude(ctx, repoDir, prompt, repoConfig); err != nil {
+	if err := r.runClaude(ctx, repoDir, prompt, maxBudget, anthropicAPIKey); err != nil {
 		return "", fmt.Errorf("claude code: %w", err)
 	}
 
@@ -167,13 +150,11 @@ func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogit
 	}
 
 	// Stage, commit, push
-	spinner.UpdateMessage(fmt.Sprintf("Pushing changes for issue #%d...", issue.GetNumber()))
 	if err := r.gitCommitAndPush(ctx, repoDir, branchName, issue.GetNumber(), issue.GetTitle(), owner, repo); err != nil {
 		return "", fmt.Errorf("commit and push: %w", err)
 	}
 
 	// Create PR (or find existing one for this branch)
-	spinner.UpdateMessage(fmt.Sprintf("Creating pull request for issue #%d...", issue.GetNumber()))
 	prTitle := fmt.Sprintf("feat: %s (issue #%d)", issue.GetTitle(), issue.GetNumber())
 	prBody := prBodyForIssue(issue.GetNumber())
 	pr, err := r.client.CreatePullRequest(ctx, owner, repo, branchName, defaultBranch, prTitle, prBody)
@@ -181,19 +162,15 @@ func (r *Runner) implement(ctx context.Context, owner, repo string, issue *gogit
 		// If PR creation failed, check if one already exists for this branch
 		existing, findErr := r.client.FindPullRequestByHead(ctx, owner, repo, branchName)
 		if findErr != nil {
-			spinner.Stop(fmt.Sprintf("PR creation failed for issue #%d!", issue.GetNumber()))
 			return "", fmt.Errorf("create PR: %w (also failed to find existing: %v)", err, findErr)
 		}
 		if existing != nil {
 			r.log.Infow("PR already exists for branch, reusing", "branch", branchName, "pr", existing.GetHTMLURL())
-			spinner.Stop(fmt.Sprintf("PR created successfully for issue #%d!", issue.GetNumber()))
 			return existing.GetHTMLURL(), nil
 		}
-		spinner.Stop(fmt.Sprintf("PR creation failed for issue #%d!", issue.GetNumber()))
 		return "", fmt.Errorf("create PR: %w", err)
 	}
 
-	spinner.Stop(fmt.Sprintf("PR created successfully for issue #%d!", issue.GetNumber()))
 	return pr.GetHTMLURL(), nil
 }
 
@@ -288,14 +265,7 @@ func (r *Runner) buildPrompt(issue *gogithub.Issue, owner, repo string) string {
 	return b.String()
 }
 
-func (r *Runner) runClaude(ctx context.Context, repoDir, prompt string, repoConfig *store.RepoConfig) error {
-	maxBudget := config.AgentMaxBudgetUSD
-	if repoConfig != nil && repoConfig.MaxBudgetUsd.Valid {
-		if f, err := repoConfig.MaxBudgetUsd.Float64Value(); err == nil && f.Valid {
-			maxBudget = f.Float64
-		}
-	}
-
+func (r *Runner) runClaude(ctx context.Context, repoDir, prompt string, maxBudget float64, anthropicAPIKey string) error {
 	args := []string{
 		"-p", prompt,
 		"--output-format", "json",
@@ -307,6 +277,10 @@ func (r *Runner) runClaude(ctx context.Context, repoDir, prompt string, repoConf
 
 	cmd := exec.CommandContext(ctx, config.AgentCommand, args...)
 	cmd.Dir = repoDir
+
+	env := os.Environ()
+	env = append(env, "ANTHROPIC_API_KEY="+anthropicAPIKey)
+	cmd.Env = env
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -436,4 +410,24 @@ func resolveLabelFailed(cfg *store.RepoConfig) string {
 		return *cfg.LabelFailed
 	}
 	return config.LabelFailed
+}
+
+func resolveMaxBudget(cfg *store.RepoConfig) float64 {
+	if cfg != nil && cfg.MaxBudgetUsd.Valid {
+		if f, err := cfg.MaxBudgetUsd.Float64Value(); err == nil && f.Valid {
+			return f.Float64
+		}
+	}
+	return config.AgentMaxBudgetUSD
+}
+
+func resolveAnthropicAPIKey(cfg *store.RepoConfig) (string, error) {
+	if cfg != nil && cfg.AnthropicApiKey != nil && *cfg.AnthropicApiKey != "" {
+		return *cfg.AnthropicApiKey, nil
+	}
+	key := os.Getenv("ANTHROPIC_API_KEY")
+	if key == "" {
+		return "", fmt.Errorf("ANTHROPIC_API_KEY is not set")
+	}
+	return key, nil
 }
