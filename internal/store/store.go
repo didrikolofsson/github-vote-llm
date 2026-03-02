@@ -252,6 +252,7 @@ func (s *PostgresStore) GetRepoConfig(ctx context.Context, owner, repo string) (
 	repoConfig.LabelInProgress = ptrOr(cfg.LabelInProgress, config.LabelInProgress)
 	repoConfig.LabelDone = ptrOr(cfg.LabelDone, config.LabelDone)
 	repoConfig.LabelFailed = ptrOr(cfg.LabelFailed, config.LabelFailed)
+	repoConfig.LabelFeatureRequest = ptrOr(cfg.LabelFeatureRequest, config.LabelFeatureRequest)
 	repoConfig.VoteThreshold = ptrOr(cfg.VoteThreshold, int32(config.AgentMaxTurns))
 	repoConfig.TimeoutMinutes = ptrOr(cfg.TimeoutMinutes, int32(config.AgentTimeoutMinutes))
 	repoConfig.MaxBudgetUsd = numericOr(cfg.MaxBudgetUsd, config.AgentMaxBudgetUSD)
