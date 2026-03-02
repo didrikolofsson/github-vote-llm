@@ -25,7 +25,7 @@ db/
   queries/                    # sqlc query definitions
   sqlc.yaml                   # sqlc config
 internal/
-  agent/runner.go             # Orchestrates Claude Code: clone, branch, run claude, commit, PR
+  agent/runner.go             # Orchestrates Claude Code: clone, branch, run claude, commit, PR. Receives resolved RepoConfigModel from webhook handler.
   agent/runner_test.go        # Agent tests
   github/auth.go              # GitHub App auth: ClientFactory (installation tokens via go-githubauth)
   github/client.go            # ClientAPI interface + App-based Client implementation
@@ -77,7 +77,7 @@ In `GIN_MODE=debug`, env vars are loaded from `.env.development` via godotenv.
 - **Webhook validation**: HMAC-SHA256 signature checked in `middleware.ValidateSignature()` before the handler sees the payload. Parsing via `gh.ParseWebHook` from go-github.
 - **Duplicate prevention**: DB-enforced via `UNIQUE(owner, repo, issue_number)` on the `executions` table — `CreateExecution` returns an error on conflict, preventing re-processing even across restarts.
 - **Execution lifecycle**: `executions` rows transition through `pending → in_progress → success/failed`; runner calls `SetInProgress`, `SetSuccess`, or `SetFailed` at each step.
-- **Per-repo config**: `GetRepoConfig` looks up `repo_config` for a (owner, repo) pair; `timeout_minutes`, `max_budget_usd`, labels, `vote_threshold`, and `anthropic_api_key` all override service-level defaults. `NULL` columns fall back to defaults.
+- **Per-repo config**: `GetRepoConfig` looks up `repo_config` for a (owner, repo) pair and returns a fully-resolved `RepoConfigModel` (no nullable fields — defaults applied in the store layer). `timeout_minutes`, `max_budget_usd`, all five labels (`label_approved`, `label_feature_request`, `label_in_progress`, `label_done`, `label_failed`), `vote_threshold`, and `anthropic_api_key` all override service-level defaults. `NULL` DB columns fall back to defaults.
 - **Label state machine**: `feature-request` → (manual) → `approved-for-dev` → `llm-in-progress` → `llm-pr-created` or `llm-failed`.
 - **Feature-request guard**: `approved-for-dev` label is only processed if the issue also has `feature-request`.
 - **Agent workspace**: `$WORKSPACE_DIR/{owner}/{repo}/repo` — reused across runs; `git fetch --all --prune` before new work.
