@@ -6,8 +6,14 @@ dev:
 build:
 	go build ./cmd/main/main.go
 
+test:
+	go test ./...
+
 generate:
 	sqlc generate -f db/sqlc.yaml
+
+migrate-new:
+	migrate create -ext sql -dir db/migrations -seq $(name)
 
 migrate-up:
 	migrate -source file://db/migrations -database $$DATABASE_URL up
