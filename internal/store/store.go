@@ -28,6 +28,12 @@ type Store interface {
 	SetFailed(ctx context.Context, id int64, errMsg string) (*ExecutionModel, error)
 	GetRepoConfig(ctx context.Context, owner, repo string) (*RepoConfigModel, error)
 	IncrementIssueVote(ctx context.Context, owner, repo string, issueNumber int) (*IssueVoteModel, error)
+	ListExecutions(ctx context.Context, limit, offset int32) ([]*ExecutionModel, error)
+	GetExecutionByID(ctx context.Context, id int64) (*ExecutionModel, error)
+	CancelExecution(ctx context.Context, id int64) (*ExecutionModel, error)
+	RetryExecution(ctx context.Context, id int64) (*ExecutionModel, error)
+	ListRepoConfigs(ctx context.Context) ([]*RepoConfigModel, error)
+	UpsertRepoConfig(ctx context.Context, params UpsertRepoConfigParams) (*RepoConfigModel, error)
 }
 
 // PostgresStore implements Store backed by a pgxpool.Pool.
@@ -50,6 +56,18 @@ func ptrOr[T any](p *T, defaultVal T) T {
 		return *p
 	}
 	return defaultVal
+}
+
+// float64ToNumeric converts *float64 to pgtype.Numeric. Returns invalid Numeric if nil.
+func float64ToNumeric(f *float64) pgtype.Numeric {
+	if f == nil {
+		return pgtype.Numeric{}
+	}
+	var n pgtype.Numeric
+	if err := n.Scan(*f); err != nil {
+		return pgtype.Numeric{}
+	}
+	return n
 }
 
 // numericToFloat64 converts pgtype.Numeric to float64. Returns 0 if not valid.
@@ -254,7 +272,6 @@ func (s *PostgresStore) GetRepoConfig(ctx context.Context, owner, repo string) (
 	repoConfig.LabelDone = ptrOr(cfg.LabelDone, config.LabelDone)
 	repoConfig.LabelFailed = ptrOr(cfg.LabelFailed, config.LabelFailed)
 	repoConfig.LabelFeatureRequest = ptrOr(cfg.LabelFeatureRequest, config.LabelFeatureRequest)
-	repoConfig.LabelCandidate = ptrOr(cfg.LabelCandidate, config.LabelCandidate)
 	repoConfig.VoteThreshold = ptrOr(cfg.VoteThreshold, int32(config.AgentMaxTurns))
 	repoConfig.TimeoutMinutes = ptrOr(cfg.TimeoutMinutes, int32(config.AgentTimeoutMinutes))
 	repoConfig.MaxBudgetUsd = numericOr(cfg.MaxBudgetUsd, config.AgentMaxBudgetUSD)
@@ -285,24 +302,135 @@ func (s *PostgresStore) IncrementIssueVote(ctx context.Context, owner, repo stri
 	}, nil
 }
 
-// func (s *PostgresStore) UpsertRepoConfig(ctx context.Context, params UpsertRepoConfigParams) (*RepoConfigModel, error) {
-// 	cfg, err := s.q.UpsertRepoConfig(ctx, params)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return &RepoConfigModel{
-// 		ID:              cfg.ID,
-// 		Owner:           cfg.Owner,
-// 		Repo:            cfg.Repo,
-// 		LabelApproved:   ptrOr(cfg.LabelApproved, config.LabelApproved),
-// 		LabelInProgress: ptrOr(cfg.LabelInProgress, config.LabelInProgress),
-// 		LabelDone:       ptrOr(cfg.LabelDone, config.LabelDone),
-// 		LabelFailed:     ptrOr(cfg.LabelFailed, config.LabelFailed),
-// 		VoteThreshold:   ptrOr(cfg.VoteThreshold, int32(config.AgentMaxTurns)),
-// 		TimeoutMinutes:  ptrOr(cfg.TimeoutMinutes, int32(config.AgentTimeoutMinutes)),
-// 		MaxBudgetUsd:    numericOr(cfg.MaxBudgetUsd, config.AgentMaxBudgetUSD),
-// 		AnthropicAPIKey: ptrOr(cfg.AnthropicApiKey, os.Getenv("ANTHROPIC_API_KEY")),
-// 		CreatedAt:       cfg.CreatedAt.Time,
-// 		UpdatedAt:       cfg.UpdatedAt.Time,
-// 	}, nil
-// }
+func (s *PostgresStore) UpsertRepoConfig(ctx context.Context, params UpsertRepoConfigParams) (*RepoConfigModel, error) {
+	cfg, err := s.q.UpsertRepoConfig(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	return &RepoConfigModel{
+		ID:                  cfg.ID,
+		Owner:               cfg.Owner,
+		Repo:                cfg.Repo,
+		LabelApproved:       ptrOr(cfg.LabelApproved, config.LabelApproved),
+		LabelInProgress:     ptrOr(cfg.LabelInProgress, config.LabelInProgress),
+		LabelDone:           ptrOr(cfg.LabelDone, config.LabelDone),
+		LabelFailed:         ptrOr(cfg.LabelFailed, config.LabelFailed),
+		LabelFeatureRequest: ptrOr(cfg.LabelFeatureRequest, config.LabelFeatureRequest),
+		VoteThreshold:       ptrOr(cfg.VoteThreshold, int32(config.AgentMaxTurns)),
+		TimeoutMinutes:      ptrOr(cfg.TimeoutMinutes, int32(config.AgentTimeoutMinutes)),
+		MaxBudgetUsd:        numericOr(cfg.MaxBudgetUsd, config.AgentMaxBudgetUSD),
+		AnthropicAPIKey:     ptrOr(cfg.AnthropicApiKey, os.Getenv("ANTHROPIC_API_KEY")),
+		CreatedAt:           cfg.CreatedAt.Time,
+		UpdatedAt:           cfg.UpdatedAt.Time,
+	}, nil
+}
+
+func (s *PostgresStore) ListExecutions(ctx context.Context, limit, offset int32) ([]*ExecutionModel, error) {
+	rows, err := s.q.ListExecutions(ctx, ListExecutionsParams{Limit: limit, Offset: offset})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*ExecutionModel, len(rows))
+	for i, exec := range rows {
+		result[i] = &ExecutionModel{
+			ID:          exec.ID,
+			Owner:       exec.Owner,
+			Repo:        exec.Repo,
+			IssueNumber: exec.IssueNumber,
+			Status:      exec.Status,
+			Branch:      exec.Branch,
+			PrUrl:       exec.PrUrl,
+			Error:       exec.Error,
+			CreatedAt:   exec.CreatedAt.Time,
+			UpdatedAt:   exec.UpdatedAt.Time,
+		}
+	}
+	return result, nil
+}
+
+func (s *PostgresStore) GetExecutionByID(ctx context.Context, id int64) (*ExecutionModel, error) {
+	exec, err := s.q.GetExecution(ctx, id)
+	if isNoRowsError(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &ExecutionModel{
+		ID:          exec.ID,
+		Owner:       exec.Owner,
+		Repo:        exec.Repo,
+		IssueNumber: exec.IssueNumber,
+		Status:      exec.Status,
+		Branch:      exec.Branch,
+		PrUrl:       exec.PrUrl,
+		Error:       exec.Error,
+		CreatedAt:   exec.CreatedAt.Time,
+		UpdatedAt:   exec.UpdatedAt.Time,
+	}, nil
+}
+
+func (s *PostgresStore) CancelExecution(ctx context.Context, id int64) (*ExecutionModel, error) {
+	exec, err := s.q.CancelExecution(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &ExecutionModel{
+		ID:          exec.ID,
+		Owner:       exec.Owner,
+		Repo:        exec.Repo,
+		IssueNumber: exec.IssueNumber,
+		Status:      exec.Status,
+		Branch:      exec.Branch,
+		PrUrl:       exec.PrUrl,
+		Error:       exec.Error,
+		CreatedAt:   exec.CreatedAt.Time,
+		UpdatedAt:   exec.UpdatedAt.Time,
+	}, nil
+}
+
+func (s *PostgresStore) RetryExecution(ctx context.Context, id int64) (*ExecutionModel, error) {
+	exec, err := s.q.RetryExecution(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &ExecutionModel{
+		ID:          exec.ID,
+		Owner:       exec.Owner,
+		Repo:        exec.Repo,
+		IssueNumber: exec.IssueNumber,
+		Status:      exec.Status,
+		Branch:      exec.Branch,
+		PrUrl:       exec.PrUrl,
+		Error:       exec.Error,
+		CreatedAt:   exec.CreatedAt.Time,
+		UpdatedAt:   exec.UpdatedAt.Time,
+	}, nil
+}
+
+func (s *PostgresStore) ListRepoConfigs(ctx context.Context) ([]*RepoConfigModel, error) {
+	rows, err := s.q.ListRepoConfigs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*RepoConfigModel, len(rows))
+	for i, cfg := range rows {
+		result[i] = &RepoConfigModel{
+			ID:                  cfg.ID,
+			Owner:               cfg.Owner,
+			Repo:                cfg.Repo,
+			LabelApproved:       ptrOr(cfg.LabelApproved, config.LabelApproved),
+			LabelInProgress:     ptrOr(cfg.LabelInProgress, config.LabelInProgress),
+			LabelDone:           ptrOr(cfg.LabelDone, config.LabelDone),
+			LabelFailed:         ptrOr(cfg.LabelFailed, config.LabelFailed),
+			LabelFeatureRequest: ptrOr(cfg.LabelFeatureRequest, config.LabelFeatureRequest),
+			VoteThreshold:       ptrOr(cfg.VoteThreshold, int32(config.AgentMaxTurns)),
+			TimeoutMinutes:      ptrOr(cfg.TimeoutMinutes, int32(config.AgentTimeoutMinutes)),
+			MaxBudgetUsd:        numericOr(cfg.MaxBudgetUsd, config.AgentMaxBudgetUSD),
+			AnthropicAPIKey:     ptrOr(cfg.AnthropicApiKey, os.Getenv("ANTHROPIC_API_KEY")),
+			CreatedAt:           cfg.CreatedAt.Time,
+			UpdatedAt:           cfg.UpdatedAt.Time,
+		}
+	}
+	return result, nil
+}

@@ -43,37 +43,78 @@ func (q *Queries) GetRepoConfig(ctx context.Context, arg GetRepoConfigParams) (R
 	return i, err
 }
 
+const listRepoConfigs = `-- name: ListRepoConfigs :many
+SELECT id, owner, repo, label_approved, label_in_progress, label_done, label_failed, label_feature_request, vote_threshold, timeout_minutes, max_budget_usd, anthropic_api_key, created_at, updated_at FROM repo_config ORDER BY created_at DESC
+`
+
+func (q *Queries) ListRepoConfigs(ctx context.Context) ([]RepoConfig, error) {
+	rows, err := q.db.Query(ctx, listRepoConfigs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RepoConfig
+	for rows.Next() {
+		var i RepoConfig
+		if err := rows.Scan(
+			&i.ID,
+			&i.Owner,
+			&i.Repo,
+			&i.LabelApproved,
+			&i.LabelInProgress,
+			&i.LabelDone,
+			&i.LabelFailed,
+			&i.LabelFeatureRequest,
+			&i.VoteThreshold,
+			&i.TimeoutMinutes,
+			&i.MaxBudgetUsd,
+			&i.AnthropicApiKey,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertRepoConfig = `-- name: UpsertRepoConfig :one
 INSERT INTO repo_config (
     owner, repo,
-    label_approved, label_in_progress, label_done, label_failed,
+    label_approved, label_in_progress, label_done, label_failed, label_feature_request,
     vote_threshold, timeout_minutes, max_budget_usd, anthropic_api_key
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (owner, repo) DO UPDATE SET
-    label_approved    = EXCLUDED.label_approved,
-    label_in_progress = EXCLUDED.label_in_progress,
-    label_done        = EXCLUDED.label_done,
-    label_failed      = EXCLUDED.label_failed,
-    vote_threshold    = EXCLUDED.vote_threshold,
-    timeout_minutes   = EXCLUDED.timeout_minutes,
-    max_budget_usd    = EXCLUDED.max_budget_usd,
-    anthropic_api_key = EXCLUDED.anthropic_api_key,
-    updated_at        = now()
+    label_approved        = EXCLUDED.label_approved,
+    label_in_progress     = EXCLUDED.label_in_progress,
+    label_done            = EXCLUDED.label_done,
+    label_failed          = EXCLUDED.label_failed,
+    label_feature_request = EXCLUDED.label_feature_request,
+    vote_threshold        = EXCLUDED.vote_threshold,
+    timeout_minutes       = EXCLUDED.timeout_minutes,
+    max_budget_usd        = EXCLUDED.max_budget_usd,
+    anthropic_api_key     = EXCLUDED.anthropic_api_key,
+    updated_at            = now()
 RETURNING id, owner, repo, label_approved, label_in_progress, label_done, label_failed, label_feature_request, vote_threshold, timeout_minutes, max_budget_usd, anthropic_api_key, created_at, updated_at
 `
 
 type UpsertRepoConfigParams struct {
-	Owner           string
-	Repo            string
-	LabelApproved   *string
-	LabelInProgress *string
-	LabelDone       *string
-	LabelFailed     *string
-	VoteThreshold   *int32
-	TimeoutMinutes  *int32
-	MaxBudgetUsd    pgtype.Numeric
-	AnthropicApiKey *string
+	Owner               string
+	Repo                string
+	LabelApproved       *string
+	LabelInProgress     *string
+	LabelDone           *string
+	LabelFailed         *string
+	LabelFeatureRequest *string
+	VoteThreshold       *int32
+	TimeoutMinutes      *int32
+	MaxBudgetUsd        pgtype.Numeric
+	AnthropicApiKey     *string
 }
 
 func (q *Queries) UpsertRepoConfig(ctx context.Context, arg UpsertRepoConfigParams) (RepoConfig, error) {
@@ -84,6 +125,7 @@ func (q *Queries) UpsertRepoConfig(ctx context.Context, arg UpsertRepoConfigPara
 		arg.LabelInProgress,
 		arg.LabelDone,
 		arg.LabelFailed,
+		arg.LabelFeatureRequest,
 		arg.VoteThreshold,
 		arg.TimeoutMinutes,
 		arg.MaxBudgetUsd,

@@ -7,6 +7,9 @@ import (
 	"os"
 	"strconv"
 
+	apimw "github.com/didrikolofsson/github-vote-llm/internal/api"
+	apihandlers "github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
+	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	ghclient "github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/handlers"
@@ -100,6 +103,22 @@ func main() {
 	webhooks := router.Group("/github")
 	webhooks.Use(middleware.ValidateSignature())
 	webhooks.POST("/webhook", webhookHandler.HandleGithubWebhook)
+
+	runsService := services.NewRunsService(st)
+	reposService := services.NewReposService(st)
+	runsHandler := apihandlers.NewRunsHandler(runsService)
+	reposHandler := apihandlers.NewReposHandler(reposService)
+
+	api := router.Group("/api")
+	api.Use(apimw.ValidateAPIKey())
+	api.GET("/runs", runsHandler.List)
+	api.POST("/runs", runsHandler.Create)
+	api.GET("/runs/:id", runsHandler.Get)
+	api.POST("/runs/:id/retry", runsHandler.Retry)
+	api.POST("/runs/:id/cancel", runsHandler.Cancel)
+	api.GET("/repos", reposHandler.List)
+	api.GET("/repos/:owner/:repo/config", reposHandler.GetConfig)
+	api.PUT("/repos/:owner/:repo/config", reposHandler.UpdateConfig)
 
 	port := os.Getenv("PORT")
 	if port == "" {

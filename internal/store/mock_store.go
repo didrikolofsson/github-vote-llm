@@ -14,6 +14,12 @@ type MockStore struct {
 	SetFailedFn                          func(ctx context.Context, id int64, errMsg string) (*ExecutionModel, error)
 	GetRepoConfigFn                      func(ctx context.Context, owner, repo string) (*RepoConfigModel, error)
 	IncrementIssueVoteFn                 func(ctx context.Context, owner, repo string, issueNumber int) (*IssueVoteModel, error)
+	ListExecutionsFn                     func(ctx context.Context, limit, offset int32) ([]*ExecutionModel, error)
+	GetExecutionByIDFn                   func(ctx context.Context, id int64) (*ExecutionModel, error)
+	CancelExecutionFn                    func(ctx context.Context, id int64) (*ExecutionModel, error)
+	RetryExecutionFn                     func(ctx context.Context, id int64) (*ExecutionModel, error)
+	ListRepoConfigsFn                    func(ctx context.Context) ([]*RepoConfigModel, error)
+	UpsertRepoConfigFn                   func(ctx context.Context, params UpsertRepoConfigParams) (*RepoConfigModel, error)
 }
 
 var _ Store = (*MockStore)(nil)
@@ -58,4 +64,46 @@ func (m *MockStore) IncrementIssueVote(ctx context.Context, owner, repo string, 
 
 func (m *MockStore) ResetExecution(ctx context.Context, id int64) (*ExecutionModel, error) {
 	return m.ResetExecutionFn(ctx, id)
+}
+
+func (m *MockStore) ListExecutions(ctx context.Context, limit, offset int32) ([]*ExecutionModel, error) {
+	if m.ListExecutionsFn == nil {
+		return nil, nil
+	}
+	return m.ListExecutionsFn(ctx, limit, offset)
+}
+
+func (m *MockStore) GetExecutionByID(ctx context.Context, id int64) (*ExecutionModel, error) {
+	if m.GetExecutionByIDFn == nil {
+		return nil, nil
+	}
+	return m.GetExecutionByIDFn(ctx, id)
+}
+
+func (m *MockStore) CancelExecution(ctx context.Context, id int64) (*ExecutionModel, error) {
+	if m.CancelExecutionFn == nil {
+		return nil, nil
+	}
+	return m.CancelExecutionFn(ctx, id)
+}
+
+func (m *MockStore) RetryExecution(ctx context.Context, id int64) (*ExecutionModel, error) {
+	if m.RetryExecutionFn == nil {
+		return nil, nil
+	}
+	return m.RetryExecutionFn(ctx, id)
+}
+
+func (m *MockStore) ListRepoConfigs(ctx context.Context) ([]*RepoConfigModel, error) {
+	if m.ListRepoConfigsFn == nil {
+		return nil, nil
+	}
+	return m.ListRepoConfigsFn(ctx)
+}
+
+func (m *MockStore) UpsertRepoConfig(ctx context.Context, params UpsertRepoConfigParams) (*RepoConfigModel, error) {
+	if m.UpsertRepoConfigFn == nil {
+		return nil, nil
+	}
+	return m.UpsertRepoConfigFn(ctx, params)
 }
