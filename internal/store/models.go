@@ -33,3 +33,13 @@ type ExecutionModel struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
+
+type IssueVoteModel struct {
+	ID          int64
+	Owner       string
+	Repo        string
+	IssueNumber int32
+	VoteCount   int32
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}

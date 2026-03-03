@@ -156,3 +156,4 @@ func TestHandleIssueEvent_CreateExecutionDBError_Returns500(t *testing.T) {
 		t.Errorf("expected 500, got %d: %s", w.Code, w.Body.String())
 	}
 }
+

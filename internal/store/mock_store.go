@@ -13,7 +13,7 @@ type MockStore struct {
 	SetSuccessFn                         func(ctx context.Context, id int64, prURL string) (*ExecutionModel, error)
 	SetFailedFn                          func(ctx context.Context, id int64, errMsg string) (*ExecutionModel, error)
 	GetRepoConfigFn                      func(ctx context.Context, owner, repo string) (*RepoConfigModel, error)
-	UpsertRepoConfigFn                   func(ctx context.Context, params UpsertRepoConfigParams) (*RepoConfigModel, error)
+	IncrementIssueVoteFn                 func(ctx context.Context, owner, repo string, issueNumber int) (*IssueVoteModel, error)
 }
 
 var _ Store = (*MockStore)(nil)
@@ -49,8 +49,11 @@ func (m *MockStore) GetRepoConfig(ctx context.Context, owner, repo string) (*Rep
 	return m.GetRepoConfigFn(ctx, owner, repo)
 }
 
-func (m *MockStore) UpsertRepoConfig(ctx context.Context, params UpsertRepoConfigParams) (*RepoConfigModel, error) {
-	return m.UpsertRepoConfigFn(ctx, params)
+func (m *MockStore) IncrementIssueVote(ctx context.Context, owner, repo string, issueNumber int) (*IssueVoteModel, error) {
+	if m.IncrementIssueVoteFn == nil {
+		return &IssueVoteModel{VoteCount: 1}, nil
+	}
+	return m.IncrementIssueVoteFn(ctx, owner, repo, issueNumber)
 }
 
 func (m *MockStore) ResetExecution(ctx context.Context, id int64) (*ExecutionModel, error) {

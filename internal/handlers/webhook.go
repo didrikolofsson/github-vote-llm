@@ -56,15 +56,6 @@ func (h *WebhookHandler) HandleGithubWebhook(c *gin.Context) {
 	}
 }
 
-func hasInProgressLabel(issue *gh.Issue, labelInProgress string) bool {
-	for _, l := range issue.Labels {
-		if l.GetName() == labelInProgress {
-			return true
-		}
-	}
-	return false
-}
-
 func (h *WebhookHandler) handleGithubIssueLabeledEvent(c *gin.Context, e *gh.IssuesEvent) {
 	issue := e.GetIssue()
 	issueNum := issue.GetNumber()
@@ -218,3 +209,4 @@ func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
 		return
 	}
 }
+
