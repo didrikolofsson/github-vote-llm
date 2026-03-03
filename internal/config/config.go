@@ -17,5 +17,4 @@ const (
 	LabelInProgress     = "llm-in-progress"
 	LabelDone           = "llm-pr-created"
 	LabelFailed         = "llm-failed"
-	LabelCandidate      = "candidate"
 )

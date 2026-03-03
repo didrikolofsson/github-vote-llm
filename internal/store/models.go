@@ -13,7 +13,6 @@ type RepoConfigModel struct {
 	LabelDone           string
 	LabelFailed         string
 	LabelFeatureRequest string
-	LabelCandidate      string
 	VoteThreshold       int32
 	TimeoutMinutes      int32
 	MaxBudgetUsd        float64
