@@ -9,6 +9,7 @@ jobs:
   ci:
     name: Test, lint, build
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -16,13 +17,30 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Test
-        run: go test ./...
+        run: make test
 
       - name: Lint OpenAPI spec
-        uses: jeanblanchard/redocly-action@v1
-        with:
-          args: lint openapi.yaml
+        run: make lint-openapi
 
       - name: Build
-        run: go build ./...
+        run: make build
+
+  deploy:
+    name: Deploy
+    needs: ci
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: deploy-group
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

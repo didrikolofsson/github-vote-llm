@@ -4,7 +4,7 @@ dev:
 	air
 
 build:
-	go build ./cmd/main/main.go
+	go build ./...
 
 test:
 	go test ./...
@@ -22,4 +22,4 @@ migrate-down:
 	migrate -source file://db/migrations -database $$DATABASE_URL down 1
 
 lint-openapi:
-	npx @redocly/cli@latest lint openapi.yaml
+	npx --yes @redocly/cli@latest lint openapi.yaml
