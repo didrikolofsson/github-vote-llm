@@ -1,4 +1,4 @@
-package handlers_test
+package webhook_test
 
 import (
 	"bytes"
@@ -9,9 +9,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
+	"github.com/didrikolofsson/github-vote-llm/internal/webhook"
 	"github.com/gin-gonic/gin"
 	gh "github.com/google/go-github/v68/github"
 )
@@ -69,7 +69,7 @@ func noExecution(ctx context.Context, owner, repo string, issueNumber int) (*sto
 	return nil, nil
 }
 
-func postWebhook(t *testing.T, handler *handlers.WebhookHandler, payload []byte) *httptest.ResponseRecorder {
+func postWebhook(t *testing.T, handler *webhook.WebhookHandler, payload []byte) *httptest.ResponseRecorder {
 	t.Helper()
 	router := gin.New()
 	router.POST("/webhook", handler.HandleGithubWebhook)
@@ -93,7 +93,7 @@ func TestHandleIssueEvent_AlreadySucceeded_Returns200(t *testing.T) {
 		},
 	}
 
-	handler := handlers.NewWebhookHandler(nil, logger.New(), "/tmp", mockStore)
+	handler := webhook.NewWebhookHandler(nil, logger.New(), "/tmp", mockStore)
 	w := postWebhook(t, handler, buildLabeledIssuePayload(t, 123))
 
 	if w.Code != http.StatusOK {
@@ -114,7 +114,7 @@ func TestHandleIssueEvent_FailedExecution_ResetDBError_Returns500(t *testing.T) 
 		},
 	}
 
-	handler := handlers.NewWebhookHandler(nil, logger.New(), "/tmp", mockStore)
+	handler := webhook.NewWebhookHandler(nil, logger.New(), "/tmp", mockStore)
 	w := postWebhook(t, handler, buildLabeledIssuePayload(t, 123))
 
 	if w.Code != http.StatusInternalServerError {
@@ -131,7 +131,7 @@ func TestHandleIssueEvent_GetExecutionDBError_Returns500(t *testing.T) {
 		},
 	}
 
-	handler := handlers.NewWebhookHandler(nil, logger.New(), "/tmp", mockStore)
+	handler := webhook.NewWebhookHandler(nil, logger.New(), "/tmp", mockStore)
 	w := postWebhook(t, handler, buildLabeledIssuePayload(t, 123))
 
 	if w.Code != http.StatusInternalServerError {
@@ -149,11 +149,10 @@ func TestHandleIssueEvent_CreateExecutionDBError_Returns500(t *testing.T) {
 		},
 	}
 
-	handler := handlers.NewWebhookHandler(nil, logger.New(), "/tmp", mockStore)
+	handler := webhook.NewWebhookHandler(nil, logger.New(), "/tmp", mockStore)
 	w := postWebhook(t, handler, buildLabeledIssuePayload(t, 123))
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500, got %d: %s", w.Code, w.Body.String())
 	}
 }
-

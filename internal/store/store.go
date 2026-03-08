@@ -58,18 +58,6 @@ func ptrOr[T any](p *T, defaultVal T) T {
 	return defaultVal
 }
 
-// float64ToNumeric converts *float64 to pgtype.Numeric. Returns invalid Numeric if nil.
-func float64ToNumeric(f *float64) pgtype.Numeric {
-	if f == nil {
-		return pgtype.Numeric{}
-	}
-	var n pgtype.Numeric
-	if err := n.Scan(*f); err != nil {
-		return pgtype.Numeric{}
-	}
-	return n
-}
-
 // numericToFloat64 converts pgtype.Numeric to float64. Returns 0 if not valid.
 func numericToFloat64(n pgtype.Numeric) float64 {
 	if !n.Valid {

@@ -3,8 +3,8 @@ package services
 import (
 	"context"
 
+	"github.com/didrikolofsson/github-vote-llm/internal/helpers"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // UpdateConfigInput holds the optional fields for updating a repo config.
@@ -52,20 +52,8 @@ func (s *ReposService) UpdateConfig(ctx context.Context, owner, repo string, in 
 		LabelFeatureRequest: in.LabelFeatureRequest,
 		VoteThreshold:       in.VoteThreshold,
 		TimeoutMinutes:      in.TimeoutMinutes,
-		MaxBudgetUsd:        float64ToNumeric(in.MaxBudgetUsd),
+		MaxBudgetUsd:        helpers.Float64ToNumeric(in.MaxBudgetUsd),
 		AnthropicApiKey:     in.AnthropicAPIKey,
 	}
 	return s.store.UpsertRepoConfig(ctx, params)
-}
-
-// float64ToNumeric converts *float64 to pgtype.Numeric.
-func float64ToNumeric(f *float64) pgtype.Numeric {
-	if f == nil {
-		return pgtype.Numeric{}
-	}
-	var n pgtype.Numeric
-	if err := n.Scan(*f); err != nil {
-		return pgtype.Numeric{}
-	}
-	return n
 }
