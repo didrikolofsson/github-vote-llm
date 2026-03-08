@@ -3,6 +3,7 @@ module github.com/didrikolofsson/github-vote-llm
 go 1.25.5
 
 require (
+	github.com/caarlos0/env/v11 v11.4.0
 	github.com/gin-gonic/gin v1.11.0
 	github.com/google/go-github/v68 v68.0.0
 	github.com/jackc/pgx/v5 v5.8.0

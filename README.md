@@ -20,12 +20,15 @@ db/
   sqlc.yaml         sqlc config
 internal/
   agent/            Claude Code orchestration (clone, run, commit, PR)
+  api/              REST API: handlers, services, API key middleware
+  config/           Env var parsing
   github/           GitHub App auth and API client
-  handlers/         Webhook event handler
+  helpers/          Shared utilities
   logger/           Structured logging (zap)
-  middleware/       Webhook signature validation
   spinner/          Terminal progress spinner
   store/            PostgreSQL store (pgx/v5 + sqlc generated code)
+  webhook/          Webhook event handler and signature validation
+openapi.yaml        OpenAPI 3.1 spec (hand-maintained, used for SDK generation)
 ```
 
 ## Requirements
@@ -46,6 +49,7 @@ All config is via environment variables:
 | `GITHUB_PRIVATE_KEY` | yes      | PEM bytes as a string                                                                                            |
 | `WEBHOOK_SECRET`     | yes      | HMAC secret matching the App's webhook config                                                                    |
 | `ANTHROPIC_API_KEY`  | yes      | API key passed to the `claude` CLI                                                                               |
+| `API_KEY`            | yes      | API key for REST endpoints (sent as `X-Api-Key` header)                                                          |
 | `DATABASE_URL`       | yes      | PostgreSQL connection string (e.g. `postgres://user:pass@localhost:5432/dbname`)                                 |
 | `PORT`               | no       | HTTP listen port (default: `8080`)                                                                               |
 | `WORKSPACE_DIR`      | no       | Base dir for repo clones (default: `/tmp/vote-llm-workspaces`). Point this at a persistent volume in production. |
@@ -108,16 +112,41 @@ go build -o vote-llm ./cmd/main
 export GITHUB_APP_ID=123456
 export GITHUB_PRIVATE_KEY=pem-string
 export WEBHOOK_SECRET=your-secret
+export API_KEY=your-api-key
 export DATABASE_URL=postgres://user:pass@localhost:5432/vote_llm
 ./vote-llm
 ```
 
-## Endpoints
+## API
 
-| Path                   | Description                              |
-| ---------------------- | ---------------------------------------- |
-| `POST /github/webhook` | Receives GitHub webhook events           |
-| `GET /health`          | Health check (returns `{"status":"ok"}`) |
+All REST endpoints are prefixed with `/v1/api`. The webhook and health check require no authentication. All other endpoints require an `X-Api-Key` header.
+
+### Webhook & health
+
+| Method | Path                      | Auth           | Description                     |
+| ------ | ------------------------- | -------------- | ------------------------------- |
+| `POST` | `/v1/api/github/webhook`  | X-Hub-Signature-256 | Receives GitHub webhook events |
+| `GET`  | `/v1/api/health`          | none           | Health check                    |
+
+### Runs
+
+| Method | Path                        | Description                              |
+| ------ | --------------------------- | ---------------------------------------- |
+| `GET`  | `/v1/api/runs`              | List runs (pagination: `limit`, `offset`) |
+| `POST` | `/v1/api/runs`              | Create a run                             |
+| `GET`  | `/v1/api/runs/:id`          | Get a run by ID                          |
+| `POST` | `/v1/api/runs/:id/retry`    | Retry a failed run                       |
+| `POST` | `/v1/api/runs/:id/cancel`   | Cancel a pending or in-progress run      |
+
+### Repos
+
+| Method | Path                                   | Description                    |
+| ------ | -------------------------------------- | ------------------------------ |
+| `GET`  | `/v1/api/repos`                        | List all repo configurations   |
+| `GET`  | `/v1/api/repos/:owner/:repo/config`    | Get config for a repo          |
+| `PUT`  | `/v1/api/repos/:owner/:repo/config`    | Update config for a repo       |
+
+The full API schema is documented in [`openapi.yaml`](./openapi.yaml).
 
 ## Labels
 

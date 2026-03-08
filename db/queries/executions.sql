@@ -46,3 +46,17 @@ FROM executions
 WHERE owner = $1
     AND repo = $2
     AND issue_number = $3;
+-- name: ListExecutions :many
+SELECT * FROM executions ORDER BY created_at DESC LIMIT $1 OFFSET $2;
+-- name: GetExecution :one
+SELECT * FROM executions WHERE id = $1;
+-- name: CancelExecution :one
+UPDATE executions
+SET status = 'cancelled', updated_at = now()
+WHERE id = $1 AND status IN ('pending', 'in_progress')
+RETURNING *;
+-- name: RetryExecution :one
+UPDATE executions
+SET status = 'pending', branch = NULL, pr_url = NULL, error = NULL, updated_at = now()
+WHERE id = $1 AND status IN ('failed', 'cancelled')
+RETURNING *;

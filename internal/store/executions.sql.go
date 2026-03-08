@@ -9,6 +9,31 @@ import (
 	"context"
 )
 
+const cancelExecution = `-- name: CancelExecution :one
+UPDATE executions
+SET status = 'cancelled', updated_at = now()
+WHERE id = $1 AND status IN ('pending', 'in_progress')
+RETURNING id, owner, repo, issue_number, status, branch, pr_url, error, created_at, updated_at
+`
+
+func (q *Queries) CancelExecution(ctx context.Context, id int64) (Execution, error) {
+	row := q.db.QueryRow(ctx, cancelExecution, id)
+	var i Execution
+	err := row.Scan(
+		&i.ID,
+		&i.Owner,
+		&i.Repo,
+		&i.IssueNumber,
+		&i.Status,
+		&i.Branch,
+		&i.PrUrl,
+		&i.Error,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createExecution = `-- name: CreateExecution :one
 INSERT INTO executions (owner, repo, issue_number, status)
 VALUES ($1, $2, $3, 'pending')
@@ -23,6 +48,28 @@ type CreateExecutionParams struct {
 
 func (q *Queries) CreateExecution(ctx context.Context, arg CreateExecutionParams) (Execution, error) {
 	row := q.db.QueryRow(ctx, createExecution, arg.Owner, arg.Repo, arg.IssueNumber)
+	var i Execution
+	err := row.Scan(
+		&i.ID,
+		&i.Owner,
+		&i.Repo,
+		&i.IssueNumber,
+		&i.Status,
+		&i.Branch,
+		&i.PrUrl,
+		&i.Error,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getExecution = `-- name: GetExecution :one
+SELECT id, owner, repo, issue_number, status, branch, pr_url, error, created_at, updated_at FROM executions WHERE id = $1
+`
+
+func (q *Queries) GetExecution(ctx context.Context, id int64) (Execution, error) {
+	row := q.db.QueryRow(ctx, getExecution, id)
 	var i Execution
 	err := row.Scan(
 		&i.ID,
@@ -69,6 +116,46 @@ func (q *Queries) GetExecutionByOwnerRepoIssueNumber(ctx context.Context, arg Ge
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listExecutions = `-- name: ListExecutions :many
+SELECT id, owner, repo, issue_number, status, branch, pr_url, error, created_at, updated_at FROM executions ORDER BY created_at DESC LIMIT $1 OFFSET $2
+`
+
+type ListExecutionsParams struct {
+	Limit  int32
+	Offset int32
+}
+
+func (q *Queries) ListExecutions(ctx context.Context, arg ListExecutionsParams) ([]Execution, error) {
+	rows, err := q.db.Query(ctx, listExecutions, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Execution
+	for rows.Next() {
+		var i Execution
+		if err := rows.Scan(
+			&i.ID,
+			&i.Owner,
+			&i.Repo,
+			&i.IssueNumber,
+			&i.Status,
+			&i.Branch,
+			&i.PrUrl,
+			&i.Error,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const resetExecution = `-- name: ResetExecution :one
@@ -118,6 +205,31 @@ type ResetFailedExecutionParams struct {
 
 func (q *Queries) ResetFailedExecution(ctx context.Context, arg ResetFailedExecutionParams) (Execution, error) {
 	row := q.db.QueryRow(ctx, resetFailedExecution, arg.Owner, arg.Repo, arg.IssueNumber)
+	var i Execution
+	err := row.Scan(
+		&i.ID,
+		&i.Owner,
+		&i.Repo,
+		&i.IssueNumber,
+		&i.Status,
+		&i.Branch,
+		&i.PrUrl,
+		&i.Error,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const retryExecution = `-- name: RetryExecution :one
+UPDATE executions
+SET status = 'pending', branch = NULL, pr_url = NULL, error = NULL, updated_at = now()
+WHERE id = $1 AND status IN ('failed', 'cancelled')
+RETURNING id, owner, repo, issue_number, status, branch, pr_url, error, created_at, updated_at
+`
+
+func (q *Queries) RetryExecution(ctx context.Context, id int64) (Execution, error) {
+	row := q.db.QueryRow(ctx, retryExecution, id)
 	var i Execution
 	err := row.Scan(
 		&i.ID,

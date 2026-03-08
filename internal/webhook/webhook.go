@@ -1,4 +1,4 @@
-package handlers
+package webhook
 
 import (
 	"context"
@@ -209,4 +209,3 @@ func (h *WebhookHandler) handleIssueEvent(c *gin.Context, e *gh.IssuesEvent) {
 		return
 	}
 }
-

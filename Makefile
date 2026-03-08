@@ -20,3 +20,6 @@ migrate-up:
 
 migrate-down:
 	migrate -source file://db/migrations -database $$DATABASE_URL down 1
+
+lint-openapi:
+	npx @redocly/cli@latest lint openapi.yaml

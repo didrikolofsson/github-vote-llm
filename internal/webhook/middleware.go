@@ -1,17 +1,16 @@
-package middleware
+package webhook
 
 import (
 	"bytes"
 	"io"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/gin-gonic/gin"
 	gh "github.com/google/go-github/v68/github"
 )
 
-func ValidateSignature() gin.HandlerFunc {
+func ValidateSignature(webhookSecret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		payload, err := io.ReadAll(c.Request.Body)
 		if err != nil {
@@ -20,7 +19,7 @@ func ValidateSignature() gin.HandlerFunc {
 			return
 		}
 
-		if err := gh.ValidateSignature(c.GetHeader("X-Hub-Signature-256"), payload, []byte(os.Getenv("WEBHOOK_SECRET"))); err != nil {
+		if err := gh.ValidateSignature(c.GetHeader("X-Hub-Signature-256"), payload, []byte(webhookSecret)); err != nil {
 			log.Printf("invalid signature: %v", err)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid signature"})
 			return
