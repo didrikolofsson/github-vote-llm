@@ -21,5 +21,11 @@ vote-llm.db
 vote-llm.db*
 *.pem
 
+# Client
+client/node_modules/
+
+# Server build
+server/web/dist/
+
 # Claude
 .claude/worktrees/

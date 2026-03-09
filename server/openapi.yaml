@@ -1,0 +1,815 @@
+openapi: 3.1.0
+info:
+  title: GitHub Vote LLM API
+  version: 1.0.0
+  description: API for the GitHub Vote LLM
+  contact:
+    name: Didrik Olofsson
+    email: didrik@didrik.dev
+    url: https://didrik.dev
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+paths:
+  /v1/api/health:
+    get:
+      summary: Health check
+      description: Returns the service health status. No authentication required.
+      operationId: getHealth
+      tags:
+        - Health
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /v1/api/github/webhook:
+    post:
+      summary: GitHub webhook
+      description: Receives GitHub webhook events. Validates request using X-Hub-Signature-256.
+      operationId: handleGithubWebhook
+      tags:
+        - Webhooks
+      security:
+        - hubSignature: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: GitHub webhook event payload (varies by event type)
+      responses:
+        "200":
+          description: Webhook processed successfully
+        "401":
+          description: Invalid or missing signature
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/api/runs:
+    get:
+      summary: List runs
+      description: List execution runs with optional pagination.
+      operationId: listRuns
+      tags:
+        - Runs
+      security:
+        - apiKey: []
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of runs to return (1-100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          description: Number of runs to skip for pagination
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: List of runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ApiKeyNotConfigured"
+    post:
+      summary: Create run
+      description: Create a new execution run for an issue.
+      operationId: createRun
+      tags:
+        - Runs
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRunRequest"
+      responses:
+        "201":
+          description: Run created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Run already exists for this issue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          $ref: "#/components/responses/ApiKeyNotConfigured"
+
+  /v1/api/runs/{id}:
+    get:
+      summary: Get run
+      description: Get a single run by ID.
+      operationId: getRun
+      tags:
+        - Runs
+      security:
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Run details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Run not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          $ref: "#/components/responses/ApiKeyNotConfigured"
+
+  /v1/api/runs/{id}/retry:
+    post:
+      summary: Retry run
+      description: Retry a failed run.
+      operationId: retryRun
+      tags:
+        - Runs
+      security:
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Run retried
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Execution is not in a retryable state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          $ref: "#/components/responses/ApiKeyNotConfigured"
+
+  /v1/api/runs/{id}/cancel:
+    post:
+      summary: Cancel run
+      description: Cancel a running execution.
+      operationId: cancelRun
+      tags:
+        - Runs
+      security:
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Run cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Execution is not in a cancellable state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          $ref: "#/components/responses/ApiKeyNotConfigured"
+
+  /v1/api/repos:
+    get:
+      summary: List repos
+      description: List all repository configurations.
+      operationId: listRepos
+      tags:
+        - Repos
+      security:
+        - apiKey: []
+      responses:
+        "200":
+          description: List of repo configurations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RepoConfig"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ApiKeyNotConfigured"
+
+  /v1/api/repos/{owner}/{repo}/config:
+    get:
+      summary: Get repo config
+      description: Get configuration for a specific repository.
+      operationId: getRepoConfig
+      tags:
+        - Repos
+      security:
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/Owner"
+        - $ref: "#/components/parameters/Repo"
+      responses:
+        "200":
+          description: Repo configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepoConfig"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Repo config not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          $ref: "#/components/responses/ApiKeyNotConfigured"
+    delete:
+      summary: Delete repo config
+      description: Delete configuration for a repository.
+      operationId: deleteRepoConfig
+      tags:
+        - Repos
+      security:
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/Owner"
+        - $ref: "#/components/parameters/Repo"
+      responses:
+        "204":
+          description: Config deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ApiKeyNotConfigured"
+    put:
+      summary: Update repo config
+      description: Update configuration for a repository. All fields are optional.
+      operationId: updateRepoConfig
+      tags:
+        - Repos
+      security:
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/Owner"
+        - $ref: "#/components/parameters/Repo"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRepoConfigRequest"
+      responses:
+        "200":
+          description: Config updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepoConfig"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ApiKeyNotConfigured"
+
+  /v1/api/repos/{owner}/{repo}/roadmap:
+    get:
+      summary: List roadmap items
+      description: List all proposals for a repo sorted by vote count (team view).
+      operationId: listRoadmapItems
+      tags:
+        - Roadmap
+      security:
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/Owner"
+        - $ref: "#/components/parameters/Repo"
+      responses:
+        "200":
+          description: List of proposals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Proposal"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ApiKeyNotConfigured"
+
+  /v1/api/repos/{owner}/{repo}/proposals/{id}:
+    patch:
+      summary: Update proposal status
+      description: Update the status of a proposal (team only).
+      operationId: updateProposalStatus
+      tags:
+        - Roadmap
+      security:
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/Owner"
+        - $ref: "#/components/parameters/Repo"
+        - $ref: "#/components/parameters/ProposalId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProposalStatusRequest"
+      responses:
+        "200":
+          description: Proposal updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Proposal"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Proposal not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          $ref: "#/components/responses/ApiKeyNotConfigured"
+
+  /board/{owner}/{repo}/proposals:
+    get:
+      summary: List proposals (public)
+      description: List all proposals for a public board, sorted by vote count.
+      operationId: listBoardProposals
+      tags:
+        - Board
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Owner"
+        - $ref: "#/components/parameters/Repo"
+      responses:
+        "200":
+          description: List of proposals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Proposal"
+        "403":
+          description: Board is not public
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      summary: Create proposal (public)
+      description: Submit a new feature request proposal on a public board.
+      operationId: createBoardProposal
+      tags:
+        - Board
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Owner"
+        - $ref: "#/components/parameters/Repo"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProposalRequest"
+      responses:
+        "201":
+          description: Proposal created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Proposal"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Board is not public
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /board/{owner}/{repo}/proposals/{id}/vote:
+    post:
+      summary: Vote on proposal (public)
+      description: Increment the vote count for a proposal.
+      operationId: voteProposal
+      tags:
+        - Board
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Owner"
+        - $ref: "#/components/parameters/Repo"
+        - $ref: "#/components/parameters/ProposalId"
+      responses:
+        "200":
+          description: Vote recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Proposal"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Board is not public
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Proposal not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /board/{owner}/{repo}/proposals/{id}/comments:
+    get:
+      summary: List comments (public)
+      description: List all comments for a proposal on a public board.
+      operationId: listBoardComments
+      tags:
+        - Board
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Owner"
+        - $ref: "#/components/parameters/Repo"
+        - $ref: "#/components/parameters/ProposalId"
+      responses:
+        "200":
+          description: List of comments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProposalComment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Board is not public
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      summary: Create comment (public)
+      description: Post a comment on a proposal on a public board.
+      operationId: createBoardComment
+      tags:
+        - Board
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Owner"
+        - $ref: "#/components/parameters/Repo"
+        - $ref: "#/components/parameters/ProposalId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCommentRequest"
+      responses:
+        "201":
+          description: Comment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalComment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Board is not public
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: API key for authenticating requests
+    hubSignature:
+      type: apiKey
+      in: header
+      name: X-Hub-Signature-256
+      description: HMAC-SHA256 signature of the webhook payload
+
+  parameters:
+    RunId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+      description: Run ID
+    Owner:
+      name: owner
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Repository owner (e.g. GitHub org or username)
+    Repo:
+      name: repo
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Repository name
+    ProposalId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+      description: Proposal ID
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Error message
+
+    Run:
+      type: object
+      required: [id, owner, repo, issue_number, status, created_at, updated_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        owner:
+          type: string
+        repo:
+          type: string
+        issue_number:
+          type: integer
+          format: int32
+        status:
+          type: string
+          enum: [pending, in_progress, success, failed, cancelled]
+        branch:
+          type: [string, "null"]
+        pr_url:
+          type: [string, "null"]
+          format: uri
+        error:
+          type: [string, "null"]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateRunRequest:
+      type: object
+      required: [owner, repo, issue_number]
+      properties:
+        owner:
+          type: string
+        repo:
+          type: string
+        issue_number:
+          type: integer
+          format: int32
+
+    RepoConfig:
+      type: object
+      required: [id, owner, repo, label_approved, label_in_progress, label_done, label_failed, label_feature_request, vote_threshold, timeout_minutes, max_budget_usd, is_board_public, created_at, updated_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        owner:
+          type: string
+        repo:
+          type: string
+        label_approved:
+          type: string
+        label_in_progress:
+          type: string
+        label_done:
+          type: string
+        label_failed:
+          type: string
+        label_feature_request:
+          type: string
+        vote_threshold:
+          type: integer
+          format: int32
+        timeout_minutes:
+          type: integer
+          format: int32
+        max_budget_usd:
+          type: number
+          format: double
+        is_board_public:
+          type: boolean
+          description: Whether the community board is publicly accessible
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UpdateRepoConfigRequest:
+      type: object
+      description: All fields are optional. Only provided fields will be updated.
+      properties:
+        label_approved:
+          type: string
+        label_in_progress:
+          type: string
+        label_done:
+          type: string
+        label_failed:
+          type: string
+        label_feature_request:
+          type: string
+        vote_threshold:
+          type: integer
+          format: int32
+        timeout_minutes:
+          type: integer
+          format: int32
+        max_budget_usd:
+          type: number
+          format: double
+        anthropic_api_key:
+          type: string
+          description: API key for Anthropic (stored securely, not returned in responses)
+        is_board_public:
+          type: boolean
+          description: Whether the community board is publicly accessible
+
+    Proposal:
+      type: object
+      required: [id, owner, repo, title, description, vote_count, status, created_at, updated_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        owner:
+          type: string
+        repo:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        vote_count:
+          type: integer
+          format: int32
+        status:
+          type: string
+          enum: [open, planned, done]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ProposalComment:
+      type: object
+      required: [id, proposal_id, body, author_name, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        proposal_id:
+          type: integer
+          format: int64
+        body:
+          type: string
+        author_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CreateProposalRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 5000
+
+    CreateCommentRequest:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        author_name:
+          type: string
+          maxLength: 50
+          description: Display name (defaults to "Anonymous" if omitted)
+
+    UpdateProposalStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [open, planned, done]
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: unauthorized
+    ApiKeyNotConfigured:
+      description: API key is not configured on the server
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: api key not configured
