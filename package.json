@@ -1,0 +1,26 @@
+{
+  "name": "github-vote-llm",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"pnpm run dev-client\" \"pnpm run dev-server\"",
+    "dev-client": "cd client && npm run dev",
+    "dev-server": "cd server && make dev",
+    "generate": "pnpm run generate-server && pnpm run generate-client",
+    "generate-client": "cd client && npm run generate",
+    "generate-server": "make generate",
+    "build": "pnpm run build-server && pnpm run build-client",
+    "build-client": "cd client && npm run build",
+    "build-server": "cd server && make build",
+    "test": "pnpm run test-server && pnpm run test-client",
+    "lint": "pnpm run lint-server && pnpm run lint-client"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.18.3",
+  "dependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
