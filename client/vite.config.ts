@@ -24,7 +24,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: '../server/web/dist',
+    outDir: 'dist',
     emptyOutDir: true,
     rollupOptions: {
       input: {

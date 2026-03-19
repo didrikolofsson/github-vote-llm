@@ -26,9 +26,7 @@ vote-llm.db*
 
 # Client
 client/node_modules/
-
-# Server build
-server/web/dist/
+client/dist/
 
 # Claude
 .claude/worktrees/
