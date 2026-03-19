@@ -13,6 +13,9 @@ vote-llm
 .vscode/
 *.swp
 
+# Node
+**/node_modules/
+
 # OS
 .DS_Store
 
@@ -20,6 +23,10 @@ vote-llm
 vote-llm.db
 vote-llm.db*
 *.pem
+
+# Client
+client/node_modules/
+client/dist/
 
 # Claude
 .claude/worktrees/

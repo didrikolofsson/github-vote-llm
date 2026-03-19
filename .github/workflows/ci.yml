@@ -6,8 +6,8 @@ on:
   pull_request:
 
 jobs:
-  ci:
-    name: Test, lint, build
+  ci-backend:
+    name: Test, lint, build (backend)
     runs-on: ubuntu-latest
 
     steps:
@@ -15,24 +15,52 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: server/go.mod
 
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
       - name: Test
-        run: make test
+        run: pnpm test-server
 
       - name: Lint OpenAPI spec
-        run: make lint-openapi
+        run: pnpm lint-server
 
       - name: Build
-        run: make build
+        run: pnpm build-server
+
+  ci-client:
+    name: Build (client)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - name: Install root dependencies
+        run: pnpm install
+
+      - name: Install client dependencies
+        run: pnpm install-client
+
+      - name: Build
+        run: pnpm build-client
 
   deploy:
     name: Deploy
-    needs: ci
+    needs: [ci-backend, ci-client]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     concurrency: deploy-group

@@ -1,0 +1,541 @@
+package store
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"os"
+
+	"github.com/didrikolofsson/github-vote-llm/internal/config"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// ErrAlreadyExists is returned by CreateExecution when an execution record for
+// the given (owner, repo, issue_number) already exists in the database.
+var ErrAlreadyExists = errors.New("execution already exists for this issue")
+
+// Store is the interface for all database operations used by this service.
+type Store interface {
+	GetExecutionByOwnerRepoIssueNumber(ctx context.Context, owner, repo string, issueNumber int) (*ExecutionModel, error)
+	CreateExecution(ctx context.Context, owner, repo string, issueNumber int) (*ExecutionModel, error)
+	ResetFailedExecution(ctx context.Context, owner, repo string, issueNumber int) (*ExecutionModel, error)
+	ResetExecution(ctx context.Context, id int64) (*ExecutionModel, error)
+	SetInProgress(ctx context.Context, id int64, branch string) (*ExecutionModel, error)
+	SetSuccess(ctx context.Context, id int64, prURL string) (*ExecutionModel, error)
+	SetFailed(ctx context.Context, id int64, errMsg string) (*ExecutionModel, error)
+	GetRepoConfig(ctx context.Context, owner, repo string) (*RepoConfigModel, error)
+	IncrementIssueVote(ctx context.Context, owner, repo string, issueNumber int) (*IssueVoteModel, error)
+	ListExecutions(ctx context.Context, limit, offset int32) ([]*ExecutionModel, error)
+	GetExecutionByID(ctx context.Context, id int64) (*ExecutionModel, error)
+	CancelExecution(ctx context.Context, id int64) (*ExecutionModel, error)
+	RetryExecution(ctx context.Context, id int64) (*ExecutionModel, error)
+	ListRepoConfigs(ctx context.Context) ([]*RepoConfigModel, error)
+	UpsertRepoConfig(ctx context.Context, params UpsertRepoConfigParams) (*RepoConfigModel, error)
+	DeleteRepoConfig(ctx context.Context, owner, repo string) error
+	ListProposals(ctx context.Context, owner, repo string) ([]*ProposalModel, error)
+	GetProposal(ctx context.Context, id int64) (*ProposalModel, error)
+	CreateProposal(ctx context.Context, owner, repo, title, description string) (*ProposalModel, error)
+	IncrementProposalVote(ctx context.Context, id int64) (*ProposalModel, error)
+	UpdateProposalStatus(ctx context.Context, id int64, status string) (*ProposalModel, error)
+	ListProposalComments(ctx context.Context, proposalID int64) ([]*ProposalCommentModel, error)
+	CreateProposalComment(ctx context.Context, proposalID int64, body, authorName string) (*ProposalCommentModel, error)
+}
+
+// PostgresStore implements Store backed by a pgxpool.Pool.
+type PostgresStore struct {
+	q *Queries
+}
+
+// NewPostgresStore creates a Store backed by the given connection pool.
+func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
+	return &PostgresStore{q: New(pool)}
+}
+
+func isNoRowsError(err error) bool {
+	return errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows)
+}
+
+// ptrOr returns *p if non-nil, otherwise defaultVal.
+func ptrOr[T any](p *T, defaultVal T) T {
+	if p != nil {
+		return *p
+	}
+	return defaultVal
+}
+
+// numericToFloat64 converts pgtype.Numeric to float64. Returns 0 if not valid.
+func numericToFloat64(n pgtype.Numeric) float64 {
+	if !n.Valid {
+		return 0
+	}
+	f, err := n.Float64Value()
+	if err != nil || !f.Valid {
+		return 0
+	}
+	return f.Float64
+}
+
+// numericOr returns the float64 value of n if valid, otherwise defaultVal.
+func numericOr(n pgtype.Numeric, defaultVal float64) float64 {
+	if n.Valid {
+		return numericToFloat64(n)
+	}
+	return defaultVal
+}
+
+func (s *PostgresStore) GetExecutionByOwnerRepoIssueNumber(ctx context.Context, owner, repo string, issueNumber int) (*ExecutionModel, error) {
+	exec, err := s.q.GetExecutionByOwnerRepoIssueNumber(ctx, GetExecutionByOwnerRepoIssueNumberParams{
+		Owner:       owner,
+		Repo:        repo,
+		IssueNumber: int32(issueNumber),
+	})
+	if isNoRowsError(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &ExecutionModel{
+		ID:          exec.ID,
+		Owner:       exec.Owner,
+		Repo:        exec.Repo,
+		IssueNumber: exec.IssueNumber,
+		Status:      exec.Status,
+		Branch:      exec.Branch,
+		PrUrl:       exec.PrUrl,
+		Error:       exec.Error,
+		CreatedAt:   exec.CreatedAt.Time,
+		UpdatedAt:   exec.UpdatedAt.Time,
+	}, nil
+}
+
+func (s *PostgresStore) CreateExecution(ctx context.Context, owner, repo string, issueNumber int) (*ExecutionModel, error) {
+	exec, err := s.q.CreateExecution(ctx, CreateExecutionParams{
+		Owner:       owner,
+		Repo:        repo,
+		IssueNumber: int32(issueNumber),
+	})
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, ErrAlreadyExists
+		}
+		return nil, err
+	}
+	return &ExecutionModel{
+		ID:          exec.ID,
+		Owner:       exec.Owner,
+		Repo:        exec.Repo,
+		IssueNumber: exec.IssueNumber,
+		Status:      exec.Status,
+		Branch:      exec.Branch,
+		PrUrl:       exec.PrUrl,
+		Error:       exec.Error,
+		CreatedAt:   exec.CreatedAt.Time,
+		UpdatedAt:   exec.UpdatedAt.Time,
+	}, nil
+}
+
+func (s *PostgresStore) ResetFailedExecution(ctx context.Context, owner, repo string, issueNumber int) (*ExecutionModel, error) {
+	exec, err := s.q.ResetFailedExecution(ctx, ResetFailedExecutionParams{
+		Owner:       owner,
+		Repo:        repo,
+		IssueNumber: int32(issueNumber),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &ExecutionModel{
+		ID:          exec.ID,
+		Owner:       exec.Owner,
+		Repo:        exec.Repo,
+		IssueNumber: exec.IssueNumber,
+		Status:      exec.Status,
+		Branch:      exec.Branch,
+		PrUrl:       exec.PrUrl,
+		Error:       exec.Error,
+		CreatedAt:   exec.CreatedAt.Time,
+		UpdatedAt:   exec.UpdatedAt.Time,
+	}, nil
+}
+
+func (s *PostgresStore) ResetExecution(ctx context.Context, id int64) (*ExecutionModel, error) {
+	exec, err := s.q.ResetExecution(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &ExecutionModel{
+		ID:          exec.ID,
+		Owner:       exec.Owner,
+		Repo:        exec.Repo,
+		IssueNumber: exec.IssueNumber,
+		Status:      exec.Status,
+		Branch:      exec.Branch,
+		PrUrl:       exec.PrUrl,
+		Error:       exec.Error,
+		CreatedAt:   exec.CreatedAt.Time,
+		UpdatedAt:   exec.UpdatedAt.Time,
+	}, nil
+}
+
+func (s *PostgresStore) SetInProgress(ctx context.Context, id int64, branch string) (*ExecutionModel, error) {
+	exec, err := s.q.UpdateExecutionInProgress(ctx, UpdateExecutionInProgressParams{
+		Branch: &branch,
+		ID:     id,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &ExecutionModel{
+		ID:          exec.ID,
+		Owner:       exec.Owner,
+		Repo:        exec.Repo,
+		IssueNumber: exec.IssueNumber,
+		Status:      exec.Status,
+		Branch:      exec.Branch,
+		PrUrl:       exec.PrUrl,
+		Error:       exec.Error,
+		CreatedAt:   exec.CreatedAt.Time,
+		UpdatedAt:   exec.UpdatedAt.Time,
+	}, nil
+}
+
+func (s *PostgresStore) SetSuccess(ctx context.Context, id int64, prURL string) (*ExecutionModel, error) {
+	exec, err := s.q.UpdateExecutionSuccess(ctx, UpdateExecutionSuccessParams{
+		PrUrl: &prURL,
+		ID:    id,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &ExecutionModel{
+		ID:          exec.ID,
+		Owner:       exec.Owner,
+		Repo:        exec.Repo,
+		IssueNumber: exec.IssueNumber,
+		Status:      exec.Status,
+		Branch:      exec.Branch,
+		PrUrl:       exec.PrUrl,
+		Error:       exec.Error,
+		CreatedAt:   exec.CreatedAt.Time,
+		UpdatedAt:   exec.UpdatedAt.Time,
+	}, nil
+}
+
+func (s *PostgresStore) SetFailed(ctx context.Context, id int64, errMsg string) (*ExecutionModel, error) {
+	exec, err := s.q.UpdateExecutionFailed(ctx, UpdateExecutionFailedParams{
+		Error: &errMsg,
+		ID:    id,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &ExecutionModel{
+		ID:          exec.ID,
+		Owner:       exec.Owner,
+		Repo:        exec.Repo,
+		IssueNumber: exec.IssueNumber,
+		Status:      exec.Status,
+		Branch:      exec.Branch,
+		PrUrl:       exec.PrUrl,
+		Error:       exec.Error,
+		CreatedAt:   exec.CreatedAt.Time,
+		UpdatedAt:   exec.UpdatedAt.Time,
+	}, nil
+}
+
+// GetRepoConfig returns the repo config for the given owner and repo.
+// If no config is found, it returns nil.
+func (s *PostgresStore) GetRepoConfig(ctx context.Context, owner, repo string) (*RepoConfigModel, error) {
+	var repoConfig RepoConfigModel
+
+	cfg, err := s.q.GetRepoConfig(ctx, GetRepoConfigParams{Owner: owner, Repo: repo})
+	if err != nil {
+		if isNoRowsError(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	repoConfig.ID = cfg.ID
+	repoConfig.Owner = cfg.Owner
+	repoConfig.Repo = cfg.Repo
+	repoConfig.LabelApproved = ptrOr(cfg.LabelApproved, config.LabelApproved)
+	repoConfig.LabelInProgress = ptrOr(cfg.LabelInProgress, config.LabelInProgress)
+	repoConfig.LabelDone = ptrOr(cfg.LabelDone, config.LabelDone)
+	repoConfig.LabelFailed = ptrOr(cfg.LabelFailed, config.LabelFailed)
+	repoConfig.LabelFeatureRequest = ptrOr(cfg.LabelFeatureRequest, config.LabelFeatureRequest)
+	repoConfig.VoteThreshold = ptrOr(cfg.VoteThreshold, int32(config.AgentMaxTurns))
+	repoConfig.TimeoutMinutes = ptrOr(cfg.TimeoutMinutes, int32(config.AgentTimeoutMinutes))
+	repoConfig.MaxBudgetUsd = numericOr(cfg.MaxBudgetUsd, config.AgentMaxBudgetUSD)
+	repoConfig.AnthropicAPIKey = ptrOr(cfg.AnthropicApiKey, os.Getenv("ANTHROPIC_API_KEY"))
+	repoConfig.IsBoardPublic = cfg.IsBoardPublic
+	repoConfig.CreatedAt = cfg.CreatedAt.Time
+	repoConfig.UpdatedAt = cfg.UpdatedAt.Time
+
+	return &repoConfig, nil
+}
+
+func (s *PostgresStore) IncrementIssueVote(ctx context.Context, owner, repo string, issueNumber int) (*IssueVoteModel, error) {
+	vote, err := s.q.IncrementIssueVote(ctx, IncrementIssueVoteParams{
+		Owner:       owner,
+		Repo:        repo,
+		IssueNumber: int32(issueNumber),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &IssueVoteModel{
+		ID:          vote.ID,
+		Owner:       vote.Owner,
+		Repo:        vote.Repo,
+		IssueNumber: vote.IssueNumber,
+		VoteCount:   vote.VoteCount,
+		CreatedAt:   vote.CreatedAt.Time,
+		UpdatedAt:   vote.UpdatedAt.Time,
+	}, nil
+}
+
+func (s *PostgresStore) UpsertRepoConfig(ctx context.Context, params UpsertRepoConfigParams) (*RepoConfigModel, error) {
+	cfg, err := s.q.UpsertRepoConfig(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	return &RepoConfigModel{
+		ID:                  cfg.ID,
+		Owner:               cfg.Owner,
+		Repo:                cfg.Repo,
+		LabelApproved:       ptrOr(cfg.LabelApproved, config.LabelApproved),
+		LabelInProgress:     ptrOr(cfg.LabelInProgress, config.LabelInProgress),
+		LabelDone:           ptrOr(cfg.LabelDone, config.LabelDone),
+		LabelFailed:         ptrOr(cfg.LabelFailed, config.LabelFailed),
+		LabelFeatureRequest: ptrOr(cfg.LabelFeatureRequest, config.LabelFeatureRequest),
+		VoteThreshold:       ptrOr(cfg.VoteThreshold, int32(config.AgentMaxTurns)),
+		TimeoutMinutes:      ptrOr(cfg.TimeoutMinutes, int32(config.AgentTimeoutMinutes)),
+		MaxBudgetUsd:        numericOr(cfg.MaxBudgetUsd, config.AgentMaxBudgetUSD),
+		AnthropicAPIKey:     ptrOr(cfg.AnthropicApiKey, os.Getenv("ANTHROPIC_API_KEY")),
+		IsBoardPublic:       cfg.IsBoardPublic,
+		CreatedAt:           cfg.CreatedAt.Time,
+		UpdatedAt:           cfg.UpdatedAt.Time,
+	}, nil
+}
+
+func (s *PostgresStore) ListExecutions(ctx context.Context, limit, offset int32) ([]*ExecutionModel, error) {
+	rows, err := s.q.ListExecutions(ctx, ListExecutionsParams{Limit: limit, Offset: offset})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*ExecutionModel, len(rows))
+	for i, exec := range rows {
+		result[i] = &ExecutionModel{
+			ID:          exec.ID,
+			Owner:       exec.Owner,
+			Repo:        exec.Repo,
+			IssueNumber: exec.IssueNumber,
+			Status:      exec.Status,
+			Branch:      exec.Branch,
+			PrUrl:       exec.PrUrl,
+			Error:       exec.Error,
+			CreatedAt:   exec.CreatedAt.Time,
+			UpdatedAt:   exec.UpdatedAt.Time,
+		}
+	}
+	return result, nil
+}
+
+func (s *PostgresStore) GetExecutionByID(ctx context.Context, id int64) (*ExecutionModel, error) {
+	exec, err := s.q.GetExecution(ctx, id)
+	if isNoRowsError(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &ExecutionModel{
+		ID:          exec.ID,
+		Owner:       exec.Owner,
+		Repo:        exec.Repo,
+		IssueNumber: exec.IssueNumber,
+		Status:      exec.Status,
+		Branch:      exec.Branch,
+		PrUrl:       exec.PrUrl,
+		Error:       exec.Error,
+		CreatedAt:   exec.CreatedAt.Time,
+		UpdatedAt:   exec.UpdatedAt.Time,
+	}, nil
+}
+
+func (s *PostgresStore) CancelExecution(ctx context.Context, id int64) (*ExecutionModel, error) {
+	exec, err := s.q.CancelExecution(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &ExecutionModel{
+		ID:          exec.ID,
+		Owner:       exec.Owner,
+		Repo:        exec.Repo,
+		IssueNumber: exec.IssueNumber,
+		Status:      exec.Status,
+		Branch:      exec.Branch,
+		PrUrl:       exec.PrUrl,
+		Error:       exec.Error,
+		CreatedAt:   exec.CreatedAt.Time,
+		UpdatedAt:   exec.UpdatedAt.Time,
+	}, nil
+}
+
+func (s *PostgresStore) RetryExecution(ctx context.Context, id int64) (*ExecutionModel, error) {
+	exec, err := s.q.RetryExecution(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &ExecutionModel{
+		ID:          exec.ID,
+		Owner:       exec.Owner,
+		Repo:        exec.Repo,
+		IssueNumber: exec.IssueNumber,
+		Status:      exec.Status,
+		Branch:      exec.Branch,
+		PrUrl:       exec.PrUrl,
+		Error:       exec.Error,
+		CreatedAt:   exec.CreatedAt.Time,
+		UpdatedAt:   exec.UpdatedAt.Time,
+	}, nil
+}
+
+func (s *PostgresStore) DeleteRepoConfig(ctx context.Context, owner, repo string) error {
+	return s.q.DeleteRepoConfig(ctx, DeleteRepoConfigParams{Owner: owner, Repo: repo})
+}
+
+func (s *PostgresStore) ListRepoConfigs(ctx context.Context) ([]*RepoConfigModel, error) {
+	rows, err := s.q.ListRepoConfigs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*RepoConfigModel, len(rows))
+	for i, cfg := range rows {
+		result[i] = &RepoConfigModel{
+			ID:                  cfg.ID,
+			Owner:               cfg.Owner,
+			Repo:                cfg.Repo,
+			LabelApproved:       ptrOr(cfg.LabelApproved, config.LabelApproved),
+			LabelInProgress:     ptrOr(cfg.LabelInProgress, config.LabelInProgress),
+			LabelDone:           ptrOr(cfg.LabelDone, config.LabelDone),
+			LabelFailed:         ptrOr(cfg.LabelFailed, config.LabelFailed),
+			LabelFeatureRequest: ptrOr(cfg.LabelFeatureRequest, config.LabelFeatureRequest),
+			VoteThreshold:       ptrOr(cfg.VoteThreshold, int32(config.AgentMaxTurns)),
+			TimeoutMinutes:      ptrOr(cfg.TimeoutMinutes, int32(config.AgentTimeoutMinutes)),
+			MaxBudgetUsd:        numericOr(cfg.MaxBudgetUsd, config.AgentMaxBudgetUSD),
+			AnthropicAPIKey:     ptrOr(cfg.AnthropicApiKey, os.Getenv("ANTHROPIC_API_KEY")),
+			IsBoardPublic:       cfg.IsBoardPublic,
+			CreatedAt:           cfg.CreatedAt.Time,
+			UpdatedAt:           cfg.UpdatedAt.Time,
+		}
+	}
+	return result, nil
+}
+
+func toProposalModel(p Proposal) *ProposalModel {
+	return &ProposalModel{
+		ID:          p.ID,
+		Owner:       p.Owner,
+		Repo:        p.Repo,
+		Title:       p.Title,
+		Description: p.Description,
+		VoteCount:   p.VoteCount,
+		Status:      p.Status,
+		CreatedAt:   p.CreatedAt.Time,
+		UpdatedAt:   p.UpdatedAt.Time,
+	}
+}
+
+func (s *PostgresStore) ListProposals(ctx context.Context, owner, repo string) ([]*ProposalModel, error) {
+	rows, err := s.q.ListProposals(ctx, ListProposalsParams{Owner: owner, Repo: repo})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*ProposalModel, len(rows))
+	for i, p := range rows {
+		result[i] = toProposalModel(p)
+	}
+	return result, nil
+}
+
+func (s *PostgresStore) GetProposal(ctx context.Context, id int64) (*ProposalModel, error) {
+	p, err := s.q.GetProposal(ctx, id)
+	if isNoRowsError(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return toProposalModel(p), nil
+}
+
+func (s *PostgresStore) CreateProposal(ctx context.Context, owner, repo, title, description string) (*ProposalModel, error) {
+	p, err := s.q.CreateProposal(ctx, CreateProposalParams{
+		Owner:       owner,
+		Repo:        repo,
+		Title:       title,
+		Description: description,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return toProposalModel(p), nil
+}
+
+func (s *PostgresStore) IncrementProposalVote(ctx context.Context, id int64) (*ProposalModel, error) {
+	p, err := s.q.IncrementProposalVote(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return toProposalModel(p), nil
+}
+
+func (s *PostgresStore) UpdateProposalStatus(ctx context.Context, id int64, status string) (*ProposalModel, error) {
+	p, err := s.q.UpdateProposalStatus(ctx, UpdateProposalStatusParams{ID: id, Status: status})
+	if err != nil {
+		return nil, err
+	}
+	return toProposalModel(p), nil
+}
+
+func (s *PostgresStore) ListProposalComments(ctx context.Context, proposalID int64) ([]*ProposalCommentModel, error) {
+	rows, err := s.q.ListProposalComments(ctx, proposalID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*ProposalCommentModel, len(rows))
+	for i, c := range rows {
+		result[i] = &ProposalCommentModel{
+			ID:         c.ID,
+			ProposalID: c.ProposalID,
+			Body:       c.Body,
+			AuthorName: c.AuthorName,
+			CreatedAt:  c.CreatedAt.Time,
+		}
+	}
+	return result, nil
+}
+
+func (s *PostgresStore) CreateProposalComment(ctx context.Context, proposalID int64, body, authorName string) (*ProposalCommentModel, error) {
+	c, err := s.q.CreateProposalComment(ctx, CreateProposalCommentParams{
+		ProposalID: proposalID,
+		Body:       body,
+		AuthorName: authorName,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &ProposalCommentModel{
+		ID:         c.ID,
+		ProposalID: c.ProposalID,
+		Body:       c.Body,
+		AuthorName: c.AuthorName,
+		CreatedAt:  c.CreatedAt.Time,
+	}, nil
+}
