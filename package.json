@@ -13,8 +13,10 @@
     "build": "pnpm run build-server && pnpm run build-client",
     "build-client": "cd client && npm run build",
     "build-server": "cd server && make build",
-    "test": "pnpm run test-server && pnpm run test-client",
-    "lint": "pnpm run lint-server && pnpm run lint-client"
+    "test": "pnpm run test-server",
+    "test-server": "cd server && make test",
+    "lint": "pnpm run lint-server",
+    "lint-server": "cd server && make lint-openapi"
   },
   "keywords": [],
   "author": "",

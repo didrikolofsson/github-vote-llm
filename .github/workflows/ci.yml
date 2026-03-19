@@ -21,17 +21,18 @@ jobs:
         with:
           node-version: "20"
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
       - name: Test
-        working-directory: server
-        run: go test ./...
+        run: pnpm test-server
 
       - name: Lint OpenAPI spec
-        working-directory: server
-        run: make lint-openapi
+        run: pnpm lint-server
 
       - name: Build
-        working-directory: server
-        run: go build ./...
+        run: pnpm build-server
 
   ci-client:
     name: Build (client)
@@ -46,13 +47,16 @@ jobs:
           cache: "npm"
           cache-dependency-path: client/package-lock.json
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
       - name: Install dependencies
         working-directory: client
-        run: npm ci
+        run: pnpm install
 
       - name: Build
-        working-directory: client
-        run: npm run build
+        run: pnpm build-client
 
   deploy:
     name: Deploy
