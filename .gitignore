@@ -16,6 +16,9 @@ vote-llm
 # Node
 **/node_modules/
 
+# Pnpm
+**/.pnpm-store/
+
 # OS
 .DS_Store
 
