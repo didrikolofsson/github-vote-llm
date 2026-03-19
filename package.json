@@ -11,6 +11,7 @@
     "generate-client": "cd client && npm run generate",
     "generate-server": "make generate",
     "build": "pnpm run build-server && pnpm run build-client",
+    "install-client": "cd client && npm ci",
     "build-client": "cd client && npm run build",
     "build-server": "cd server && make build",
     "test": "pnpm run test-server",
