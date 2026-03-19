@@ -15,18 +15,8 @@ function relativeTime(iso: string): string {
   return 'just now';
 }
 
-const TH_STYLE: React.CSSProperties = {
-  paddingBottom: 8,
-  paddingRight: 24,
-  fontSize: 10,
-  letterSpacing: '0.15em',
-  textTransform: 'uppercase',
-  color: '#302E2A',
-  fontWeight: 400,
-  textAlign: 'left',
-  borderBottom: '1px solid #191919',
-  whiteSpace: 'nowrap',
-};
+const TH_CLASS =
+  'pb-2 pr-6 text-[10px] tracking-[0.15em] uppercase text-gray-500 font-normal text-left border-b border-gray-800 whitespace-nowrap';
 
 export default function DashboardPage() {
   const qc = useQueryClient();
@@ -48,16 +38,12 @@ export default function DashboardPage() {
   });
 
   if (isLoading) {
-    return (
-      <p style={{ fontSize: 12, color: '#302E2A', letterSpacing: '0.08em' }}>
-        Loading…
-      </p>
-    );
+    return <p className="text-xs text-gray-500 tracking-[0.08em]">Loading…</p>;
   }
 
   if (error) {
     return (
-      <p style={{ fontSize: 12, color: '#FF3A3A', letterSpacing: '0.04em' }}>
+      <p className="text-xs text-red-500 tracking-[0.04em]">
         error: {error instanceof Error ? error.message : 'unknown'}
       </p>
     );
@@ -65,163 +51,75 @@ export default function DashboardPage() {
 
   return (
     <div className="animate-slide-up">
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-          <span
-            style={{
-              fontSize: 10,
-              letterSpacing: '0.25em',
-              textTransform: 'uppercase',
-              color: '#00E87A',
-            }}
-          >
-            Runs
-          </span>
+      <div className="flex items-baseline justify-between mb-6">
+        <div className="flex items-baseline gap-3">
+          <span className="text-[10px] tracking-[0.25em] uppercase text-emerald-400">Runs</span>
           {runs && (
-            <span style={{ fontSize: 10, color: '#302E2A', letterSpacing: '0.05em' }}>
-              {runs.length} total
-            </span>
+            <span className="text-[10px] text-gray-500 tracking-[0.05em]">{runs.length} total</span>
           )}
         </div>
         <button
           onClick={() => qc.invalidateQueries({ queryKey: ['runs'] })}
-          style={{
-            fontSize: 10,
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            color: '#302E2A',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            transition: 'color 150ms',
-          }}
-          onMouseEnter={(e) => ((e.target as HTMLElement).style.color = '#6A6458')}
-          onMouseLeave={(e) => ((e.target as HTMLElement).style.color = '#302E2A')}
+          className="text-[10px] tracking-[0.12em] uppercase text-gray-500 hover:text-gray-300 bg-transparent border-none cursor-pointer transition-colors duration-150"
         >
           Refresh
         </button>
       </div>
 
       {runs?.length === 0 ? (
-        <p style={{ fontSize: 12, color: '#302E2A', letterSpacing: '0.06em' }}>
-          no runs yet.
-        </p>
+        <p className="text-xs text-gray-500 tracking-[0.06em]">no runs yet.</p>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-xs">
             <thead>
               <tr>
-                <th style={TH_STYLE}>ID</th>
-                <th style={TH_STYLE}>Repository</th>
-                <th style={TH_STYLE}>Issue</th>
-                <th style={TH_STYLE}>Status</th>
-                <th style={TH_STYLE}>Branch</th>
-                <th style={TH_STYLE}>Updated</th>
-                <th style={{ ...TH_STYLE, paddingRight: 0 }}></th>
+                <th className={TH_CLASS}>ID</th>
+                <th className={TH_CLASS}>Repository</th>
+                <th className={TH_CLASS}>Issue</th>
+                <th className={TH_CLASS}>Status</th>
+                <th className={TH_CLASS}>Branch</th>
+                <th className={TH_CLASS}>Updated</th>
+                <th className={`${TH_CLASS} pr-0`}></th>
               </tr>
             </thead>
             <tbody>
               {runs?.map((run: Run, i: number) => (
                 <tr
                   key={run.id}
-                  style={{
-                    borderBottom: '1px solid #111111',
-                    animationDelay: `${i * 30}ms`,
-                  }}
-                  onMouseEnter={(e) =>
-                    ((e.currentTarget as HTMLElement).style.background = '#0C0C0C')
-                  }
-                  onMouseLeave={(e) =>
-                    ((e.currentTarget as HTMLElement).style.background = 'transparent')
-                  }
+                  className="border-b border-gray-900 hover:bg-gray-900 transition-colors"
+                  style={{ animationDelay: `${i * 30}ms` }}
                 >
-                  <td style={{ padding: '10px 24px 10px 0', color: '#403C34' }}>
+                  <td className="py-2.5 pr-6">
                     <Link
                       to={`/runs/${run.id}`}
-                      style={{
-                        color: '#403C34',
-                        textDecoration: 'none',
-                        letterSpacing: '0.04em',
-                        transition: 'color 150ms',
-                      }}
-                      onMouseEnter={(e) =>
-                        ((e.target as HTMLElement).style.color = '#C4C0AC')
-                      }
-                      onMouseLeave={(e) =>
-                        ((e.target as HTMLElement).style.color = '#403C34')
-                      }
+                      className="text-gray-400 no-underline tracking-[0.04em] transition-colors duration-150 hover:text-gray-100"
                     >
                       #{run.id}
                     </Link>
                   </td>
-                  <td
-                    style={{
-                      padding: '10px 24px 10px 0',
-                      color: '#C4C0AC',
-                      letterSpacing: '0.02em',
-                    }}
-                  >
+                  <td className="py-2.5 pr-6 text-gray-100 tracking-[0.02em]">
                     {run.owner}/{run.repo}
                   </td>
-                  <td
-                    style={{
-                      padding: '10px 24px 10px 0',
-                      color: '#403C34',
-                      letterSpacing: '0.04em',
-                    }}
-                  >
+                  <td className="py-2.5 pr-6 text-gray-400 tracking-[0.04em]">
                     #{run.issue_number}
                   </td>
-                  <td style={{ padding: '10px 24px 10px 0' }}>
+                  <td className="py-2.5 pr-6">
                     <StatusBadge status={run.status} />
                   </td>
                   <td
-                    style={{
-                      padding: '10px 24px 10px 0',
-                      color: '#302E2A',
-                      fontSize: 11,
-                      letterSpacing: '0.02em',
-                      maxWidth: 220,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
+                    className="py-2.5 pr-6 text-gray-500 text-[11px] tracking-[0.02em] max-w-[220px] overflow-hidden text-ellipsis whitespace-nowrap"
                   >
                     {run.branch ?? '—'}
                   </td>
-                  <td
-                    style={{
-                      padding: '10px 24px 10px 0',
-                      color: '#302E2A',
-                      fontSize: 11,
-                      letterSpacing: '0.04em',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
+                  <td className="py-2.5 pr-6 text-gray-500 text-[11px] tracking-[0.04em] whitespace-nowrap">
                     {relativeTime(run.updated_at)}
                   </td>
-                  <td style={{ padding: '10px 0', textAlign: 'right' }}>
+                  <td className="py-2.5 text-right">
                     {(run.status === 'failed' || run.status === 'cancelled') && (
                       <button
                         onClick={() => retry.mutate(run.id)}
                         disabled={retry.isPending}
-                        style={{
-                          fontSize: 10,
-                          letterSpacing: '0.12em',
-                          textTransform: 'uppercase',
-                          color: '#3A9EFF',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          opacity: retry.isPending ? 0.4 : 1,
-                          transition: 'color 150ms',
-                        }}
-                        onMouseEnter={(e) =>
-                          ((e.target as HTMLElement).style.color = '#6ABBFF')
-                        }
-                        onMouseLeave={(e) =>
-                          ((e.target as HTMLElement).style.color = '#3A9EFF')
-                        }
+                        className="text-[10px] tracking-[0.12em] uppercase text-sky bg-transparent border-none cursor-pointer transition-colors duration-150 disabled:opacity-40 hover:text-sky/90"
                       >
                         Retry
                       </button>
@@ -230,23 +128,7 @@ export default function DashboardPage() {
                       <button
                         onClick={() => cancel.mutate(run.id)}
                         disabled={cancel.isPending}
-                        style={{
-                          fontSize: 10,
-                          letterSpacing: '0.12em',
-                          textTransform: 'uppercase',
-                          color: '#302E2A',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          opacity: cancel.isPending ? 0.4 : 1,
-                          transition: 'color 150ms',
-                        }}
-                        onMouseEnter={(e) =>
-                          ((e.target as HTMLElement).style.color = '#6A6458')
-                        }
-                        onMouseLeave={(e) =>
-                          ((e.target as HTMLElement).style.color = '#302E2A')
-                        }
+                        className="text-[10px] tracking-[0.12em] uppercase text-gray-500 hover:text-gray-300 bg-transparent border-none cursor-pointer transition-colors duration-150 disabled:opacity-40"
                       >
                         Cancel
                       </button>

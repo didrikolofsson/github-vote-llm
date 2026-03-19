@@ -1,4 +1,4 @@
-package services
+package api_services
 
 import (
 	"context"

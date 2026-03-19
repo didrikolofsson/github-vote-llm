@@ -17,84 +17,29 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: '#070707',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
       {/* Faint corner decoration */}
-      <div
-        style={{
-          position: 'fixed',
-          top: 24,
-          left: 24,
-          fontSize: 10,
-          letterSpacing: '0.3em',
-          color: '#191919',
-          textTransform: 'uppercase',
-        }}
-      >
+      <div className="fixed top-6 left-6 text-[10px] tracking-[0.3em] text-border uppercase">
         github-vote-llm
       </div>
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 24,
-          right: 24,
-          fontSize: 10,
-          letterSpacing: '0.2em',
-          color: '#191919',
-          textTransform: 'uppercase',
-        }}
-      >
+      <div className="fixed bottom-6 right-6 text-[10px] tracking-[0.2em] text-border uppercase">
         v1.0
       </div>
 
-      <div
-        className="animate-slide-up"
-        style={{ width: 300 }}
-      >
+      <div className="animate-slide-up w-[300px]">
         {/* Wordmark */}
-        <div style={{ marginBottom: 40, textAlign: 'center' }}>
-          <div
-            style={{
-              fontSize: 11,
-              letterSpacing: '0.45em',
-              textTransform: 'uppercase',
-              color: '#00E87A',
-              fontWeight: 600,
-              marginBottom: 8,
-            }}
-          >
+        <div className="mb-10 text-center">
+          <div className="text-[11px] tracking-[0.45em] uppercase text-emerald-400 font-semibold mb-2">
             vote-llm
           </div>
-          <div
-            style={{
-              width: 24,
-              height: 1,
-              background: '#191919',
-              margin: '0 auto',
-            }}
-          />
-          <div
-            style={{
-              marginTop: 8,
-              fontSize: 10,
-              letterSpacing: '0.2em',
-              color: '#282420',
-              textTransform: 'uppercase',
-            }}
-          >
+          <div className="w-6 h-px bg-gray-800 mx-auto" />
+          <div className="mt-2 text-[10px] tracking-[0.2em] text-gray-500 uppercase">
             authentication required
           </div>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-2">
           <div>
             <input
               type="password"
@@ -105,53 +50,15 @@ export default function LoginPage() {
               }}
               placeholder="X-Api-Key"
               autoFocus
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                background: '#0C0C0C',
-                border: '1px solid #191919',
-                color: '#C4C0AC',
-                fontSize: 12,
-                letterSpacing: '0.04em',
-                outline: 'none',
-                borderRadius: 0,
-                boxSizing: 'border-box',
-                transition: 'border-color 150ms',
-              }}
-              onFocus={(e) => (e.target.style.borderColor = '#302E2A')}
-              onBlur={(e) => (e.target.style.borderColor = '#191919')}
+              className="w-full py-2.5 px-3 bg-gray-900 border border-gray-800 text-gray-100 text-xs tracking-[0.04em] outline-none rounded-none box-border transition-[border-color] duration-150 focus:border-gray-500"
             />
             {error && (
-              <p
-                style={{
-                  marginTop: 6,
-                  fontSize: 11,
-                  color: '#FF3A3A',
-                  letterSpacing: '0.04em',
-                }}
-              >
-                {error}
-              </p>
+              <p className="mt-1.5 text-[11px] text-red tracking-[0.04em]">{error}</p>
             )}
           </div>
           <button
             type="submit"
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              background: '#00E87A',
-              color: '#070707',
-              fontSize: 11,
-              letterSpacing: '0.2em',
-              textTransform: 'uppercase',
-              fontWeight: 600,
-              border: 'none',
-              cursor: 'pointer',
-              borderRadius: 0,
-              transition: 'opacity 150ms',
-            }}
-            onMouseEnter={(e) => ((e.target as HTMLElement).style.opacity = '0.85')}
-            onMouseLeave={(e) => ((e.target as HTMLElement).style.opacity = '1')}
+            className="w-full py-2.5 px-3 bg-emerald-400 text-gray-950 text-[11px] tracking-[0.2em] uppercase font-semibold border-none cursor-pointer rounded-none transition-opacity duration-150 hover:opacity-[0.85]"
           >
             Continue
           </button>

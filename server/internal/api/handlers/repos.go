@@ -1,11 +1,11 @@
-package handlers
+package api_handlers
 
 import (
 	"net/http"
 	"strconv"
 	"time"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
+	api_services "github.com/didrikolofsson/github-vote-llm/internal/api/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
 )
@@ -64,11 +64,11 @@ type UpdateRepoConfigRequest struct {
 
 // ReposHandler handles HTTP requests for repo configuration endpoints.
 type ReposHandler struct {
-	svc *services.ReposService
+	svc *api_services.ReposService
 }
 
 // NewReposHandler creates a new ReposHandler.
-func NewReposHandler(svc *services.ReposService) *ReposHandler {
+func NewReposHandler(svc *api_services.ReposService) *ReposHandler {
 	return &ReposHandler{svc: svc}
 }
 
@@ -180,7 +180,7 @@ func (h *ReposHandler) UpdateConfig(c *gin.Context) {
 		return
 	}
 
-	cfg, err := h.svc.UpdateConfig(c.Request.Context(), owner, repo, services.UpdateConfigInput{
+	cfg, err := h.svc.UpdateConfig(c.Request.Context(), owner, repo, api_services.UpdateConfigInput{
 		LabelApproved:       req.LabelApproved,
 		LabelInProgress:     req.LabelInProgress,
 		LabelDone:           req.LabelDone,

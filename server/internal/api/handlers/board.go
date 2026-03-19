@@ -1,4 +1,4 @@
-package handlers
+package api_handlers
 
 import (
 	"net/http"
@@ -46,7 +46,7 @@ func toProposalResponse(m *store.ProposalModel) ProposalResponse {
 
 // BoardHandler handles public-facing board API endpoints (no auth required).
 type BoardHandler struct {
-	store  store.Store
+	store store.Store
 }
 
 // NewBoardHandler creates a new BoardHandler.

@@ -2,39 +2,25 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { listRepos, updateRepoConfig, deleteRepoConfig } from '../client/sdk.gen';
 import type { RepoConfig, UpdateRepoConfigRequest } from '../client/types.gen';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 
-// ─── Shared styles ────────────────────────────────────────────────────────────
+// ─── Shared styles ───────────────────────────────────────────────────────────
 
-const INPUT_STYLE: React.CSSProperties = {
-  width: '100%',
-  padding: '8px 10px',
-  background: '#0C0C0C',
-  border: '1px solid #191919',
-  color: '#C4C0AC',
-  fontSize: 12,
-  letterSpacing: '0.03em',
-  outline: 'none',
-  borderRadius: 0,
-  boxSizing: 'border-box',
-  transition: 'border-color 150ms',
-};
+const SECTION_LABEL_CLASS =
+  'text-[9px] tracking-[0.25em] uppercase text-muted-foreground mb-3';
 
-const SECTION_LABEL_STYLE: React.CSSProperties = {
-  fontSize: 9,
-  letterSpacing: '0.25em',
-  textTransform: 'uppercase',
-  color: '#201E1A',
-  marginBottom: 12,
-};
-
-const FIELD_LABEL_STYLE: React.CSSProperties = {
-  display: 'block',
-  fontSize: 10,
-  letterSpacing: '0.15em',
-  textTransform: 'uppercase',
-  color: '#302E2A',
-  marginBottom: 5,
-};
+const FIELD_LABEL_CLASS =
+  'block text-[10px] tracking-[0.15em] uppercase text-muted-foreground mb-1.5';
 
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
@@ -72,14 +58,12 @@ function FormFields({
   function textField(label: string, key: keyof UpdateRepoConfigRequest) {
     return (
       <div key={key}>
-        <label style={FIELD_LABEL_STYLE}>{label}</label>
-        <input
+        <Label className={FIELD_LABEL_CLASS}>{label}</Label>
+        <Input
           type="text"
           value={String(form[key] ?? '')}
           onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-          style={INPUT_STYLE}
-          onFocus={(e) => (e.target.style.borderColor = '#302E2A')}
-          onBlur={(e) => (e.target.style.borderColor = '#191919')}
+          className="text-xs tracking-[0.03em] rounded-none h-8"
         />
       </div>
     );
@@ -88,14 +72,12 @@ function FormFields({
   function numField(label: string, key: keyof UpdateRepoConfigRequest) {
     return (
       <div key={key}>
-        <label style={FIELD_LABEL_STYLE}>{label}</label>
-        <input
+        <Label className={FIELD_LABEL_CLASS}>{label}</Label>
+        <Input
           type="number"
           value={String(form[key] ?? '')}
           onChange={(e) => setForm((f) => ({ ...f, [key]: Number(e.target.value) }))}
-          style={INPUT_STYLE}
-          onFocus={(e) => (e.target.style.borderColor = '#302E2A')}
-          onBlur={(e) => (e.target.style.borderColor = '#191919')}
+          className="text-xs tracking-[0.03em] rounded-none h-8"
         />
       </div>
     );
@@ -104,40 +86,36 @@ function FormFields({
   return (
     <>
       {showOwnerRepo && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={SECTION_LABEL_STYLE}>Repository</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div className="mb-5">
+          <div className={SECTION_LABEL_CLASS}>Repository</div>
+          <div className="grid grid-cols-2 gap-2.5">
             <div>
-              <label style={FIELD_LABEL_STYLE}>Owner</label>
-              <input
+              <Label className={FIELD_LABEL_CLASS}>Owner</Label>
+              <Input
                 type="text"
                 value={owner ?? ''}
                 onChange={(e) => setOwner?.(e.target.value)}
                 placeholder="e.g. acme-org"
-                style={{ ...INPUT_STYLE, color: owner ? '#C4C0AC' : undefined }}
-                onFocus={(e) => (e.target.style.borderColor = '#302E2A')}
-                onBlur={(e) => (e.target.style.borderColor = '#191919')}
+                className="text-xs tracking-[0.03em] rounded-none h-8"
               />
             </div>
             <div>
-              <label style={FIELD_LABEL_STYLE}>Repo</label>
-              <input
+              <Label className={FIELD_LABEL_CLASS}>Repo</Label>
+              <Input
                 type="text"
                 value={repo ?? ''}
                 onChange={(e) => setRepo?.(e.target.value)}
                 placeholder="e.g. my-project"
-                style={{ ...INPUT_STYLE, color: repo ? '#C4C0AC' : undefined }}
-                onFocus={(e) => (e.target.style.borderColor = '#302E2A')}
-                onBlur={(e) => (e.target.style.borderColor = '#191919')}
+                className="text-xs tracking-[0.03em] rounded-none h-8"
               />
             </div>
           </div>
         </div>
       )}
 
-      <div style={{ marginBottom: 20 }}>
-        <div style={SECTION_LABEL_STYLE}>Labels</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="mb-5">
+        <div className={SECTION_LABEL_CLASS}>Labels</div>
+        <div className="flex flex-col gap-2.5">
           {textField('Approved', 'label_approved')}
           {textField('In Progress', 'label_in_progress')}
           {textField('Done', 'label_done')}
@@ -146,9 +124,9 @@ function FormFields({
         </div>
       </div>
 
-      <div style={{ marginBottom: 20 }}>
-        <div style={SECTION_LABEL_STYLE}>Limits</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+      <div className="mb-5">
+        <div className={SECTION_LABEL_CLASS}>Limits</div>
+        <div className="grid grid-cols-3 gap-2.5">
           {numField('Vote threshold', 'vote_threshold')}
           {numField('Timeout (min)', 'timeout_minutes')}
           {numField('Budget (USD)', 'max_budget_usd')}
@@ -156,15 +134,12 @@ function FormFields({
       </div>
 
       <div>
-        <div style={SECTION_LABEL_STYLE}>Anthropic</div>
+        <div className={SECTION_LABEL_CLASS}>Anthropic</div>
         <div>
-          <label style={FIELD_LABEL_STYLE}>
-            API Key{' '}
-            <span style={{ color: '#201E1A', letterSpacing: '0.08em' }}>
-              (leave blank to keep)
-            </span>
-          </label>
-          <input
+          <Label className={FIELD_LABEL_CLASS}>
+            API Key <span className="text-muted-foreground tracking-[0.08em]">(leave blank to keep)</span>
+          </Label>
+          <Input
             type="password"
             placeholder="sk-ant-…"
             onChange={(e) =>
@@ -173,154 +148,31 @@ function FormFields({
                 anthropic_api_key: e.target.value || undefined,
               }))
             }
-            style={{ ...INPUT_STYLE, color: '#403C34' }}
-            onFocus={(e) => (e.target.style.borderColor = '#302E2A')}
-            onBlur={(e) => (e.target.style.borderColor = '#191919')}
+            className="text-xs tracking-[0.03em] rounded-none h-8"
           />
         </div>
       </div>
 
       <div>
-        <div style={SECTION_LABEL_STYLE}>Community Board</div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '10px 12px',
-            background: '#080808',
-            border: '1px solid #141414',
-          }}
-        >
+        <div className={SECTION_LABEL_CLASS}>Community Board</div>
+        <div className="flex items-center justify-between py-2.5 px-3 bg-muted/50 border border-border rounded-lg">
           <div>
-            <span style={{ fontSize: 11, color: '#6A6458', letterSpacing: '0.03em', display: 'block' }}>
+            <span className="text-[11px] text-foreground tracking-[0.03em] block">
               Public board
             </span>
-            <span style={{ fontSize: 10, color: '#302E2A', letterSpacing: '0.03em' }}>
+            <span className="text-[10px] text-muted-foreground tracking-[0.03em]">
               Allow community to propose and vote on features
             </span>
           </div>
-          <button
-            onClick={() => setForm((f) => ({ ...f, is_board_public: !f.is_board_public }))}
-            style={{
-              width: 36,
-              height: 20,
-              borderRadius: 10,
-              background: form.is_board_public ? '#00E87A' : '#191919',
-              border: 'none',
-              cursor: 'pointer',
-              position: 'relative',
-              flexShrink: 0,
-              transition: 'background 200ms',
-            }}
-          >
-            <span
-              style={{
-                position: 'absolute',
-                top: 2,
-                left: form.is_board_public ? 18 : 2,
-                width: 16,
-                height: 16,
-                borderRadius: '50%',
-                background: form.is_board_public ? '#070707' : '#302E2A',
-                transition: 'left 200ms, background 200ms',
-              }}
-            />
-          </button>
+          <Switch
+            checked={form.is_board_public}
+            onCheckedChange={(checked) =>
+              setForm((f) => ({ ...f, is_board_public: checked }))
+            }
+          />
         </div>
       </div>
     </>
-  );
-}
-
-// ─── Modal shell ──────────────────────────────────────────────────────────────
-
-function Modal({
-  title,
-  subtitle,
-  onClose,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.8)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 50,
-      }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        className="animate-slide-up"
-        style={{
-          background: '#0C0C0C',
-          border: '1px solid #191919',
-          padding: 24,
-          width: '100%',
-          maxWidth: 440,
-          maxHeight: '90vh',
-          overflowY: 'auto',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'baseline',
-            justifyContent: 'space-between',
-            marginBottom: 20,
-            paddingBottom: 16,
-            borderBottom: '1px solid #191919',
-          }}
-        >
-          <div>
-            <span
-              style={{
-                display: 'block',
-                fontSize: 10,
-                letterSpacing: '0.2em',
-                textTransform: 'uppercase',
-                color: '#302E2A',
-                marginBottom: subtitle ? 3 : 0,
-              }}
-            >
-              {title}
-            </span>
-            {subtitle && (
-              <span style={{ fontSize: 13, color: '#C4C0AC', letterSpacing: '0.02em' }}>
-                {subtitle}
-              </span>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              fontSize: 18,
-              color: '#302E2A',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              lineHeight: 1,
-              padding: '0 0 0 16px',
-              transition: 'color 150ms',
-            }}
-            onMouseEnter={(e) => ((e.target as HTMLElement).style.color = '#6A6458')}
-            onMouseLeave={(e) => ((e.target as HTMLElement).style.color = '#302E2A')}
-          >
-            ×
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
   );
 }
 
@@ -344,77 +196,174 @@ function ModalFooter({
   return (
     <>
       {error && (
-        <p
-          style={{
-            marginBottom: 12,
-            fontSize: 11,
-            color: '#FF3A3A',
-            letterSpacing: '0.04em',
-          }}
-        >
-          {error}
-        </p>
+        <p className="mb-3 text-[11px] text-destructive tracking-[0.04em]">{error}</p>
       )}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          gap: 10,
-          paddingTop: 16,
-          borderTop: '1px solid #191919',
-        }}
-      >
-        <button
-          onClick={onCancel}
-          style={{
-            padding: '8px 14px',
-            background: 'none',
-            border: 'none',
-            fontSize: 10,
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            color: '#302E2A',
-            cursor: 'pointer',
-            transition: 'color 150ms',
-          }}
-          onMouseEnter={(e) => ((e.target as HTMLElement).style.color = '#6A6458')}
-          onMouseLeave={(e) => ((e.target as HTMLElement).style.color = '#302E2A')}
-        >
+      <DialogFooter className="border-border pt-4">
+        <Button variant="ghost" onClick={onCancel} className="text-[10px] tracking-[0.12em] uppercase">
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={onSubmit}
           disabled={isPending}
-          style={{
-            padding: '8px 16px',
-            background: destructive ? '#3A1414' : '#00E87A',
-            color: destructive ? '#FF3A3A' : '#070707',
-            fontSize: 10,
-            letterSpacing: '0.15em',
-            textTransform: 'uppercase',
-            fontWeight: 600,
-            border: destructive ? '1px solid #FF3A3A40' : 'none',
-            cursor: isPending ? 'not-allowed' : 'pointer',
-            opacity: isPending ? 0.5 : 1,
-            transition: 'opacity 150ms',
-          }}
-          onMouseEnter={(e) => {
-            if (!isPending) (e.target as HTMLElement).style.opacity = '0.85';
-          }}
-          onMouseLeave={(e) => {
-            if (!isPending) (e.target as HTMLElement).style.opacity = '1';
-          }}
+          variant={destructive ? 'destructive' : 'default'}
+          className="text-[10px] tracking-[0.15em] uppercase"
         >
           {isPending ? '…' : submitLabel}
-        </button>
-      </div>
+        </Button>
+      </DialogFooter>
     </>
   );
 }
 
-// ─── Create modal ─────────────────────────────────────────────────────────────
+// ─── Main page ────────────────────────────────────────────────────────────────
 
-function CreateModal({ onClose }: { onClose: () => void }) {
+type ModalState =
+  | { kind: 'none' }
+  | { kind: 'create' }
+  | { kind: 'edit'; config: RepoConfig }
+  | { kind: 'delete'; config: RepoConfig };
+
+export default function ConfigPage() {
+  const [modal, setModal] = useState<ModalState>({ kind: 'none' });
+
+  const { data: repos, isLoading, error } = useQuery({
+    queryKey: ['repos'],
+    queryFn: () => listRepos().then((r) => r.data ?? []),
+  });
+
+  if (isLoading) {
+    return <p className="text-xs text-muted-foreground tracking-[0.08em]">Loading…</p>;
+  }
+
+  if (error) {
+    return (
+      <p className="text-xs text-destructive tracking-[0.04em]">
+        error: {error instanceof Error ? error.message : 'unknown'}
+      </p>
+    );
+  }
+
+  return (
+    <div className="animate-slide-up">
+      {/* Header */}
+      <div className="flex items-baseline justify-between mb-6">
+        <div className="flex items-baseline gap-3">
+          <span className="text-[10px] tracking-[0.25em] uppercase text-primary">Config</span>
+          {repos && (
+            <span className="text-[10px] text-muted-foreground tracking-[0.05em]">
+              {repos.length} repos
+            </span>
+          )}
+        </div>
+        <Button
+          variant="outline"
+          onClick={() => setModal({ kind: 'create' })}
+          className="text-[10px] tracking-[0.15em] uppercase"
+        >
+          + Add
+        </Button>
+      </div>
+
+      {/* Table */}
+      {repos?.length === 0 ? (
+        <div className="py-8 border-t border-b border-border">
+          <p className="text-xs text-muted-foreground tracking-[0.06em] text-center">
+            no repos configured
+          </p>
+          <p className="mt-2 text-[11px] text-muted-foreground tracking-[0.06em] text-center">
+            add one to override service defaults for a specific repository
+          </p>
+        </div>
+      ) : (
+        <div>
+          {/* Column headers */}
+          <div className="grid gap-x-5 pb-2 border-b border-border grid-cols-[2fr_80px_80px_80px_100px_72px]">
+            {['Repository', 'Threshold', 'Timeout', 'Budget', 'Updated', ''].map((h) => (
+              <span
+                key={h}
+                className="text-[10px] tracking-[0.15em] uppercase text-muted-foreground"
+              >
+                {h}
+              </span>
+            ))}
+          </div>
+
+          {repos?.map((cfg: RepoConfig) => (
+            <div
+              key={cfg.id}
+              className="grid gap-x-5 items-center py-2.5 border-b border-border hover:bg-muted/30 transition-colors grid-cols-[2fr_80px_80px_80px_100px_72px]"
+            >
+              <span className="text-xs text-foreground tracking-[0.02em]">
+                {cfg.owner}/{cfg.repo}
+              </span>
+              <span className="text-xs text-muted-foreground tracking-[0.04em]">
+                {cfg.vote_threshold}
+              </span>
+              <span className="text-xs text-muted-foreground tracking-[0.04em]">
+                {cfg.timeout_minutes}m
+              </span>
+              <span className="text-xs text-muted-foreground tracking-[0.04em]">
+                ${cfg.max_budget_usd}
+              </span>
+              <span className="text-[11px] text-muted-foreground tracking-[0.04em] whitespace-nowrap">
+                {new Date(cfg.updated_at).toLocaleDateString()}
+              </span>
+
+              <div className="flex items-center justify-end gap-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setModal({ kind: 'edit', config: cfg })}
+                  className="text-[10px] tracking-[0.12em] uppercase"
+                >
+                  Edit
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setModal({ kind: 'delete', config: cfg })}
+                  className="text-[10px] tracking-[0.12em] uppercase text-destructive hover:text-destructive"
+                >
+                  Del
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Modals */}
+      <Dialog
+        open={modal.kind !== 'none'}
+        onOpenChange={(open) => !open && setModal({ kind: 'none' })}
+      >
+        <DialogContent className="sm:max-w-[440px] max-h-[90vh] overflow-y-auto">
+          {modal.kind === 'create' && (
+            <ConfigCreateModal
+              onClose={() => setModal({ kind: 'none' })}
+            />
+          )}
+          {modal.kind === 'edit' && modal.config && (
+            <ConfigEditModal
+              config={modal.config}
+              onClose={() => setModal({ kind: 'none' })}
+            />
+          )}
+          {modal.kind === 'delete' && modal.config && (
+            <ConfigDeleteModal
+              config={modal.config}
+              onClose={() => setModal({ kind: 'none' })}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ─── Create modal content ─────────────────────────────────────────────────────
+
+function ConfigCreateModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const [owner, setOwner] = useState('');
   const [repo, setRepo] = useState('');
@@ -433,7 +382,12 @@ function CreateModal({ onClose }: { onClose: () => void }) {
   const canSubmit = owner.trim() !== '' && repo.trim() !== '';
 
   return (
-    <Modal title="Add Config" onClose={onClose}>
+    <>
+      <DialogHeader>
+        <DialogTitle className="text-[10px] tracking-[0.2em] uppercase text-muted-foreground font-normal">
+          Add Config
+        </DialogTitle>
+      </DialogHeader>
       <FormFields
         form={form}
         setForm={setForm}
@@ -452,13 +406,13 @@ function CreateModal({ onClose }: { onClose: () => void }) {
         submitLabel="Add"
         error={errorMsg}
       />
-    </Modal>
+    </>
   );
 }
 
-// ─── Edit modal ───────────────────────────────────────────────────────────────
+// ─── Edit modal content ───────────────────────────────────────────────────────
 
-function EditModal({ config, onClose }: { config: RepoConfig; onClose: () => void }) {
+function ConfigEditModal({ config, onClose }: { config: RepoConfig; onClose: () => void }) {
   const qc = useQueryClient();
   const [form, setForm] = useState<UpdateRepoConfigRequest>({
     label_approved: config.label_approved,
@@ -484,7 +438,15 @@ function EditModal({ config, onClose }: { config: RepoConfig; onClose: () => voi
   const errorMsg = update.error instanceof Error ? update.error.message : undefined;
 
   return (
-    <Modal title="Edit Config" subtitle={`${config.owner}/${config.repo}`} onClose={onClose}>
+    <>
+      <DialogHeader>
+        <DialogTitle className="text-[10px] tracking-[0.2em] uppercase text-muted-foreground font-normal">
+          Edit Config
+        </DialogTitle>
+        <span className="text-[13px] text-foreground tracking-[0.02em]">
+          {config.owner}/{config.repo}
+        </span>
+      </DialogHeader>
       <FormFields form={form} setForm={setForm} />
       <ModalFooter
         onCancel={onClose}
@@ -493,13 +455,13 @@ function EditModal({ config, onClose }: { config: RepoConfig; onClose: () => voi
         submitLabel="Save"
         error={errorMsg}
       />
-    </Modal>
+    </>
   );
 }
 
-// ─── Delete confirm modal ─────────────────────────────────────────────────────
+// ─── Delete confirm modal content ──────────────────────────────────────────────
 
-function DeleteModal({ config, onClose }: { config: RepoConfig; onClose: () => void }) {
+function ConfigDeleteModal({ config, onClose }: { config: RepoConfig; onClose: () => void }) {
   const qc = useQueryClient();
 
   const del = useMutation({
@@ -514,20 +476,18 @@ function DeleteModal({ config, onClose }: { config: RepoConfig; onClose: () => v
   const errorMsg = del.error instanceof Error ? del.error.message : undefined;
 
   return (
-    <Modal title="Delete Config" subtitle={`${config.owner}/${config.repo}`} onClose={onClose}>
-      <p
-        style={{
-          fontSize: 12,
-          color: '#6A6458',
-          letterSpacing: '0.03em',
-          lineHeight: 1.7,
-          marginBottom: 20,
-        }}
-      >
-        This will permanently remove the configuration for{' '}
-        <span style={{ color: '#C4C0AC' }}>
+    <>
+      <DialogHeader>
+        <DialogTitle className="text-[10px] tracking-[0.2em] uppercase text-muted-foreground font-normal">
+          Delete Config
+        </DialogTitle>
+        <span className="text-[13px] text-foreground tracking-[0.02em]">
           {config.owner}/{config.repo}
         </span>
+      </DialogHeader>
+      <p className="text-xs text-muted-foreground tracking-[0.03em] leading-relaxed mb-5">
+        This will permanently remove the configuration for{' '}
+        <span className="text-foreground">{config.owner}/{config.repo}</span>
         . The repository's webhook trigger will fall back to service defaults.
       </p>
       <ModalFooter
@@ -538,257 +498,6 @@ function DeleteModal({ config, onClose }: { config: RepoConfig; onClose: () => v
         error={errorMsg}
         destructive
       />
-    </Modal>
-  );
-}
-
-// ─── Main page ────────────────────────────────────────────────────────────────
-
-type ModalState =
-  | { kind: 'none' }
-  | { kind: 'create' }
-  | { kind: 'edit'; config: RepoConfig }
-  | { kind: 'delete'; config: RepoConfig };
-
-export default function ConfigPage() {
-  const [modal, setModal] = useState<ModalState>({ kind: 'none' });
-
-  const { data: repos, isLoading, error } = useQuery({
-    queryKey: ['repos'],
-    queryFn: () => listRepos().then((r) => r.data ?? []),
-  });
-
-  if (isLoading) {
-    return (
-      <p style={{ fontSize: 12, color: '#302E2A', letterSpacing: '0.08em' }}>Loading…</p>
-    );
-  }
-
-  if (error) {
-    return (
-      <p style={{ fontSize: 12, color: '#FF3A3A', letterSpacing: '0.04em' }}>
-        error: {error instanceof Error ? error.message : 'unknown'}
-      </p>
-    );
-  }
-
-  return (
-    <div className="animate-slide-up">
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-          marginBottom: 24,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-          <span
-            style={{
-              fontSize: 10,
-              letterSpacing: '0.25em',
-              textTransform: 'uppercase',
-              color: '#00E87A',
-            }}
-          >
-            Config
-          </span>
-          {repos && (
-            <span style={{ fontSize: 10, color: '#302E2A', letterSpacing: '0.05em' }}>
-              {repos.length} repos
-            </span>
-          )}
-        </div>
-        <button
-          onClick={() => setModal({ kind: 'create' })}
-          style={{
-            padding: '6px 12px',
-            background: 'none',
-            border: '1px solid #191919',
-            fontSize: 10,
-            letterSpacing: '0.15em',
-            textTransform: 'uppercase',
-            color: '#403C34',
-            cursor: 'pointer',
-            transition: 'border-color 150ms, color 150ms',
-          }}
-          onMouseEnter={(e) => {
-            const el = e.currentTarget;
-            el.style.borderColor = '#302E2A';
-            el.style.color = '#C4C0AC';
-          }}
-          onMouseLeave={(e) => {
-            const el = e.currentTarget;
-            el.style.borderColor = '#191919';
-            el.style.color = '#403C34';
-          }}
-        >
-          + Add
-        </button>
-      </div>
-
-      {/* Table */}
-      {repos?.length === 0 ? (
-        <div
-          style={{
-            padding: '32px 0',
-            borderTop: '1px solid #191919',
-            borderBottom: '1px solid #191919',
-          }}
-        >
-          <p
-            style={{
-              fontSize: 12,
-              color: '#302E2A',
-              letterSpacing: '0.06em',
-              textAlign: 'center',
-            }}
-          >
-            no repos configured
-          </p>
-          <p
-            style={{
-              marginTop: 8,
-              fontSize: 11,
-              color: '#201E1A',
-              letterSpacing: '0.06em',
-              textAlign: 'center',
-            }}
-          >
-            add one to override service defaults for a specific repository
-          </p>
-        </div>
-      ) : (
-        <div>
-          {/* Column headers */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '2fr 80px 80px 80px 100px 72px',
-              gap: '0 20px',
-              paddingBottom: 8,
-              borderBottom: '1px solid #191919',
-            }}
-          >
-            {['Repository', 'Threshold', 'Timeout', 'Budget', 'Updated', ''].map((h) => (
-              <span
-                key={h}
-                style={{
-                  fontSize: 10,
-                  letterSpacing: '0.15em',
-                  textTransform: 'uppercase',
-                  color: '#302E2A',
-                }}
-              >
-                {h}
-              </span>
-            ))}
-          </div>
-
-          {repos?.map((cfg: RepoConfig) => (
-            <div
-              key={cfg.id}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '2fr 80px 80px 80px 100px 72px',
-                gap: '0 20px',
-                alignItems: 'center',
-                padding: '11px 0',
-                borderBottom: '1px solid #111111',
-                transition: 'background 150ms',
-              }}
-              onMouseEnter={(e) =>
-                ((e.currentTarget as HTMLElement).style.background = '#0C0C0C')
-              }
-              onMouseLeave={(e) =>
-                ((e.currentTarget as HTMLElement).style.background = 'transparent')
-              }
-            >
-              <span
-                style={{ fontSize: 12, color: '#C4C0AC', letterSpacing: '0.02em' }}
-              >
-                {cfg.owner}/{cfg.repo}
-              </span>
-              <span style={{ fontSize: 12, color: '#403C34', letterSpacing: '0.04em' }}>
-                {cfg.vote_threshold}
-              </span>
-              <span style={{ fontSize: 12, color: '#403C34', letterSpacing: '0.04em' }}>
-                {cfg.timeout_minutes}m
-              </span>
-              <span style={{ fontSize: 12, color: '#403C34', letterSpacing: '0.04em' }}>
-                ${cfg.max_budget_usd}
-              </span>
-              <span
-                style={{
-                  fontSize: 11,
-                  color: '#302E2A',
-                  letterSpacing: '0.04em',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {new Date(cfg.updated_at).toLocaleDateString()}
-              </span>
-
-              {/* Row actions */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'flex-end',
-                  gap: 12,
-                }}
-              >
-                <button
-                  onClick={() => setModal({ kind: 'edit', config: cfg })}
-                  style={{
-                    fontSize: 10,
-                    letterSpacing: '0.12em',
-                    textTransform: 'uppercase',
-                    color: '#302E2A',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    transition: 'color 150ms',
-                  }}
-                  onMouseEnter={(e) => ((e.target as HTMLElement).style.color = '#C4C0AC')}
-                  onMouseLeave={(e) => ((e.target as HTMLElement).style.color = '#302E2A')}
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => setModal({ kind: 'delete', config: cfg })}
-                  style={{
-                    fontSize: 10,
-                    letterSpacing: '0.12em',
-                    textTransform: 'uppercase',
-                    color: '#2A1414',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    transition: 'color 150ms',
-                  }}
-                  onMouseEnter={(e) => ((e.target as HTMLElement).style.color = '#FF3A3A')}
-                  onMouseLeave={(e) => ((e.target as HTMLElement).style.color = '#2A1414')}
-                >
-                  Del
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Modals */}
-      {modal.kind === 'create' && (
-        <CreateModal onClose={() => setModal({ kind: 'none' })} />
-      )}
-      {modal.kind === 'edit' && (
-        <EditModal config={modal.config} onClose={() => setModal({ kind: 'none' })} />
-      )}
-      {modal.kind === 'delete' && (
-        <DeleteModal config={modal.config} onClose={() => setModal({ kind: 'none' })} />
-      )}
-    </div>
+    </>
   );
 }

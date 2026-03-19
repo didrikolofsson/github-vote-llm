@@ -7,7 +7,7 @@ import (
 	envpkg "github.com/caarlos0/env/v11"
 )
 
-type environment struct {
+type Environment struct {
 	GITHUB_APP_ID      int64  `env:"GITHUB_APP_ID,required"`
 	GITHUB_PRIVATE_KEY string `env:"GITHUB_PRIVATE_KEY,required"`
 	API_KEY            string `env:"API_KEY,required"`
@@ -18,7 +18,7 @@ type environment struct {
 	WORKSPACE_DIR      string `env:"WORKSPACE_DIR" envDefault:"/tmp/vote-llm-workspaces"`
 }
 
-func LoadEnv() (*environment, error) {
+func LoadEnv() (*Environment, error) {
 	// Check if GITHUB_PRIVATE_KEY_PATH is set
 	// If set, read the file and set GITHUB_PRIVATE_KEY
 	// This is only needed for the local debugger to work
@@ -31,7 +31,7 @@ func LoadEnv() (*environment, error) {
 		os.Setenv("GITHUB_PRIVATE_KEY", string(githubPrivateKey))
 	}
 
-	var env environment
+	var env Environment
 	if err := envpkg.ParseWithOptions(&env, envpkg.Options{
 		// https://pkg.go.dev/github.com/caarlos0/env/v11#Options
 	}); err != nil {

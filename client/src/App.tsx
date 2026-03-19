@@ -12,7 +12,7 @@ export default function App() {
 
   if (!apiKey) {
     return (
-      <BrowserRouter basename="/ui">
+      <BrowserRouter>
         <Routes>
           <Route path="*" element={<LoginPage />} />
         </Routes>
@@ -21,7 +21,7 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter basename="/ui">
+    <BrowserRouter>
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<RoadmapPage />} />

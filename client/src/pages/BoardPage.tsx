@@ -9,6 +9,17 @@ import {
   createBoardComment,
 } from '../client/sdk.gen';
 import type { Proposal, ProposalComment } from '../client/types.gen';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -23,15 +34,23 @@ function relativeTime(iso: string): string {
   return 'just now';
 }
 
-const STATUS_COLOR: Record<Proposal['status'], string> = {
-  open: '#403C34',
-  planned: '#00E87A',
-  done: '#3A9EFF',
+const STATUS_CLASS: Record<Proposal['status'], string> = {
+  open: 'text-muted-foreground border-muted-foreground/25',
+  planned: 'text-primary border-primary/25',
+  done: 'text-sky-400 border-sky-400/25',
 };
 
 // ─── Comment thread ────────────────────────────────────────────────────────────
 
-function CommentThread({ owner, repo, proposalId }: { owner: string; repo: string; proposalId: number }) {
+function CommentThread({
+  owner,
+  repo,
+  proposalId,
+}: {
+  owner: string;
+  repo: string;
+  proposalId: number;
+}) {
   const qc = useQueryClient();
   const [body, setBody] = useState('');
   const [author, setAuthor] = useState('');
@@ -59,37 +78,28 @@ function CommentThread({ owner, repo, proposalId }: { owner: string; repo: strin
   });
 
   return (
-    <div style={{ marginTop: 16, borderTop: '1px solid #141414', paddingTop: 16 }}>
+    <div className="mt-4 pt-4 border-t border-border">
       {isLoading ? (
-        <p style={{ fontSize: 11, color: '#302E2A', letterSpacing: '0.06em' }}>Loading comments…</p>
+        <p className="text-[11px] text-muted-foreground tracking-[0.06em]">Loading comments…</p>
       ) : comments.length === 0 ? (
-        <p style={{ fontSize: 11, color: '#201E1A', letterSpacing: '0.06em', marginBottom: 12 }}>
+        <p className="text-[11px] text-muted-foreground tracking-[0.06em] mb-3">
           No comments yet. Be the first.
         </p>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+        <div className="flex flex-col gap-3 mb-4">
           {comments.map((cm: ProposalComment) => (
-            <div key={cm.id} style={{ display: 'flex', gap: 12 }}>
-              <div
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: '#201E1A',
-                  flexShrink: 0,
-                  marginTop: 5,
-                }}
-              />
+            <div key={cm.id} className="flex gap-3">
+              <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground flex-shrink-0 mt-1" />
               <div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
-                  <span style={{ fontSize: 11, color: '#403C34', letterSpacing: '0.05em' }}>
+                <div className="flex items-baseline gap-2 mb-0.5">
+                  <span className="text-[11px] text-muted-foreground tracking-[0.05em]">
                     {cm.author_name}
                   </span>
-                  <span style={{ fontSize: 10, color: '#201E1A', letterSpacing: '0.04em' }}>
+                  <span className="text-[10px] text-muted-foreground/80 tracking-[0.04em]">
                     {relativeTime(cm.created_at)}
                   </span>
                 </div>
-                <p style={{ fontSize: 12, color: '#8A8476', letterSpacing: '0.02em', lineHeight: 1.6 }}>
+                <p className="text-xs text-muted-foreground tracking-[0.02em] leading-relaxed">
                   {cm.body}
                 </p>
               </div>
@@ -98,69 +108,29 @@ function CommentThread({ owner, repo, proposalId }: { owner: string; repo: strin
         </div>
       )}
 
-      {/* Comment form */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <textarea
+      <div className="flex flex-col gap-2">
+        <Textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder="Add a comment…"
           rows={3}
-          style={{
-            width: '100%',
-            padding: '8px 10px',
-            background: '#0C0C0C',
-            border: '1px solid #191919',
-            color: '#C4C0AC',
-            fontSize: 12,
-            letterSpacing: '0.02em',
-            outline: 'none',
-            resize: 'vertical',
-            boxSizing: 'border-box',
-            fontFamily: 'inherit',
-            lineHeight: 1.5,
-          }}
-          onFocus={(e) => (e.target.style.borderColor = '#302E2A')}
-          onBlur={(e) => (e.target.style.borderColor = '#191919')}
+          className="text-xs tracking-[0.02em] rounded-none resize-y min-h-[4.5rem]"
         />
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input
+        <div className="flex gap-2 items-center">
+          <Input
             value={author}
             onChange={(e) => setAuthor(e.target.value)}
             placeholder="Your name (optional)"
-            style={{
-              flex: 1,
-              padding: '6px 10px',
-              background: '#0C0C0C',
-              border: '1px solid #191919',
-              color: '#C4C0AC',
-              fontSize: 11,
-              letterSpacing: '0.03em',
-              outline: 'none',
-              fontFamily: 'inherit',
-            }}
-            onFocus={(e) => (e.target.style.borderColor = '#302E2A')}
-            onBlur={(e) => (e.target.style.borderColor = '#191919')}
+            className="flex-1 text-[11px] tracking-[0.03em] rounded-none h-9"
           />
-          <button
+          <Button
             onClick={() => body.trim() && post.mutate()}
             disabled={post.isPending || !body.trim()}
-            style={{
-              padding: '6px 14px',
-              background: body.trim() ? '#00E87A' : '#111111',
-              color: body.trim() ? '#070707' : '#201E1A',
-              fontSize: 10,
-              letterSpacing: '0.15em',
-              textTransform: 'uppercase',
-              fontWeight: 600,
-              border: 'none',
-              cursor: body.trim() ? 'pointer' : 'not-allowed',
-              opacity: post.isPending ? 0.6 : 1,
-              transition: 'all 150ms',
-              flexShrink: 0,
-            }}
+            size="sm"
+            className="text-[10px] tracking-[0.15em] uppercase flex-shrink-0"
           >
             {submitted ? 'Posted' : post.isPending ? '…' : 'Post'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -185,162 +155,67 @@ function ProposalCard({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div
-      style={{
-        border: '1px solid #141414',
-        background: '#0A0A0A',
-        transition: 'border-color 200ms',
-      }}
-      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.borderColor = '#1E1E1E')}
-      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.borderColor = '#141414')}
-    >
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '56px 1fr',
-          gap: 0,
-        }}
-      >
-        {/* Vote button */}
+    <div className="border border-border bg-muted/30 transition-[border-color] duration-200 hover:border-border/80">
+      <div className="grid grid-cols-[56px_1fr] gap-0">
         <button
           onClick={(e) => {
             e.stopPropagation();
             onVote();
           }}
           disabled={isVoting}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 2,
-            padding: '14px 0',
-            background: 'none',
-            border: 'none',
-            borderRight: '1px solid #141414',
-            cursor: 'pointer',
-            opacity: isVoting ? 0.5 : 1,
-            transition: 'all 150ms',
-          }}
-          onMouseEnter={(e) => {
-            if (!isVoting) {
-              const el = e.currentTarget;
-              el.style.background = '#0F1A14';
-            }
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.background = 'none';
-          }}
+          className="flex flex-col items-center justify-center gap-0.5 py-3.5 bg-transparent border-none border-r border-border cursor-pointer transition-all duration-150 disabled:opacity-50 hover:bg-primary/10"
         >
           <svg width="10" height="7" viewBox="0 0 10 7" fill="none">
-            <path d="M5 0L10 7H0L5 0Z" fill={isVoting ? '#201E1A' : '#00E87A'} />
+            <path
+              d="M5 0L10 7H0L5 0Z"
+              className={isVoting ? 'fill-muted-foreground' : 'fill-primary'}
+            />
           </svg>
-          <span
-            style={{
-              fontSize: 14,
-              fontWeight: 600,
-              color: '#C4C0AC',
-              letterSpacing: '0.02em',
-              lineHeight: 1,
-            }}
-          >
+          <span className="text-sm font-semibold text-foreground tracking-[0.02em] leading-none">
             {proposal.vote_count}
           </span>
         </button>
 
-        {/* Content */}
         <button
           onClick={() => setExpanded((v) => !v)}
-          style={{
-            display: 'block',
-            width: '100%',
-            padding: '14px 16px',
-            background: 'none',
-            border: 'none',
-            textAlign: 'left',
-            cursor: 'pointer',
-          }}
+          className="block w-full py-3.5 px-4 bg-transparent border-none text-left cursor-pointer"
         >
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-            <span
-              style={{
-                fontSize: 13,
-                color: '#C4C0AC',
-                letterSpacing: '0.02em',
-                lineHeight: 1.4,
-                fontWeight: 500,
-              }}
-            >
+          <div className="flex items-start justify-between gap-3">
+            <span className="text-[13px] text-foreground tracking-[0.02em] leading-snug font-medium">
               {proposal.title}
             </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <div className="flex items-center gap-2 flex-shrink-0">
               <span
-                style={{
-                  fontSize: 9,
-                  letterSpacing: '0.2em',
-                  textTransform: 'uppercase',
-                  color: STATUS_COLOR[proposal.status],
-                  border: `1px solid ${STATUS_COLOR[proposal.status]}40`,
-                  padding: '2px 6px',
-                }}
+                className={`text-[9px] tracking-[0.2em] uppercase border py-0.5 px-1.5 ${STATUS_CLASS[proposal.status]}`}
               >
                 {proposal.status}
               </span>
               <span
-                style={{
-                  fontSize: 10,
-                  color: expanded ? '#403C34' : '#201E1A',
-                  letterSpacing: '0.1em',
-                  transition: 'color 150ms',
-                }}
+                className={`text-[10px] tracking-[0.1em] transition-colors duration-150 ${
+                  expanded ? 'text-muted-foreground' : 'text-muted-foreground/80'
+                }`}
               >
                 {expanded ? '▲' : '▼'}
               </span>
             </div>
           </div>
           {!expanded && proposal.description && (
-            <p
-              style={{
-                marginTop: 5,
-                fontSize: 11,
-                color: '#302E2A',
-                letterSpacing: '0.02em',
-                lineHeight: 1.5,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                maxWidth: '100%',
-              }}
-            >
+            <p className="mt-1 text-[11px] text-muted-foreground tracking-[0.02em] leading-normal overflow-hidden text-ellipsis whitespace-nowrap max-w-full">
               {proposal.description}
             </p>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 6 }}>
-            <span style={{ fontSize: 10, color: '#201E1A', letterSpacing: '0.05em' }}>
+          <div className="flex items-center gap-3 mt-1.5">
+            <span className="text-[10px] text-muted-foreground tracking-[0.05em]">
               {relativeTime(proposal.created_at)}
             </span>
           </div>
         </button>
       </div>
 
-      {/* Expanded: description + comments */}
       {expanded && (
-        <div
-          style={{
-            padding: '16px 16px 16px 72px',
-            borderTop: '1px solid #141414',
-          }}
-        >
+        <div className="pt-4 pb-4 pl-4 pr-4 ml-[72px] border-t border-border">
           {proposal.description && (
-            <p
-              style={{
-                fontSize: 12,
-                color: '#8A8476',
-                letterSpacing: '0.02em',
-                lineHeight: 1.7,
-                marginBottom: 0,
-              }}
-            >
+            <p className="text-xs text-muted-foreground tracking-[0.02em] leading-relaxed mb-0">
               {proposal.description}
             </p>
           )}
@@ -356,11 +231,13 @@ function ProposalCard({
 function NewProposalModal({
   owner,
   repo,
-  onClose,
+  open,
+  onOpenChange,
 }: {
   owner: string;
   repo: string;
-  onClose: () => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   const qc = useQueryClient();
   const [title, setTitle] = useState('');
@@ -374,209 +251,70 @@ function NewProposalModal({
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['board-proposals', owner, repo] });
-      onClose();
+      onOpenChange(false);
     },
   });
 
-  const errorMsg =
-    create.error instanceof Error ? create.error.message : undefined;
+  const errorMsg = create.error instanceof Error ? create.error.message : undefined;
   const canSubmit = title.trim().length >= 3;
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.85)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 50,
-        padding: 16,
-      }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        className="animate-slide-up"
-        style={{
-          background: '#0C0C0C',
-          border: '1px solid #1E1E1E',
-          padding: 24,
-          width: '100%',
-          maxWidth: 480,
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'baseline',
-            marginBottom: 20,
-            paddingBottom: 16,
-            borderBottom: '1px solid #141414',
-          }}
-        >
-          <span
-            style={{
-              fontSize: 10,
-              letterSpacing: '0.2em',
-              textTransform: 'uppercase',
-              color: '#302E2A',
-            }}
-          >
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[480px] max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-[10px] tracking-[0.2em] uppercase text-muted-foreground font-normal">
             New Proposal
-          </span>
-          <button
-            onClick={onClose}
-            style={{
-              fontSize: 18,
-              color: '#201E1A',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              lineHeight: 1,
-              transition: 'color 150ms',
-            }}
-            onMouseEnter={(e) => ((e.target as HTMLElement).style.color = '#6A6458')}
-            onMouseLeave={(e) => ((e.target as HTMLElement).style.color = '#201E1A')}
-          >
-            ×
-          </button>
-        </div>
+          </DialogTitle>
+        </DialogHeader>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="flex flex-col gap-3.5">
           <div>
-            <label
-              style={{
-                display: 'block',
-                fontSize: 10,
-                letterSpacing: '0.15em',
-                textTransform: 'uppercase',
-                color: '#302E2A',
-                marginBottom: 5,
-              }}
-            >
+            <Label className="block text-[10px] tracking-[0.15em] uppercase text-muted-foreground mb-1.5">
               Title *
-            </label>
-            <input
+            </Label>
+            <Input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Add dark mode toggle"
               maxLength={200}
-              style={{
-                width: '100%',
-                padding: '8px 10px',
-                background: '#070707',
-                border: '1px solid #191919',
-                color: '#C4C0AC',
-                fontSize: 12,
-                letterSpacing: '0.02em',
-                outline: 'none',
-                boxSizing: 'border-box',
-                fontFamily: 'inherit',
-              }}
-              onFocus={(e) => (e.target.style.borderColor = '#302E2A')}
-              onBlur={(e) => (e.target.style.borderColor = '#191919')}
+              className="text-xs tracking-[0.02em] rounded-none h-9"
               autoFocus
             />
           </div>
           <div>
-            <label
-              style={{
-                display: 'block',
-                fontSize: 10,
-                letterSpacing: '0.15em',
-                textTransform: 'uppercase',
-                color: '#302E2A',
-                marginBottom: 5,
-              }}
-            >
-              Description{' '}
-              <span style={{ color: '#201E1A', letterSpacing: '0.08em' }}>(optional)</span>
-            </label>
-            <textarea
+            <Label className="block text-[10px] tracking-[0.15em] uppercase text-muted-foreground mb-1.5">
+              Description <span className="text-muted-foreground tracking-[0.08em]">(optional)</span>
+            </Label>
+            <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Describe the feature or problem you want solved…"
               rows={4}
               maxLength={5000}
-              style={{
-                width: '100%',
-                padding: '8px 10px',
-                background: '#070707',
-                border: '1px solid #191919',
-                color: '#C4C0AC',
-                fontSize: 12,
-                letterSpacing: '0.02em',
-                outline: 'none',
-                resize: 'vertical',
-                boxSizing: 'border-box',
-                fontFamily: 'inherit',
-                lineHeight: 1.5,
-              }}
-              onFocus={(e) => (e.target.style.borderColor = '#302E2A')}
-              onBlur={(e) => (e.target.style.borderColor = '#191919')}
+              className="text-xs tracking-[0.02em] rounded-none resize-y leading-normal min-h-24"
             />
           </div>
         </div>
 
         {errorMsg && (
-          <p style={{ marginTop: 12, fontSize: 11, color: '#FF3A3A', letterSpacing: '0.04em' }}>
-            {errorMsg}
-          </p>
+          <p className="text-[11px] text-destructive tracking-[0.04em]">{errorMsg}</p>
         )}
 
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'flex-end',
-            gap: 10,
-            paddingTop: 16,
-            marginTop: 16,
-            borderTop: '1px solid #141414',
-          }}
-        >
-          <button
-            onClick={onClose}
-            style={{
-              padding: '8px 14px',
-              background: 'none',
-              border: 'none',
-              fontSize: 10,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-              color: '#302E2A',
-              cursor: 'pointer',
-              transition: 'color 150ms',
-            }}
-            onMouseEnter={(e) => ((e.target as HTMLElement).style.color = '#6A6458')}
-            onMouseLeave={(e) => ((e.target as HTMLElement).style.color = '#302E2A')}
-          >
+        <DialogFooter className="border-border pt-4">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} className="text-[10px] tracking-[0.12em] uppercase">
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => canSubmit && create.mutate()}
             disabled={!canSubmit || create.isPending}
-            style={{
-              padding: '8px 16px',
-              background: canSubmit ? '#00E87A' : '#111111',
-              color: canSubmit ? '#070707' : '#201E1A',
-              fontSize: 10,
-              letterSpacing: '0.15em',
-              textTransform: 'uppercase',
-              fontWeight: 600,
-              border: 'none',
-              cursor: canSubmit ? 'pointer' : 'not-allowed',
-              opacity: create.isPending ? 0.5 : 1,
-              transition: 'all 150ms',
-            }}
+            className="text-[10px] tracking-[0.15em] uppercase"
           >
             {create.isPending ? '…' : 'Submit'}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -614,152 +352,69 @@ export default function BoardPage() {
 
   if (!owner || !repo) {
     return (
-      <div style={{ minHeight: '100vh', background: '#070707', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ fontSize: 12, color: '#302E2A', letterSpacing: '0.08em' }}>Invalid board URL.</p>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-xs text-muted-foreground tracking-[0.08em]">Invalid board URL.</p>
       </div>
     );
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#070707', color: '#C4C0AC' }}>
-      {/* Header */}
-      <header
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
-          background: '#070707',
-          borderBottom: '1px solid #141414',
-          height: 48,
-          display: 'flex',
-          alignItems: 'center',
-          paddingLeft: 24,
-          paddingRight: 24,
-          justifyContent: 'space-between',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span
-            style={{
-              color: '#00E87A',
-              fontSize: 11,
-              letterSpacing: '0.35em',
-              textTransform: 'uppercase',
-              fontWeight: 600,
-            }}
-          >
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="sticky top-0 z-10 bg-background border-b border-border h-12 flex items-center px-6 justify-between">
+        <div className="flex items-center gap-4">
+          <span className="text-primary text-[11px] tracking-[0.35em] uppercase font-semibold">
             vote-llm
           </span>
-          <span style={{ fontSize: 10, color: '#191919', letterSpacing: '0.05em' }}>/</span>
-          <span style={{ fontSize: 12, color: '#403C34', letterSpacing: '0.05em' }}>
+          <span className="text-[10px] text-muted-foreground tracking-[0.05em]">/</span>
+          <span className="text-xs text-muted-foreground tracking-[0.05em]">
             {owner}/{repo}
           </span>
         </div>
-        <button
+        <Button
           onClick={() => setShowNew(true)}
-          style={{
-            padding: '6px 14px',
-            background: '#00E87A',
-            color: '#070707',
-            fontSize: 10,
-            letterSpacing: '0.15em',
-            textTransform: 'uppercase',
-            fontWeight: 600,
-            border: 'none',
-            cursor: 'pointer',
-            transition: 'opacity 150ms',
-          }}
-          onMouseEnter={(e) => ((e.target as HTMLElement).style.opacity = '0.85')}
-          onMouseLeave={(e) => ((e.target as HTMLElement).style.opacity = '1')}
+          size="sm"
+          className="text-[10px] tracking-[0.15em] uppercase"
         >
           + Propose
-        </button>
+        </Button>
       </header>
 
-      {/* Hero */}
-      <div
-        style={{
-          padding: '48px 24px 32px',
-          maxWidth: 720,
-          margin: '0 auto',
-        }}
-      >
-        <h1
-          style={{
-            fontSize: 24,
-            fontWeight: 600,
-            color: '#C4C0AC',
-            letterSpacing: '0.02em',
-            marginBottom: 8,
-            lineHeight: 1.2,
-          }}
-        >
+      <div className="py-12 px-6 max-w-[720px] mx-auto">
+        <h1 className="text-2xl font-semibold text-foreground tracking-[0.02em] mb-2 leading-tight">
           Feature Requests
         </h1>
-        <p
-          style={{
-            fontSize: 12,
-            color: '#302E2A',
-            letterSpacing: '0.05em',
-            lineHeight: 1.6,
-          }}
-        >
-          Vote on the features you want most. The highest-voted proposals shape what gets built next.
+        <p className="text-xs text-muted-foreground tracking-[0.05em] leading-relaxed">
+          Vote on the features you want most. The highest-voted proposals shape what gets built
+          next.
         </p>
       </div>
 
-      {/* Content */}
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 24px 64px' }}>
+      <div className="max-w-[720px] mx-auto px-6 pb-16">
         {isLoading ? (
-          <p style={{ fontSize: 12, color: '#302E2A', letterSpacing: '0.08em' }}>Loading…</p>
+          <p className="text-xs text-muted-foreground tracking-[0.08em]">Loading…</p>
         ) : error ? (
-          <div
-            style={{
-              padding: 20,
-              border: '1px solid #2A1414',
-              background: '#0D0707',
-            }}
-          >
-            <p style={{ fontSize: 12, color: '#FF3A3A', letterSpacing: '0.04em' }}>
+          <div className="p-5 border border-destructive/20 bg-destructive/5">
+            <p className="text-xs text-destructive tracking-[0.04em]">
               {error instanceof Error && error.message.includes('403')
                 ? 'This board is not public.'
                 : `Error: ${error instanceof Error ? error.message : 'unknown'}`}
             </p>
           </div>
         ) : proposals.length === 0 ? (
-          <div
-            style={{
-              padding: '48px 24px',
-              border: '1px solid #141414',
-              textAlign: 'center',
-            }}
-          >
-            <p style={{ fontSize: 12, color: '#302E2A', letterSpacing: '0.06em', marginBottom: 8 }}>
-              No proposals yet.
-            </p>
-            <p style={{ fontSize: 11, color: '#201E1A', letterSpacing: '0.05em' }}>
+          <div className="py-12 px-6 border border-border text-center">
+            <p className="text-xs text-muted-foreground tracking-[0.06em] mb-2">No proposals yet.</p>
+            <p className="text-[11px] text-muted-foreground tracking-[0.05em]">
               Be the first to suggest a feature.
             </p>
-            <button
+            <Button
               onClick={() => setShowNew(true)}
-              style={{
-                marginTop: 20,
-                padding: '8px 20px',
-                background: '#00E87A',
-                color: '#070707',
-                fontSize: 10,
-                letterSpacing: '0.15em',
-                textTransform: 'uppercase',
-                fontWeight: 600,
-                border: 'none',
-                cursor: 'pointer',
-              }}
+              className="mt-5 text-[10px] tracking-[0.15em] uppercase"
             >
               + Propose a feature
-            </button>
+            </Button>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div className="flex flex-col gap-0.5">
             {proposals.map((p: Proposal) => (
               <ProposalCard
                 key={p.id}
@@ -774,9 +429,12 @@ export default function BoardPage() {
         )}
       </div>
 
-      {showNew && (
-        <NewProposalModal owner={owner} repo={repo} onClose={() => setShowNew(false)} />
-      )}
+      <NewProposalModal
+        owner={owner}
+        repo={repo}
+        open={showNew}
+        onOpenChange={setShowNew}
+      />
     </div>
   );
 }

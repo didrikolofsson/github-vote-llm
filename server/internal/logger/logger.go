@@ -16,13 +16,13 @@ type Logger struct {
 // New creates a root Logger with colored console output.
 func New() *Logger {
 	encoderCfg := zapcore.EncoderConfig{
-		TimeKey:       "time",
-		LevelKey:      "level",
-		NameKey:       "component",
-		MessageKey:    "msg",
-		EncodeTime:    zapcore.TimeEncoderOfLayout("15:04:05"),
-		EncodeLevel:   zapcore.CapitalColorLevelEncoder,
-		EncodeName:    zapcore.FullNameEncoder,
+		TimeKey:          "time",
+		LevelKey:         "level",
+		NameKey:          "component",
+		MessageKey:       "msg",
+		EncodeTime:       zapcore.TimeEncoderOfLayout("15:04:05"),
+		EncodeLevel:      zapcore.CapitalColorLevelEncoder,
+		EncodeName:       zapcore.FullNameEncoder,
 		ConsoleSeparator: "\t",
 	}
 

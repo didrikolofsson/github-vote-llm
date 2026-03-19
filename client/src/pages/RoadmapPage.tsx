@@ -11,10 +11,10 @@ const LANE_LABEL: Record<Proposal['status'], string> = {
   planned: 'Planned',
   done: 'Done',
 };
-const LANE_COLOR: Record<Proposal['status'], string> = {
-  open: '#403C34',
-  planned: '#00E87A',
-  done: '#3A9EFF',
+const LANE_CLASS: Record<Proposal['status'], string> = {
+  open: 'text-gray-400 border-gray-400/25',
+  planned: 'text-emerald-400 border-emerald-400/25',
+  done: 'text-sky-400 border-sky-400/25',
 };
 
 // ─── Proposal card ────────────────────────────────────────────────────────────
@@ -49,107 +49,42 @@ function RoadmapCard({
   };
 
   return (
-    <div
-      style={{
-        border: '1px solid #141414',
-        background: '#0A0A0A',
-        transition: 'border-color 200ms',
-      }}
-      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.borderColor = '#1E1E1E')}
-      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.borderColor = '#141414')}
-    >
+    <div className="border border-gray-800 bg-gray-900 transition-[border-color] duration-200 hover:border-gray-700">
       <button
         onClick={() => setExpanded((v) => !v)}
-        style={{
-          display: 'block',
-          width: '100%',
-          padding: '12px 14px',
-          background: 'none',
-          border: 'none',
-          textAlign: 'left',
-          cursor: 'pointer',
-        }}
+        className="block w-full py-3 px-3.5 bg-transparent border-none text-left cursor-pointer"
       >
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-          {/* Vote count */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 3,
-              flexShrink: 0,
-              paddingTop: 2,
-            }}
-          >
+        <div className="flex items-start gap-2.5">
+          <div className="flex items-center gap-0.5 flex-shrink-0 pt-0.5">
             <svg width="7" height="5" viewBox="0 0 7 5" fill="none">
-              <path d="M3.5 0L7 5H0L3.5 0Z" fill="#201E1A" />
+              <path d="M3.5 0L7 5H0L3.5 0Z" className="fill-gray-500" />
             </svg>
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#403C34', letterSpacing: '0.02em' }}>
+            <span className="text-xs font-semibold text-gray-400 tracking-[0.02em]">
               {proposal.vote_count}
             </span>
           </div>
-          <span
-            style={{
-              fontSize: 12,
-              color: '#C4C0AC',
-              letterSpacing: '0.02em',
-              lineHeight: 1.4,
-              fontWeight: 500,
-              flex: 1,
-            }}
-          >
+          <span className="text-xs text-gray-100 tracking-[0.02em] leading-snug font-medium flex-1">
             {proposal.title}
           </span>
-          <span style={{ fontSize: 10, color: '#201E1A', letterSpacing: '0.1em', flexShrink: 0 }}>
+          <span className="text-[10px] text-gray-500 tracking-[0.1em] flex-shrink-0">
             {expanded ? '▲' : '▼'}
           </span>
         </div>
       </button>
 
       {expanded && (
-        <div style={{ padding: '0 14px 14px' }}>
+        <div className="px-3.5 pb-3.5">
           {proposal.description && (
-            <p
-              style={{
-                fontSize: 11,
-                color: '#403C34',
-                letterSpacing: '0.02em',
-                lineHeight: 1.6,
-                marginBottom: 12,
-                borderTop: '1px solid #111111',
-                paddingTop: 12,
-              }}
-            >
+            <p className="text-[11px] text-gray-400 tracking-[0.02em] leading-relaxed mb-3 border-t border-gray-900 pt-3">
               {proposal.description}
             </p>
           )}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div className="flex gap-2 flex-wrap">
             {prevStatus[proposal.status] && (
               <button
                 onClick={() => move.mutate(prevStatus[proposal.status]!)}
                 disabled={move.isPending}
-                style={{
-                  padding: '4px 10px',
-                  background: 'none',
-                  border: '1px solid #191919',
-                  fontSize: 9,
-                  letterSpacing: '0.15em',
-                  textTransform: 'uppercase',
-                  color: '#302E2A',
-                  cursor: 'pointer',
-                  opacity: move.isPending ? 0.4 : 1,
-                  transition: 'all 150ms',
-                }}
-                onMouseEnter={(e) => {
-                  const el = e.currentTarget;
-                  el.style.borderColor = '#302E2A';
-                  el.style.color = '#6A6458';
-                }}
-                onMouseLeave={(e) => {
-                  const el = e.currentTarget;
-                  el.style.borderColor = '#191919';
-                  el.style.color = '#302E2A';
-                }}
+                className="py-1 px-2.5 bg-transparent border border-gray-800 text-gray-500 hover:border-gray-500 hover:text-gray-300 text-[9px] tracking-[0.15em] uppercase cursor-pointer transition-all duration-150 disabled:opacity-40"
               >
                 ← {LANE_LABEL[prevStatus[proposal.status]!]}
               </button>
@@ -158,24 +93,7 @@ function RoadmapCard({
               <button
                 onClick={() => move.mutate(nextStatus[proposal.status]!)}
                 disabled={move.isPending}
-                style={{
-                  padding: '4px 10px',
-                  background: 'none',
-                  border: `1px solid ${LANE_COLOR[nextStatus[proposal.status]!]}40`,
-                  fontSize: 9,
-                  letterSpacing: '0.15em',
-                  textTransform: 'uppercase',
-                  color: LANE_COLOR[nextStatus[proposal.status]!],
-                  cursor: 'pointer',
-                  opacity: move.isPending ? 0.4 : 1,
-                  transition: 'all 150ms',
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.opacity = '0.7';
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.opacity = move.isPending ? '0.4' : '1';
-                }}
+                className={`py-1 px-2.5 bg-transparent border text-[9px] tracking-[0.15em] uppercase cursor-pointer transition-opacity duration-150 disabled:opacity-40 hover:opacity-70 ${LANE_CLASS[nextStatus[proposal.status]!]}`}
               >
                 {LANE_LABEL[nextStatus[proposal.status]!]} →
               </button>
@@ -200,54 +118,30 @@ function KanbanLane({
   owner: string;
   repo: string;
 }) {
+  const borderColor =
+    status === 'open'
+      ? 'border-gray-400/20'
+      : status === 'planned'
+        ? 'border-emerald-400/20'
+        : 'border-sky-400/20';
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 0 }}>
-      {/* Lane header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          marginBottom: 10,
-          paddingBottom: 10,
-          borderBottom: `1px solid ${LANE_COLOR[status]}30`,
-        }}
-      >
+    <div className="flex flex-col gap-0 min-w-0">
+      <div className={`flex items-center gap-2 mb-2.5 pb-2.5 border-b ${borderColor}`}>
         <span
-          style={{
-            fontSize: 9,
-            letterSpacing: '0.25em',
-            textTransform: 'uppercase',
-            color: LANE_COLOR[status],
-            fontWeight: 600,
-          }}
+          className={`text-[9px] tracking-[0.25em] uppercase font-semibold ${LANE_CLASS[status].split(' ')[0]}`}
         >
           {LANE_LABEL[status]}
         </span>
-        <span
-          style={{
-            fontSize: 10,
-            color: '#201E1A',
-            letterSpacing: '0.05em',
-          }}
-        >
-          {proposals.length}
-        </span>
+        <span className="text-[10px] text-gray-500 tracking-[0.05em]">{proposals.length}</span>
       </div>
 
-      {/* Cards */}
       {proposals.length === 0 ? (
-        <div
-          style={{
-            padding: '16px',
-            border: '1px dashed #141414',
-            textAlign: 'center',
-          }}
-        >
-          <span style={{ fontSize: 10, color: '#191919', letterSpacing: '0.08em' }}>empty</span>
+        <div className="p-4 border border-dashed border-gray-800 text-center">
+          <span className="text-[10px] text-gray-600 tracking-[0.08em]">empty</span>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div className="flex flex-col gap-0.5">
           {proposals.map((p) => (
             <RoadmapCard key={p.id} proposal={p} owner={owner} repo={repo} />
           ))}
@@ -257,7 +151,7 @@ function KanbanLane({
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ─── Main page ──────────────────────────────────────────────────────────────────
 
 export default function RoadmapPage() {
   const qc = useQueryClient();
@@ -284,51 +178,24 @@ export default function RoadmapPage() {
     proposals.filter((p) => p.status === status).sort((a, b) => b.vote_count - a.vote_count);
 
   if (reposLoading) {
-    return <p style={{ fontSize: 12, color: '#302E2A', letterSpacing: '0.08em' }}>Loading…</p>;
+    return <p className="text-xs text-gray-500 tracking-[0.08em]">Loading…</p>;
   }
 
   return (
     <div className="animate-slide-up">
       {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-          marginBottom: 24,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-          <span
-            style={{
-              fontSize: 10,
-              letterSpacing: '0.25em',
-              textTransform: 'uppercase',
-              color: '#00E87A',
-            }}
-          >
-            Roadmap
-          </span>
+      <div className="flex items-baseline justify-between mb-6">
+        <div className="flex items-baseline gap-3">
+          <span className="text-[10px] tracking-[0.25em] uppercase text-emerald-400">Roadmap</span>
           {proposals.length > 0 && (
-            <span style={{ fontSize: 10, color: '#302E2A', letterSpacing: '0.05em' }}>
+            <span className="text-[10px] text-gray-500 tracking-[0.05em]">
               {proposals.length} proposals
             </span>
           )}
         </div>
         <button
           onClick={() => qc.invalidateQueries({ queryKey: ['roadmap', owner, repo] })}
-          style={{
-            fontSize: 10,
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            color: '#302E2A',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            transition: 'color 150ms',
-          }}
-          onMouseEnter={(e) => ((e.target as HTMLElement).style.color = '#6A6458')}
-          onMouseLeave={(e) => ((e.target as HTMLElement).style.color = '#302E2A')}
+          className="text-[10px] tracking-[0.12em] uppercase text-gray-500 hover:text-gray-300 bg-transparent border-none cursor-pointer transition-colors duration-150"
         >
           Refresh
         </button>
@@ -336,62 +203,27 @@ export default function RoadmapPage() {
 
       {/* Repo selector */}
       {repos.length === 0 ? (
-        <div
-          style={{
-            padding: '32px 0',
-            borderTop: '1px solid #191919',
-            borderBottom: '1px solid #191919',
-          }}
-        >
-          <p
-            style={{
-              fontSize: 12,
-              color: '#302E2A',
-              letterSpacing: '0.06em',
-              textAlign: 'center',
-            }}
-          >
+        <div className="py-8 border-t border-b border-gray-800">
+          <p className="text-xs text-gray-500 tracking-[0.06em] text-center">
             no repos configured
           </p>
-          <p
-            style={{
-              marginTop: 8,
-              fontSize: 11,
-              color: '#201E1A',
-              letterSpacing: '0.06em',
-              textAlign: 'center',
-            }}
-          >
+          <p className="mt-2 text-[11px] text-gray-500 tracking-[0.06em] text-center">
             add a repo in Config to start tracking proposals
           </p>
         </div>
       ) : (
         <>
           {repos.length > 1 && (
-            <div
-              style={{
-                display: 'flex',
-                gap: 0,
-                marginBottom: 24,
-                borderBottom: '1px solid #141414',
-              }}
-            >
+            <div className="flex gap-0 mb-6 border-b border-gray-800">
               {repos.map((r: RepoConfig, i: number) => (
                 <button
                   key={r.id}
                   onClick={() => setSelectedIdx(i)}
-                  style={{
-                    padding: '8px 16px',
-                    background: 'none',
-                    border: 'none',
-                    borderBottom: i === selectedIdx ? '1px solid #00E87A' : '1px solid transparent',
-                    fontSize: 11,
-                    letterSpacing: '0.05em',
-                    color: i === selectedIdx ? '#C4C0AC' : '#302E2A',
-                    cursor: 'pointer',
-                    marginBottom: -1,
-                    transition: 'color 150ms',
-                  }}
+                  className={`py-2 px-4 bg-transparent border-none border-b-2 -mb-px text-[11px] tracking-[0.05em] cursor-pointer transition-colors duration-150 ${
+                    i === selectedIdx
+                      ? 'border-emerald-400 text-gray-100'
+                      : 'border-transparent text-gray-500'
+                  }`}
                 >
                   {r.owner}/{r.repo}
                 </button>
@@ -400,33 +232,14 @@ export default function RoadmapPage() {
           )}
 
           {proposalsLoading ? (
-            <p style={{ fontSize: 12, color: '#302E2A', letterSpacing: '0.08em' }}>Loading…</p>
+            <p className="text-xs text-gray-500 tracking-[0.08em]">Loading…</p>
           ) : (
             <div>
               {/* Board link */}
               {selectedRepo?.is_board_public && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    marginBottom: 20,
-                    padding: '10px 14px',
-                    background: '#080E0B',
-                    border: '1px solid #001A0D',
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 4,
-                      height: 4,
-                      borderRadius: '50%',
-                      background: '#00E87A',
-                      display: 'inline-block',
-                      flexShrink: 0,
-                    }}
-                  />
-                  <span style={{ fontSize: 11, color: '#302E2A', letterSpacing: '0.04em', flex: 1 }}>
+                <div className="flex items-center gap-2.5 mb-5 py-2.5 px-3.5 bg-emerald-400/5 border border-emerald-400/10">
+                  <span className="w-1 h-1 rounded-full bg-emerald-400 flex-shrink-0 inline-block" />
+                  <span className="text-[11px] text-gray-500 tracking-[0.04em] flex-1">
                     Community board is public
                   </span>
                   <button
@@ -434,19 +247,7 @@ export default function RoadmapPage() {
                       const url = `${window.location.origin}/board/${owner}/${repo}`;
                       navigator.clipboard.writeText(url);
                     }}
-                    style={{
-                      fontSize: 10,
-                      letterSpacing: '0.12em',
-                      textTransform: 'uppercase',
-                      color: '#00E87A',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      opacity: 0.7,
-                      transition: 'opacity 150ms',
-                    }}
-                    onMouseEnter={(e) => ((e.target as HTMLElement).style.opacity = '1')}
-                    onMouseLeave={(e) => ((e.target as HTMLElement).style.opacity = '0.7')}
+                    className="text-[10px] tracking-[0.12em] uppercase text-emerald-400 bg-transparent border-none cursor-pointer opacity-70 transition-opacity duration-150 hover:opacity-100"
                   >
                     Copy link
                   </button>
@@ -454,17 +255,7 @@ export default function RoadmapPage() {
                     href={`/board/${owner}/${repo}`}
                     target="_blank"
                     rel="noreferrer"
-                    style={{
-                      fontSize: 10,
-                      letterSpacing: '0.12em',
-                      textTransform: 'uppercase',
-                      color: '#00E87A',
-                      textDecoration: 'none',
-                      opacity: 0.7,
-                      transition: 'opacity 150ms',
-                    }}
-                    onMouseEnter={(e) => ((e.target as HTMLElement).style.opacity = '1')}
-                    onMouseLeave={(e) => ((e.target as HTMLElement).style.opacity = '0.7')}
+                    className="text-[10px] tracking-[0.12em] uppercase text-emerald-400 no-underline opacity-70 transition-opacity duration-150 hover:opacity-100"
                   >
                     View →
                   </a>
@@ -472,14 +263,7 @@ export default function RoadmapPage() {
               )}
 
               {/* Kanban */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
-                  gap: 16,
-                  alignItems: 'start',
-                }}
-              >
+              <div className="grid grid-cols-3 gap-4 items-start">
                 {LANE_ORDER.map((status) => (
                   <KanbanLane
                     key={status}

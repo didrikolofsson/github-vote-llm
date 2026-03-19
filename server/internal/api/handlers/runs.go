@@ -1,4 +1,4 @@
-package handlers
+package api_handlers
 
 import (
 	"errors"
@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
+	api_services "github.com/didrikolofsson/github-vote-llm/internal/api/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -43,11 +43,11 @@ func toRunResponse(m *store.ExecutionModel) RunResponse {
 
 // RunsHandler handles HTTP requests for execution (run) endpoints.
 type RunsHandler struct {
-	svc *services.RunsService
+	svc *api_services.RunsService
 }
 
 // NewRunsHandler creates a new RunsHandler.
-func NewRunsHandler(svc *services.RunsService) *RunsHandler {
+func NewRunsHandler(svc *api_services.RunsService) *RunsHandler {
 	return &RunsHandler{svc: svc}
 }
 

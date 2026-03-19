@@ -4,42 +4,20 @@ import { useAuth } from '../lib/auth';
 const navLink = ({ isActive }: { isActive: boolean }) =>
   [
     'text-[11px] tracking-[0.12em] uppercase transition-colors duration-150',
-    isActive ? 'text-[#C4C0AC]' : 'text-[#403C34] hover:text-[#6A6458]',
+    isActive ? 'text-gray-100' : 'text-gray-400 hover:text-gray-300',
   ].join(' ');
 
 export default function Layout() {
   const { logout } = useAuth();
 
   return (
-    <div style={{ minHeight: '100vh', background: '#070707', color: '#C4C0AC' }}>
-      <header
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
-          background: '#070707',
-          borderBottom: '1px solid #191919',
-          height: 40,
-          display: 'flex',
-          alignItems: 'center',
-          paddingLeft: 24,
-          paddingRight: 24,
-          justifyContent: 'space-between',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
-          <span
-            style={{
-              color: '#00E87A',
-              fontSize: 11,
-              letterSpacing: '0.35em',
-              textTransform: 'uppercase',
-              fontWeight: 600,
-            }}
-          >
+    <div className="min-h-screen bg-gray-950 text-gray-100">
+      <header className="sticky top-0 z-10 bg-gray-950 border-b border-gray-800 h-10 flex items-center px-6 justify-between">
+        <div className="flex items-center gap-8">
+          <span className="text-emerald-400 text-[11px] tracking-[0.35em] uppercase font-semibold">
             vote-llm
           </span>
-          <nav style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+          <nav className="flex items-center gap-6">
             <NavLink to="/" end className={navLink}>
               Roadmap
             </NavLink>
@@ -53,23 +31,12 @@ export default function Layout() {
         </div>
         <button
           onClick={logout}
-          style={{
-            fontSize: 11,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            color: '#282420',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            transition: 'color 150ms',
-          }}
-          onMouseEnter={(e) => ((e.target as HTMLElement).style.color = '#403C34')}
-          onMouseLeave={(e) => ((e.target as HTMLElement).style.color = '#282420')}
+          className="text-[11px] tracking-[0.1em] uppercase text-gray-500 hover:text-gray-400 bg-transparent border-none cursor-pointer transition-colors duration-150"
         >
           Sign out
         </button>
       </header>
-      <main style={{ padding: '32px 24px', maxWidth: 1040, margin: '0 auto' }}>
+      <main className="py-8 px-6 max-w-[1040px] mx-auto">
         <Outlet />
       </main>
     </div>
