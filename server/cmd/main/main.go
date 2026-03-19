@@ -3,14 +3,11 @@ package main
 import (
 	"context"
 	"log"
-	"os"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api"
-	apihandlers "github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
-	api_services "github.com/didrikolofsson/github-vote-llm/internal/api/services"
+	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
-	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -28,7 +25,7 @@ func main() {
 		log.Fatalf("failed to load environment: %v", err)
 	}
 
-	appLog := logger.New()
+	appLog := logger.New().Named("main")
 	defer appLog.Sync()
 
 	ctx := context.Background()
@@ -42,25 +39,6 @@ func main() {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
 
-	router := gin.New()
-	router.SetTrustedProxies(nil)
-
-	st := store.NewPostgresStore(pool)
-
-	runsService := api_services.NewRunsService(st)
-	reposService := api_services.NewReposService(st)
-	runsHandler := apihandlers.NewRunsHandler(runsService)
-	reposHandler := apihandlers.NewReposHandler(reposService)
-	boardHandler := apihandlers.NewBoardHandler(st)
-
-	apiHandlers := apihandlers.New(boardHandler, runsHandler, reposHandler)
-
-	api.SetupPublicBoardRouter(router, apiHandlers)
-	api.SetupAPIRouter(router, appLog, apiHandlers, env)
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	router.Run(":" + port)
+	router := api.RestApiRouterFactory(logger.New().Named("api"), handlers.NewUsersHandlers()).Create()
+	router.Run(":" + env.PORT)
 }
