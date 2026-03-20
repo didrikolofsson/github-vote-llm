@@ -14,8 +14,8 @@ type RestApiRouter interface {
 }
 
 type RestApiRouterImpl struct {
-	logger       *logger.Logger
-	userHandlers handlers.UserHandlers
+	logger *logger.Logger
+	uh     handlers.UserHandlers
 }
 
 func NewRestApiRouter(
@@ -23,15 +23,17 @@ func NewRestApiRouter(
 	uh handlers.UserHandlers,
 ) RestApiRouter {
 	return &RestApiRouterImpl{
-		logger:       logger,
-		userHandlers: uh,
+		logger: logger,
+		uh:     uh,
 	}
 }
 
 func (r *RestApiRouterImpl) Create() *gin.Engine {
 	router := gin.New()
+
 	router.SetTrustedProxies(nil)
 	router.Use(middleware.AddRequestID)
+	router.Use(middleware.LogRequests(r.logger))
 
 	api := router.Group("/v1/")
 
@@ -41,10 +43,10 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 
 	// Users endpoints
 	users := api.Group("/users")
-	users.POST("/signup", r.userHandlers.Signup)
-	users.POST("/login", r.userHandlers.Login)
-	users.POST("/logout", r.userHandlers.Logout)
-	users.DELETE("/:id", r.userHandlers.DeleteUser)
+	users.POST("/signup", r.uh.Signup)
+	users.POST("/login", r.uh.Login)
+	users.POST("/logout", r.uh.Logout)
+	users.DELETE("/:id", r.uh.DeleteUser)
 
 	return router
 }

@@ -2,12 +2,11 @@ package services
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 
-	dtos "github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
-	"github.com/didrikolofsson/github-vote-llm/internal/api/repos"
+	"github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -20,11 +19,12 @@ type UserService interface {
 }
 
 type UserServiceImpl struct {
-	r repos.UserRepository
+	db *pgx.Conn
+	q  *store.Queries
 }
 
-func NewUserService(r repos.UserRepository) UserService {
-	return &UserServiceImpl{r: r}
+func NewUserService(db *pgx.Conn, q *store.Queries) UserService {
+	return &UserServiceImpl{db: db, q: q}
 }
 
 var ErrUserExists = errors.New("user already exists")
@@ -38,7 +38,7 @@ func (s *UserServiceImpl) Signup(ctx context.Context, params *store.CreateUserPa
 	}
 	params.Password = string(hashedPassword)
 
-	user, err := s.r.CreateUser(ctx, store.CreateUserParams{
+	user, err := s.q.CreateUser(ctx, store.CreateUserParams{
 		Email:    params.Email,
 		Password: string(hashedPassword),
 	})
@@ -67,15 +67,22 @@ func (s *UserServiceImpl) Logout(ctx context.Context, user *dtos.User) (*dtos.Us
 }
 
 func (s *UserServiceImpl) DeleteUser(ctx context.Context, userID int64) error {
-	user, err := s.r.GetUserByID(ctx, userID)
-	if err != nil && errors.Is(err, sql.ErrNoRows) {
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := s.q.WithTx(tx)
+	user, err := qtx.GetUserByID(ctx, userID)
+	if err != nil && errors.Is(err, pgx.ErrNoRows) {
 		return ErrUserNotFound
 	}
 	if err != nil {
 		return err
 	}
-	if err := s.r.DeleteUser(ctx, user.ID); err != nil {
+	if err := qtx.DeleteUser(ctx, user.ID); err != nil {
 		return err
 	}
-	return nil
+	return tx.Commit(ctx)
 }

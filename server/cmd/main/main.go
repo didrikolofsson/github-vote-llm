@@ -6,10 +6,10 @@ import (
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
-	"github.com/didrikolofsson/github-vote-llm/internal/api/repos"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
+	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
@@ -40,8 +40,8 @@ func main() {
 	apiLogger := logger.New().Named("api")
 	defer apiLogger.Sync()
 
-	userRepo := repos.NewUserRepository(conn)
-	userService := services.NewUserService(userRepo)
+	q := store.New(conn)
+	userService := services.NewUserService(conn, q)
 	userHandlers := handlers.NewUserHandlers(userService, apiLogger)
 
 	router := api.NewRestApiRouter(
