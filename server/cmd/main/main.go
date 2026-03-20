@@ -6,10 +6,12 @@ import (
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
+	"github.com/didrikolofsson/github-vote-llm/internal/api/repos"
+	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
 )
 
@@ -25,20 +27,27 @@ func main() {
 		log.Fatalf("failed to load environment: %v", err)
 	}
 
-	appLog := logger.New().Named("main")
-	defer appLog.Sync()
+	appLogger := logger.New().Named("main")
+	defer appLogger.Sync()
 
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, env.DATABASE_URL)
+	conn, err := pgx.Connect(ctx, env.DATABASE_URL)
 	if err != nil {
-		log.Fatalf("failed to create database pool: %v", err)
-	}
-	defer pool.Close()
-
-	if err := pool.Ping(ctx); err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
+	defer conn.Close(ctx)
 
-	router := api.RestApiRouterFactory(logger.New().Named("api"), handlers.NewUsersHandlers()).Create()
+	apiLogger := logger.New().Named("api")
+	defer apiLogger.Sync()
+
+	userRepo := repos.NewUserRepository(conn)
+	userService := services.NewUserService(userRepo)
+	userHandlers := handlers.NewUserHandlers(userService, apiLogger)
+
+	router := api.NewRestApiRouter(
+		apiLogger,
+		userHandlers,
+	).Create()
+
 	router.Run(":" + env.PORT)
 }

@@ -3,7 +3,8 @@ package api
 import (
 	"net/http"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
+	handlers "github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
+	"github.com/didrikolofsson/github-vote-llm/internal/api/middleware"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/gin-gonic/gin"
 )
@@ -12,21 +13,25 @@ type RestApiRouter interface {
 	Create() *gin.Engine
 }
 
-type restApiRouter struct {
-	logger        *logger.Logger
-	usersHandlers handlers.UsersHandlers
+type RestApiRouterImpl struct {
+	logger       *logger.Logger
+	userHandlers handlers.UserHandlers
 }
 
-func RestApiRouterFactory(logger *logger.Logger, usersHandlers handlers.UsersHandlers) RestApiRouter {
-	return &restApiRouter{
-		logger:        logger,
-		usersHandlers: usersHandlers,
+func NewRestApiRouter(
+	logger *logger.Logger,
+	uh handlers.UserHandlers,
+) RestApiRouter {
+	return &RestApiRouterImpl{
+		logger:       logger,
+		userHandlers: uh,
 	}
 }
 
-func (r *restApiRouter) Create() *gin.Engine {
+func (r *RestApiRouterImpl) Create() *gin.Engine {
 	router := gin.New()
 	router.SetTrustedProxies(nil)
+	router.Use(middleware.AddRequestID)
 
 	api := router.Group("/v1/")
 
@@ -36,9 +41,10 @@ func (r *restApiRouter) Create() *gin.Engine {
 
 	// Users endpoints
 	users := api.Group("/users")
-	users.POST("/signup", r.usersHandlers.Signup)
-	users.POST("/login", r.usersHandlers.Login)
-	users.POST("/logout", r.usersHandlers.Logout)
+	users.POST("/signup", r.userHandlers.Signup)
+	users.POST("/login", r.userHandlers.Login)
+	users.POST("/logout", r.userHandlers.Logout)
+	users.DELETE("/:id", r.userHandlers.DeleteUser)
 
 	return router
 }

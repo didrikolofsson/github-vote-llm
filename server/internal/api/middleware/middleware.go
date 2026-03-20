@@ -1,7 +1,8 @@
-package api_middleware
+package middleware
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // ValidateAPIKey returns a middleware that checks the X-Api-Key header against
@@ -19,4 +20,10 @@ func ValidateAPIKey(apiKey string) gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+func AddRequestID(c *gin.Context) {
+	requestID := uuid.New().String()
+	c.Set("request_id", requestID)
+	c.Next()
 }

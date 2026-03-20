@@ -68,3 +68,11 @@ type RepoConfig struct {
 	UpdatedAt           pgtype.Timestamptz
 	IsBoardPublic       bool
 }
+
+type User struct {
+	ID        int64
+	Email     string
+	Password  string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
