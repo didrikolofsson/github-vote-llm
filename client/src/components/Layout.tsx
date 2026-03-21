@@ -30,7 +30,7 @@ export default function Layout() {
           </nav>
         </div>
         <button
-          onClick={logout}
+          onClick={() => void logout()}
           className="text-[11px] tracking-[0.1em] uppercase text-gray-500 hover:text-gray-400 bg-transparent border-none cursor-pointer transition-colors duration-150"
         >
           Sign out

@@ -3,47 +3,158 @@ import {
   useContext,
   useState,
   useCallback,
+  useEffect,
   type ReactNode,
 } from 'react';
-import { client } from '../client/client.gen';
+import {
+  setAccessToken,
+  setOnRefresh,
+  authorize,
+  exchangeToken,
+  refreshToken,
+  revokeToken,
+  signup as apiSignup,
+  ApiError,
+} from './api';
+import { generateCodeVerifier, generateCodeChallenge } from './pkce';
 
-const API_KEY_KEY = 'github-vote-llm-api-key';
-
-function configureClient(apiKey: string): void {
-  client.setConfig({
-    baseUrl: window.location.origin,
-    headers: { 'X-Api-Key': apiKey },
-  });
-}
+const REFRESH_TOKEN_KEY = 'github-vote-llm-refresh-token';
 
 interface AuthContextType {
-  apiKey: string | null;
-  login: (key: string) => void;
-  logout: () => void;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  error: string | null;
+  clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [apiKey, setApiKey] = useState<string | null>(() => {
-    const stored = localStorage.getItem(API_KEY_KEY);
-    if (stored) configureClient(stored);
-    return stored;
-  });
+  const [accessTokenState, setAccessTokenState] = useState<string | null>(null);
+  const [refreshTokenState, setRefreshTokenState] = useState<string | null>(() =>
+    sessionStorage.getItem(REFRESH_TOKEN_KEY),
+  );
+  const [isLoading, setIsLoading] = useState(!!sessionStorage.getItem(REFRESH_TOKEN_KEY));
+  const [error, setError] = useState<string | null>(null);
 
-  const login = useCallback((key: string) => {
-    localStorage.setItem(API_KEY_KEY, key);
-    configureClient(key);
-    setApiKey(key);
+  const doRefresh = useCallback(async (): Promise<string | null> => {
+    const stored = sessionStorage.getItem(REFRESH_TOKEN_KEY);
+    if (!stored) return null;
+    try {
+      const res = await refreshToken(stored);
+      setAccessToken(res.access_token);
+      setAccessTokenState(res.access_token);
+      return res.access_token;
+    } catch {
+      sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+      setRefreshTokenState(null);
+      setAccessTokenState(null);
+      setAccessToken(null);
+      return null;
+    }
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem(API_KEY_KEY);
-    setApiKey(null);
+  useEffect(() => {
+    setOnRefresh(doRefresh);
+    return () => setOnRefresh(null);
+  }, [doRefresh]);
+
+  useEffect(() => {
+    if (refreshTokenState && !accessTokenState) {
+      doRefresh().finally(() => setIsLoading(false));
+    } else {
+      setIsLoading(false);
+    }
+  }, [refreshTokenState, accessTokenState, doRefresh]);
+
+  const login = useCallback(async (email: string, password: string) => {
+    setError(null);
+    try {
+      const verifier = await generateCodeVerifier();
+      const challenge = await generateCodeChallenge(verifier);
+      const redirectUri = window.location.origin;
+
+      const { code } = await authorize({
+        email,
+        password,
+        code_challenge: challenge,
+        redirect_uri: redirectUri,
+      });
+
+      const tokens = await exchangeToken({
+        grant_type: 'authorization_code',
+        code,
+        code_verifier: verifier,
+        redirect_uri: redirectUri,
+      });
+
+      if (!tokens.access_token) throw new Error('No access token received');
+      if (!tokens.refresh_token) throw new Error('No refresh token received');
+
+      setAccessToken(tokens.access_token);
+      setAccessTokenState(tokens.access_token);
+      sessionStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
+      setRefreshTokenState(tokens.refresh_token);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setError('Invalid email or password');
+      } else {
+        setError(err instanceof Error ? err.message : 'Login failed');
+      }
+      throw err;
+    }
   }, []);
+
+  const signup = useCallback(async (email: string, password: string) => {
+    setError(null);
+    try {
+      await apiSignup({ email, password });
+      await login(email, password);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 400) {
+        const msg = typeof err.body === 'object' && err.body !== null && 'error' in err.body
+          ? String((err.body as { error: string }).error)
+          : 'Signup failed';
+        setError(msg);
+      } else {
+        setError(err instanceof Error ? err.message : 'Signup failed');
+      }
+      throw err;
+    }
+  }, [login]);
+
+  const logout = useCallback(async () => {
+    const stored = sessionStorage.getItem(REFRESH_TOKEN_KEY);
+    if (stored) {
+      try {
+        await revokeToken(stored);
+      } catch {
+        // Ignore revoke errors
+      }
+      sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+    }
+    setRefreshTokenState(null);
+    setAccessTokenState(null);
+    setAccessToken(null);
+  }, []);
+
+  const isAuthenticated = !!accessTokenState;
 
   return (
-    <AuthContext.Provider value={{ apiKey, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        isAuthenticated,
+        isLoading,
+        login,
+        signup,
+        logout,
+        error,
+        clearError: () => setError(null),
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

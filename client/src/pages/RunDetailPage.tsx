@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getRun, cancelRun, retryRun } from '../client/sdk.gen';
+import { getRun, cancelRun, retryRun } from '@/lib/api';
 import StatusBadge from '../components/StatusBadge';
 
 function fmt(iso: string) {
@@ -33,7 +33,7 @@ export default function RunDetailPage() {
 
   const { data: run, isLoading, error } = useQuery({
     queryKey: ['runs', runId],
-    queryFn: () => getRun({ path: { id: runId } }).then((r) => r.data),
+    queryFn: () => getRun(runId),
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === 'pending' || status === 'in_progress' ? 5_000 : false;
@@ -41,12 +41,12 @@ export default function RunDetailPage() {
   });
 
   const cancel = useMutation({
-    mutationFn: () => cancelRun({ path: { id: runId } }),
+    mutationFn: () => cancelRun(runId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['runs', runId] }),
   });
 
   const retry = useMutation({
-    mutationFn: () => retryRun({ path: { id: runId } }),
+    mutationFn: () => retryRun(runId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['runs', runId] }),
   });
 

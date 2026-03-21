@@ -7,8 +7,9 @@ import {
   voteProposal,
   listBoardComments,
   createBoardComment,
-} from '../client/sdk.gen';
-import type { Proposal, ProposalComment } from '../client/types.gen';
+  type Proposal,
+  type ProposalComment,
+} from '@/lib/api';
 import {
   Dialog,
   DialogContent,
@@ -58,15 +59,14 @@ function CommentThread({
 
   const { data: comments = [], isLoading } = useQuery({
     queryKey: ['board-comments', owner, repo, proposalId],
-    queryFn: () =>
-      listBoardComments({ path: { owner, repo, id: proposalId } }).then((r) => r.data ?? []),
+    queryFn: () => listBoardComments(owner, repo, proposalId),
   });
 
   const post = useMutation({
     mutationFn: () =>
-      createBoardComment({
-        path: { owner, repo, id: proposalId },
-        body: { body: body.trim(), author_name: author.trim() || undefined },
+      createBoardComment(owner, repo, proposalId, {
+        body: body.trim(),
+        author_name: author.trim() || undefined,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['board-comments', owner, repo, proposalId] });
@@ -245,9 +245,9 @@ function NewProposalModal({
 
   const create = useMutation({
     mutationFn: () =>
-      createBoardProposal({
-        path: { owner, repo },
-        body: { title: title.trim(), description: description.trim() || undefined },
+      createBoardProposal(owner, repo, {
+        title: title.trim(),
+        description: description.trim() || undefined,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['board-proposals', owner, repo] });
@@ -331,21 +331,19 @@ export default function BoardPage() {
     error,
   } = useQuery({
     queryKey: ['board-proposals', owner, repo],
-    queryFn: () =>
-      listBoardProposals({ path: { owner: owner!, repo: repo! } }).then((r) => r.data ?? []),
+    queryFn: () => listBoardProposals(owner!, repo!),
     enabled: !!(owner && repo),
     refetchInterval: 30_000,
   });
 
   const vote = useMutation({
-    mutationFn: (id: number) =>
-      voteProposal({ path: { owner: owner!, repo: repo!, id } }),
-    onSuccess: (res) => {
-      if (!res.data) return;
+    mutationFn: (id: number) => voteProposal(owner!, repo!, id),
+    onSuccess: (updated) => {
+      if (!updated) return;
       qc.setQueryData(
         ['board-proposals', owner, repo],
         (old: Proposal[] = []) =>
-          old.map((p) => (p.id === res.data!.id ? res.data! : p)),
+          old.map((p) => (p.id === updated.id ? updated : p)),
       );
     },
   });

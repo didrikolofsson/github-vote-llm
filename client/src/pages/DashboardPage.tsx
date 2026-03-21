@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { listRuns, cancelRun, retryRun } from '../client/sdk.gen';
-import type { Run } from '../client/types.gen';
+import { listRuns, cancelRun, retryRun, type Run } from '@/lib/api';
 import StatusBadge from '../components/StatusBadge';
 
 function relativeTime(iso: string): string {
@@ -23,17 +22,17 @@ export default function DashboardPage() {
 
   const { data: runs, isLoading, error } = useQuery({
     queryKey: ['runs'],
-    queryFn: () => listRuns().then((r) => r.data ?? []),
+    queryFn: () => listRuns(),
     refetchInterval: 15_000,
   });
 
   const cancel = useMutation({
-    mutationFn: (id: number) => cancelRun({ path: { id } }),
+    mutationFn: (id: number) => cancelRun(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['runs'] }),
   });
 
   const retry = useMutation({
-    mutationFn: (id: number) => retryRun({ path: { id } }),
+    mutationFn: (id: number) => retryRun(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['runs'] }),
   });
 

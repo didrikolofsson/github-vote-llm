@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { listRepos, listRoadmapItems, updateProposalStatus } from '../client/sdk.gen';
-import type { Proposal, RepoConfig } from '../client/types.gen';
+import {
+  listRepos,
+  listRoadmapItems,
+  updateProposalStatus,
+  type Proposal,
+  type RepoConfig,
+} from '@/lib/api';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -33,7 +38,7 @@ function RoadmapCard({
 
   const move = useMutation({
     mutationFn: (status: Proposal['status']) =>
-      updateProposalStatus({ path: { owner, repo, id: proposal.id }, body: { status } }),
+      updateProposalStatus(owner, repo, proposal.id, { status }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['roadmap', owner, repo] });
     },
@@ -159,7 +164,7 @@ export default function RoadmapPage() {
 
   const { data: repos = [], isLoading: reposLoading } = useQuery({
     queryKey: ['repos'],
-    queryFn: () => listRepos().then((r) => r.data ?? []),
+    queryFn: () => listRepos(),
   });
 
   const selectedRepo: RepoConfig | undefined = repos[selectedIdx];
@@ -168,8 +173,7 @@ export default function RoadmapPage() {
 
   const { data: proposals = [], isLoading: proposalsLoading } = useQuery({
     queryKey: ['roadmap', owner, repo],
-    queryFn: () =>
-      listRoadmapItems({ path: { owner: owner!, repo: repo! } }).then((r) => r.data ?? []),
+    queryFn: () => listRoadmapItems(owner!, repo!),
     enabled: !!(owner && repo),
     refetchInterval: 30_000,
   });

@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { listRepos, updateRepoConfig, deleteRepoConfig } from '../client/sdk.gen';
-import type { RepoConfig, UpdateRepoConfigRequest } from '../client/types.gen';
+import {
+  listRepos,
+  updateRepoConfig,
+  deleteRepoConfig,
+  type RepoConfig,
+  type UpdateRepoConfigRequest,
+} from '@/lib/api';
 import {
   Dialog,
   DialogContent,
@@ -228,7 +233,7 @@ export default function ConfigPage() {
 
   const { data: repos, isLoading, error } = useQuery({
     queryKey: ['repos'],
-    queryFn: () => listRepos().then((r) => r.data ?? []),
+    queryFn: () => listRepos(),
   });
 
   if (isLoading) {
@@ -371,7 +376,7 @@ function ConfigCreateModal({ onClose }: { onClose: () => void }) {
 
   const create = useMutation({
     mutationFn: () =>
-      updateRepoConfig({ path: { owner: owner.trim(), repo: repo.trim() }, body: form }),
+      updateRepoConfig(owner.trim(), repo.trim(), form),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['repos'] });
       onClose();
@@ -428,7 +433,7 @@ function ConfigEditModal({ config, onClose }: { config: RepoConfig; onClose: () 
 
   const update = useMutation({
     mutationFn: () =>
-      updateRepoConfig({ path: { owner: config.owner, repo: config.repo }, body: form }),
+      updateRepoConfig(config.owner, config.repo, form),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['repos'] });
       onClose();
@@ -466,7 +471,7 @@ function ConfigDeleteModal({ config, onClose }: { config: RepoConfig; onClose: (
 
   const del = useMutation({
     mutationFn: () =>
-      deleteRepoConfig({ path: { owner: config.owner, repo: config.repo } }),
+      deleteRepoConfig(config.owner, config.repo),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['repos'] });
       onClose();

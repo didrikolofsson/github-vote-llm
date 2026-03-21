@@ -8,9 +8,17 @@ import ConfigPage from './pages/ConfigPage';
 import Layout from './components/Layout';
 
 export default function App() {
-  const { apiKey } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
 
-  if (!apiKey) {
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <p className="text-xs text-gray-500 tracking-[0.08em]">Loading…</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
     return (
       <BrowserRouter>
         <Routes>
