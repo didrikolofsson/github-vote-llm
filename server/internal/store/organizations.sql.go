@@ -40,6 +40,16 @@ func (q *Queries) DeleteOrganization(ctx context.Context, id int64) error {
 	return err
 }
 
+const deleteOrganizationByID = `-- name: DeleteOrganizationByID :exec
+DELETE FROM organizations
+WHERE id = $1
+`
+
+func (q *Queries) DeleteOrganizationByID(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteOrganizationByID, id)
+	return err
+}
+
 const getOrganizationByID = `-- name: GetOrganizationByID :one
 SELECT id,
     name,
@@ -51,6 +61,33 @@ WHERE id = $1
 
 func (q *Queries) GetOrganizationByID(ctx context.Context, id int64) (Organization, error) {
 	row := q.db.QueryRow(ctx, getOrganizationByID, id)
+	var i Organization
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateOrganizationByID = `-- name: UpdateOrganizationByID :one
+UPDATE organizations
+SET name = $2
+WHERE id = $1
+RETURNING id,
+    name,
+    created_at,
+    updated_at
+`
+
+type UpdateOrganizationByIDParams struct {
+	ID   int64
+	Name string
+}
+
+func (q *Queries) UpdateOrganizationByID(ctx context.Context, arg UpdateOrganizationByIDParams) (Organization, error) {
+	row := q.db.QueryRow(ctx, updateOrganizationByID, arg.ID, arg.Name)
 	var i Organization
 	err := row.Scan(
 		&i.ID,

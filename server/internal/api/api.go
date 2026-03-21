@@ -69,7 +69,8 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	organizations := api.Group("/organizations")
 	// organizations.Use(middleware.RequireAuth(r.env.JWT_SECRET))
 	organizations.POST("/", r.oh.CreateOrganization)
-	// organizations.GET("/:id", r.oh.GetOrganization)
+	organizations.GET("/:id", r.oh.GetOrganization)
+	organizations.PUT("/:id", r.oh.UpdateOrganization)
 	organizations.DELETE("/:id", r.oh.DeleteOrganization)
 
 	return router

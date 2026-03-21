@@ -10,9 +10,8 @@ type Organization struct {
 }
 
 type OrganizationMember struct {
-	UserID    int64     `json:"user_id"`
-	Role      string    `json:"role"`
-	CreatedAt time.Time `json:"created_at"`
+	UserID int64  `json:"user_id"`
+	Role   string `json:"role"`
 }
 
 type OrganizationWithMembers struct {

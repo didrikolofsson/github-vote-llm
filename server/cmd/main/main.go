@@ -46,7 +46,7 @@ func main() {
 	authService := services.NewAuthService(conn, q, env.JWT_SECRET)
 	authHandlers := handlers.NewAuthHandlers(authService, env.JWT_SECRET)
 	organizationService := services.NewOrganizationService(conn, q)
-	organizationHandlers := handlers.NewOrganizationHandlers(organizationService)
+	organizationHandlers := handlers.NewOrganizationHandlers(organizationService, apiLogger)
 
 	router := api.NewRestApiRouter(
 		env,

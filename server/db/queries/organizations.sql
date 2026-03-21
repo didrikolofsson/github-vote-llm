@@ -15,3 +15,14 @@ SELECT id,
     updated_at
 FROM organizations
 WHERE id = $1;
+-- name: UpdateOrganizationByID :one
+UPDATE organizations
+SET name = $2
+WHERE id = $1
+RETURNING id,
+    name,
+    created_at,
+    updated_at;
+-- name: DeleteOrganizationByID :exec
+DELETE FROM organizations
+WHERE id = $1;
