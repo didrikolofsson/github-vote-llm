@@ -13,9 +13,7 @@ import (
 )
 
 type UserHandlers interface {
-	Signup(c *gin.Context)
-	Login(c *gin.Context)
-	Logout(c *gin.Context)
+	SignupUser(c *gin.Context)
 	DeleteUser(c *gin.Context)
 }
 
@@ -31,7 +29,7 @@ func NewUserHandlers(s services.UserService, l *logger.Logger) UserHandlers {
 	}
 }
 
-func (h *UserHandlersImpl) Signup(c *gin.Context) {
+func (h *UserHandlersImpl) SignupUser(c *gin.Context) {
 	// Check request body
 	var params store.CreateUserParams
 	if err := c.ShouldBindJSON(&params); err != nil {
@@ -42,7 +40,7 @@ func (h *UserHandlersImpl) Signup(c *gin.Context) {
 
 	h.l.Infow("Signing up user", "email", params.Email, "request_id", request.GetRequestID(c))
 
-	user, err := h.s.Signup(c.Request.Context(), &params)
+	user, err := h.s.SignupUser(c.Request.Context(), &params)
 	if errors.Is(err, services.ErrUserExists) {
 		h.l.Warnw("User already exists", "email", params.Email, "request_id", request.GetRequestID(c))
 		c.JSON(http.StatusBadRequest, gin.H{"error": "User already exists"})
@@ -53,14 +51,6 @@ func (h *UserHandlersImpl) Signup(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, user)
-}
-
-func (h *UserHandlersImpl) Login(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "User logged in"})
-}
-
-func (h *UserHandlersImpl) Logout(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "User logged out"})
 }
 
 func (h *UserHandlersImpl) DeleteUser(c *gin.Context) {

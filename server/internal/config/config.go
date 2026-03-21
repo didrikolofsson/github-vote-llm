@@ -1,6 +1,8 @@
 // Hardcoded config values
 package config
 
+import "time"
+
 // DefaultWorkspaceDir is the fallback workspace directory when WORKSPACE_DIR is not set.
 const DefaultWorkspaceDir = "/tmp/vote-llm-workspaces"
 
@@ -17,4 +19,9 @@ const (
 	LabelInProgress     = "llm-in-progress"
 	LabelDone           = "llm-pr-created"
 	LabelFailed         = "llm-failed"
+
+	// Auth
+	AccessTokenTTL  = 15 * time.Minute
+	RefreshTokenTTL = 7 * 24 * time.Hour
+	AuthCodeTTL     = 5 * time.Minute
 )

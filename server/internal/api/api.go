@@ -1,10 +1,9 @@
 package api
 
 import (
-	"net/http"
-
 	handlers "github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/middleware"
+	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/gin-gonic/gin"
 )
@@ -14,17 +13,23 @@ type RestApiRouter interface {
 }
 
 type RestApiRouterImpl struct {
+	env    *config.Environment
 	logger *logger.Logger
 	uh     handlers.UserHandlers
+	ah     handlers.AuthHandlers
 }
 
 func NewRestApiRouter(
+	env *config.Environment,
 	logger *logger.Logger,
 	uh handlers.UserHandlers,
+	ah handlers.AuthHandlers,
 ) RestApiRouter {
 	return &RestApiRouterImpl{
+		env:    env,
 		logger: logger,
 		uh:     uh,
+		ah:     ah,
 	}
 }
 
@@ -37,15 +42,19 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 
 	api := router.Group("/v1/")
 
-	api.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-	})
+	// OAuth2 endpoints
+	auth := api.Group("/auth")
+	auth.POST("/authorize", r.ah.Authorize)
+	auth.POST("/token", r.ah.Token)
+	auth.POST("/revoke", r.ah.Revoke)
 
-	// Users endpoints
 	users := api.Group("/users")
-	users.POST("/signup", r.uh.Signup)
-	users.POST("/login", r.uh.Login)
-	users.POST("/logout", r.uh.Logout)
+
+	// Public user endpoints
+	users.POST("/signup", r.uh.SignupUser)
+
+	// Protected user endpoints
+	users.Use(middleware.RequireAuth(r.env.JWT_SECRET))
 	users.DELETE("/:id", r.uh.DeleteUser)
 
 	return router

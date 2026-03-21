@@ -8,6 +8,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AuthorizationCode struct {
+	ID            int64
+	Code          string
+	UserID        int64
+	CodeChallenge string
+	RedirectUri   string
+	Used          bool
+	ExpiresAt     pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamptz
+}
+
 type Execution struct {
 	ID          int64
 	Owner       string
@@ -49,6 +60,14 @@ type ProposalComment struct {
 	Body       string
 	AuthorName string
 	CreatedAt  pgtype.Timestamptz
+}
+
+type RefreshToken struct {
+	ID        int64
+	TokenHash string
+	UserID    int64
+	ExpiresAt pgtype.Timestamptz
+	CreatedAt pgtype.Timestamptz
 }
 
 type RepoConfig struct {

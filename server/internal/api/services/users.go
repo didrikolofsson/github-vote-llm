@@ -5,16 +5,14 @@ import (
 	"errors"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
+	"github.com/didrikolofsson/github-vote-llm/internal/helpers"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type UserService interface {
-	Signup(ctx context.Context, params *store.CreateUserParams) (*dtos.User, error)
-	Login(ctx context.Context, user *dtos.User) (*dtos.User, error)
-	Logout(ctx context.Context, user *dtos.User) (*dtos.User, error)
+	SignupUser(ctx context.Context, params *store.CreateUserParams) (*dtos.User, error)
 	DeleteUser(ctx context.Context, userID int64) error
 }
 
@@ -27,20 +25,20 @@ func NewUserService(db *pgx.Conn, q *store.Queries) UserService {
 	return &UserServiceImpl{db: db, q: q}
 }
 
-var ErrUserExists = errors.New("user already exists")
-var ErrUserNotFound = errors.New("user not found")
+var (
+	ErrUserExists   = errors.New("user already exists")
+	ErrUserNotFound = errors.New("user not found")
+)
 
-func (s *UserServiceImpl) Signup(ctx context.Context, params *store.CreateUserParams) (*dtos.User, error) {
-	// We need to encrypt the password before storing it in the database
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(params.Password), bcrypt.DefaultCost)
+func (s *UserServiceImpl) SignupUser(ctx context.Context, params *store.CreateUserParams) (*dtos.User, error) {
+	hashedPassword, err := helpers.HashPassword(params.Password)
 	if err != nil {
 		return nil, err
 	}
-	params.Password = string(hashedPassword)
 
 	user, err := s.q.CreateUser(ctx, store.CreateUserParams{
 		Email:    params.Email,
-		Password: string(hashedPassword),
+		Password: hashedPassword,
 	})
 
 	if err != nil {
@@ -56,14 +54,6 @@ func (s *UserServiceImpl) Signup(ctx context.Context, params *store.CreateUserPa
 		CreatedAt: user.CreatedAt.Time,
 		UpdatedAt: user.UpdatedAt.Time,
 	}, nil
-}
-
-func (s *UserServiceImpl) Login(ctx context.Context, user *dtos.User) (*dtos.User, error) {
-	return nil, nil
-}
-
-func (s *UserServiceImpl) Logout(ctx context.Context, user *dtos.User) (*dtos.User, error) {
-	return nil, nil
 }
 
 func (s *UserServiceImpl) DeleteUser(ctx context.Context, userID int64) error {

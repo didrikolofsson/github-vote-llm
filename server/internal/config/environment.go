@@ -16,6 +16,7 @@ type Environment struct {
 	PORT               string `env:"PORT" envDefault:"8080"`
 	ANTHROPIC_API_KEY  string `env:"ANTHROPIC_API_KEY,required"`
 	WORKSPACE_DIR      string `env:"WORKSPACE_DIR" envDefault:"/tmp/vote-llm-workspaces"`
+	JWT_SECRET         string `env:"JWT_SECRET,required"`
 }
 
 func LoadEnv() (*Environment, error) {
