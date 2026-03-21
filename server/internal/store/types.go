@@ -5,8 +5,53 @@
 package store
 
 import (
+	"database/sql/driver"
+	"fmt"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type OrganizationMemberRole string
+
+const (
+	OrganizationMemberRoleOwner  OrganizationMemberRole = "owner"
+	OrganizationMemberRoleMember OrganizationMemberRole = "member"
+)
+
+func (e *OrganizationMemberRole) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = OrganizationMemberRole(s)
+	case string:
+		*e = OrganizationMemberRole(s)
+	default:
+		return fmt.Errorf("unsupported scan type for OrganizationMemberRole: %T", src)
+	}
+	return nil
+}
+
+type NullOrganizationMemberRole struct {
+	OrganizationMemberRole OrganizationMemberRole
+	Valid                  bool // Valid is true if OrganizationMemberRole is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullOrganizationMemberRole) Scan(value interface{}) error {
+	if value == nil {
+		ns.OrganizationMemberRole, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.OrganizationMemberRole.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullOrganizationMemberRole) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.OrganizationMemberRole), nil
+}
 
 type AuthorizationCode struct {
 	ID            int64
@@ -40,6 +85,19 @@ type IssueVote struct {
 	VoteCount   int32
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
+}
+
+type Organization struct {
+	ID        int64
+	Name      string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+type OrganizationMember struct {
+	OrganizationID int64
+	UserID         int64
+	Role           OrganizationMemberRole
 }
 
 type Proposal struct {

@@ -1,6 +1,8 @@
 package api
 
 import (
+	"net/http"
+
 	handlers "github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/middleware"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
@@ -17,6 +19,7 @@ type RestApiRouterImpl struct {
 	logger *logger.Logger
 	uh     handlers.UserHandlers
 	ah     handlers.AuthHandlers
+	oh     handlers.OrganizationHandlers
 }
 
 func NewRestApiRouter(
@@ -24,12 +27,14 @@ func NewRestApiRouter(
 	logger *logger.Logger,
 	uh handlers.UserHandlers,
 	ah handlers.AuthHandlers,
+	oh handlers.OrganizationHandlers,
 ) RestApiRouter {
 	return &RestApiRouterImpl{
 		env:    env,
 		logger: logger,
 		uh:     uh,
 		ah:     ah,
+		oh:     oh,
 	}
 }
 
@@ -41,6 +46,9 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	router.Use(middleware.LogRequests(r.logger))
 
 	api := router.Group("/v1/")
+	api.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
 
 	// OAuth2 endpoints
 	auth := api.Group("/auth")
@@ -56,6 +64,13 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	// Protected user endpoints
 	users.Use(middleware.RequireAuth(r.env.JWT_SECRET))
 	users.DELETE("/:id", r.uh.DeleteUser)
+
+	// Organization endpoints
+	organizations := api.Group("/organizations")
+	// organizations.Use(middleware.RequireAuth(r.env.JWT_SECRET))
+	organizations.POST("/", r.oh.CreateOrganization)
+	// organizations.GET("/:id", r.oh.GetOrganization)
+	organizations.DELETE("/:id", r.oh.DeleteOrganization)
 
 	return router
 }

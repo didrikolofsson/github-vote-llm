@@ -45,12 +45,15 @@ func main() {
 	userHandlers := handlers.NewUserHandlers(userService, apiLogger)
 	authService := services.NewAuthService(conn, q, env.JWT_SECRET)
 	authHandlers := handlers.NewAuthHandlers(authService, env.JWT_SECRET)
+	organizationService := services.NewOrganizationService(conn, q)
+	organizationHandlers := handlers.NewOrganizationHandlers(organizationService)
 
 	router := api.NewRestApiRouter(
 		env,
 		apiLogger,
 		userHandlers,
 		authHandlers,
+		organizationHandlers,
 	).Create()
 
 	router.Run(":" + env.PORT)
