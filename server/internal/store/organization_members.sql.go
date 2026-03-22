@@ -58,6 +58,45 @@ func (q *Queries) GetOrganizationMembers(ctx context.Context, organizationID int
 	return items, nil
 }
 
+const getOrganizationMembersWithUser = `-- name: GetOrganizationMembersWithUser :many
+SELECT om.organization_id, om.user_id, om.role, u.email
+FROM organization_members om
+JOIN users u ON u.id = om.user_id
+WHERE om.organization_id = $1
+`
+
+type GetOrganizationMembersWithUserRow struct {
+	OrganizationID int64
+	UserID         int64
+	Role           OrganizationMemberRole
+	Email          string
+}
+
+func (q *Queries) GetOrganizationMembersWithUser(ctx context.Context, organizationID int64) ([]GetOrganizationMembersWithUserRow, error) {
+	rows, err := q.db.Query(ctx, getOrganizationMembersWithUser, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetOrganizationMembersWithUserRow
+	for rows.Next() {
+		var i GetOrganizationMembersWithUserRow
+		if err := rows.Scan(
+			&i.OrganizationID,
+			&i.UserID,
+			&i.Role,
+			&i.Email,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const removeOrganizationMember = `-- name: RemoveOrganizationMember :exec
 DELETE FROM organization_members
 WHERE organization_id = $1
@@ -72,4 +111,24 @@ type RemoveOrganizationMemberParams struct {
 func (q *Queries) RemoveOrganizationMember(ctx context.Context, arg RemoveOrganizationMemberParams) error {
 	_, err := q.db.Exec(ctx, removeOrganizationMember, arg.OrganizationID, arg.UserID)
 	return err
+}
+
+const updateOrganizationMemberRole = `-- name: UpdateOrganizationMemberRole :one
+UPDATE organization_members
+SET role = $3
+WHERE organization_id = $1 AND user_id = $2
+RETURNING organization_id, user_id, role
+`
+
+type UpdateOrganizationMemberRoleParams struct {
+	OrganizationID int64
+	UserID         int64
+	Role           OrganizationMemberRole
+}
+
+func (q *Queries) UpdateOrganizationMemberRole(ctx context.Context, arg UpdateOrganizationMemberRoleParams) (OrganizationMember, error) {
+	row := q.db.QueryRow(ctx, updateOrganizationMemberRole, arg.OrganizationID, arg.UserID, arg.Role)
+	var i OrganizationMember
+	err := row.Scan(&i.OrganizationID, &i.UserID, &i.Role)
+	return i, err
 }

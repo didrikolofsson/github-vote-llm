@@ -149,10 +149,12 @@ import {
   ProposalListSchema,
   ProposalCommentSchema,
   ProposalCommentListSchema,
+  OrganizationListResponseSchema,
+  OrganizationWithMembersSchema,
 } from './api-schemas';
 
-import type { Proposal } from './api-schemas';
-export type { Run, RepoConfig, UpdateRepoConfigRequest, Proposal, ProposalComment } from './api-schemas';
+import type { Proposal, Organization, RepoConfig, Run, ProposalComment } from './api-schemas';
+export type { Run, RepoConfig, UpdateRepoConfigRequest, Proposal, ProposalComment, Organization, OrganizationWithMembers } from './api-schemas';
 
 let onRefresh: (() => Promise<string | null>) | null = null;
 
@@ -176,6 +178,77 @@ async function requestWithRefresh<T>(
     }
     throw err;
   }
+}
+
+export async function listMyOrganizations(): Promise<Organization[]> {
+  const data = await requestWithRefresh('/organizations', {
+    schema: OrganizationListResponseSchema,
+  });
+  return data.organizations;
+}
+
+export async function createOrganization(name: string) {
+  return requestWithRefresh('/organizations', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+    schema: OrganizationWithMembersSchema,
+  });
+}
+
+// GitHub connection
+export async function getGitHubStatus(): Promise<{ connected: boolean; login?: string }> {
+  return requestWithRefresh('/auth/github/status', {}) as Promise<{ connected: boolean; login?: string }>;
+}
+
+export async function getGitHubAuthorizeUrl(): Promise<{ authorize_url: string }> {
+  return requestWithRefresh('/auth/github/authorize', {}) as Promise<{ authorize_url: string }>;
+}
+
+// Organization repositories
+export type OrgRepository = { owner: string; repo: string; created_at?: string };
+export async function listOrgRepositories(orgId: number): Promise<OrgRepository[]> {
+  const data = await requestWithRefresh(`/organizations/${orgId}/repositories`, {}) as { repositories: OrgRepository[] };
+  return data.repositories;
+}
+
+export async function listAvailableRepositories(orgId: number, page = 1): Promise<{ repositories: OrgRepository[]; has_more: boolean }> {
+  return requestWithRefresh(`/organizations/${orgId}/repositories/available?page=${page}`, {}) as Promise<{ repositories: OrgRepository[]; has_more: boolean }>;
+}
+
+export async function addRepository(orgId: number, owner: string, repo: string): Promise<void> {
+  await requestWithRefresh(`/organizations/${orgId}/repositories`, {
+    method: 'POST',
+    body: JSON.stringify({ owner, repo }),
+  });
+}
+
+export async function removeRepository(orgId: number, owner: string, repo: string): Promise<void> {
+  await requestWithRefresh(`/organizations/${orgId}/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, { method: 'DELETE' });
+}
+
+// Organization members
+export type OrgMember = { user_id: number; email: string; role: string };
+export async function listOrgMembers(orgId: number): Promise<OrgMember[]> {
+  const data = await requestWithRefresh(`/organizations/${orgId}/members`, {}) as { members: OrgMember[] };
+  return data.members;
+}
+
+export async function inviteMember(orgId: number, email: string): Promise<void> {
+  await requestWithRefresh(`/organizations/${orgId}/members`, {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function removeMember(orgId: number, userId: number): Promise<void> {
+  await requestWithRefresh(`/organizations/${orgId}/members/${userId}`, { method: 'DELETE' });
+}
+
+export async function updateMemberRole(orgId: number, userId: number, role: 'owner' | 'member'): Promise<void> {
+  await requestWithRefresh(`/organizations/${orgId}/members/${userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ role }),
+  });
 }
 
 export async function listRepos(): Promise<RepoConfig[]> {

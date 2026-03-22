@@ -27,7 +27,7 @@ func (q *Queries) DeleteRepoConfig(ctx context.Context, arg DeleteRepoConfigPara
 }
 
 const getRepoConfig = `-- name: GetRepoConfig :one
-SELECT id, owner, repo, label_approved, label_in_progress, label_done, label_failed, label_feature_request, vote_threshold, timeout_minutes, max_budget_usd, anthropic_api_key, created_at, updated_at, is_board_public FROM repo_config
+SELECT id, owner, repo, label_approved, label_in_progress, label_done, label_failed, label_feature_request, vote_threshold, timeout_minutes, max_budget_usd, anthropic_api_key, is_board_public, created_at, updated_at FROM repo_config
 WHERE owner = $1 AND repo = $2
 `
 
@@ -52,15 +52,15 @@ func (q *Queries) GetRepoConfig(ctx context.Context, arg GetRepoConfigParams) (R
 		&i.TimeoutMinutes,
 		&i.MaxBudgetUsd,
 		&i.AnthropicApiKey,
+		&i.IsBoardPublic,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.IsBoardPublic,
 	)
 	return i, err
 }
 
 const listRepoConfigs = `-- name: ListRepoConfigs :many
-SELECT id, owner, repo, label_approved, label_in_progress, label_done, label_failed, label_feature_request, vote_threshold, timeout_minutes, max_budget_usd, anthropic_api_key, created_at, updated_at, is_board_public FROM repo_config ORDER BY created_at DESC
+SELECT id, owner, repo, label_approved, label_in_progress, label_done, label_failed, label_feature_request, vote_threshold, timeout_minutes, max_budget_usd, anthropic_api_key, is_board_public, created_at, updated_at FROM repo_config ORDER BY created_at DESC
 `
 
 func (q *Queries) ListRepoConfigs(ctx context.Context) ([]RepoConfig, error) {
@@ -85,9 +85,9 @@ func (q *Queries) ListRepoConfigs(ctx context.Context) ([]RepoConfig, error) {
 			&i.TimeoutMinutes,
 			&i.MaxBudgetUsd,
 			&i.AnthropicApiKey,
+			&i.IsBoardPublic,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.IsBoardPublic,
 		); err != nil {
 			return nil, err
 		}
@@ -118,7 +118,7 @@ ON CONFLICT (owner, repo) DO UPDATE SET
     anthropic_api_key     = EXCLUDED.anthropic_api_key,
     is_board_public       = EXCLUDED.is_board_public,
     updated_at            = now()
-RETURNING id, owner, repo, label_approved, label_in_progress, label_done, label_failed, label_feature_request, vote_threshold, timeout_minutes, max_budget_usd, anthropic_api_key, created_at, updated_at, is_board_public
+RETURNING id, owner, repo, label_approved, label_in_progress, label_done, label_failed, label_feature_request, vote_threshold, timeout_minutes, max_budget_usd, anthropic_api_key, is_board_public, created_at, updated_at
 `
 
 type UpsertRepoConfigParams struct {
@@ -165,9 +165,9 @@ func (q *Queries) UpsertRepoConfig(ctx context.Context, arg UpsertRepoConfigPara
 		&i.TimeoutMinutes,
 		&i.MaxBudgetUsd,
 		&i.AnthropicApiKey,
+		&i.IsBoardPublic,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.IsBoardPublic,
 	)
 	return i, err
 }

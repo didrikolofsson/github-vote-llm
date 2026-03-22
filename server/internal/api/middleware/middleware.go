@@ -64,6 +64,16 @@ func RequireAuth(jwtSecret string) gin.HandlerFunc {
 	}
 }
 
+// GetUserID returns the user_id from context (set by RequireAuth). ok is false if not present.
+func GetUserID(c *gin.Context) (int64, bool) {
+	v, exists := c.Get("user_id")
+	if !exists {
+		return 0, false
+	}
+	id, ok := v.(int64)
+	return id, ok
+}
+
 func LogRequests(logger *logger.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()

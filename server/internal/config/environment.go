@@ -2,14 +2,15 @@ package config
 
 import (
 	"fmt"
-	"os"
 
 	envpkg "github.com/caarlos0/env/v11"
 )
 
 type Environment struct {
-	GITHUB_APP_ID      int64  `env:"GITHUB_APP_ID,required"`
-	GITHUB_PRIVATE_KEY string `env:"GITHUB_PRIVATE_KEY,required"`
+	GITHUB_CLIENT_ID   string `env:"GITHUB_CLIENT_ID,required"`
+	GITHUB_CLIENT_SECRET string `env:"GITHUB_CLIENT_SECRET,required"`
+	FRONTEND_URL       string `env:"FRONTEND_URL,required"` // e.g. http://localhost:5173
+	TOKEN_ENCRYPTION_KEY string `env:"TOKEN_ENCRYPTION_KEY,required"` // 32-byte hex for AES-256
 	API_KEY            string `env:"API_KEY,required"`
 	WEBHOOK_SECRET     string `env:"WEBHOOK_SECRET,required"`
 	DATABASE_URL       string `env:"DATABASE_URL,required"`
@@ -20,18 +21,6 @@ type Environment struct {
 }
 
 func LoadEnv() (*Environment, error) {
-	// Check if GITHUB_PRIVATE_KEY_PATH is set
-	// If set, read the file and set GITHUB_PRIVATE_KEY
-	// This is only needed for the local debugger to work
-	githubPrivateKeyPath := os.Getenv("GITHUB_PRIVATE_KEY_PATH")
-	if githubPrivateKeyPath != "" {
-		githubPrivateKey, err := os.ReadFile(githubPrivateKeyPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read github private key file: %w", err)
-		}
-		os.Setenv("GITHUB_PRIVATE_KEY", string(githubPrivateKey))
-	}
-
 	var env Environment
 	if err := envpkg.ParseWithOptions(&env, envpkg.Options{
 		// https://pkg.go.dev/github.com/caarlos0/env/v11#Options

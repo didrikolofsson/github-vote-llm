@@ -15,11 +15,14 @@ type RestApiRouter interface {
 }
 
 type RestApiRouterImpl struct {
-	env    *config.Environment
-	logger *logger.Logger
-	uh     handlers.UserHandlers
-	ah     handlers.AuthHandlers
-	oh     handlers.OrganizationHandlers
+	env            *config.Environment
+	logger         *logger.Logger
+	uh             handlers.UserHandlers
+	ah             handlers.AuthHandlers
+	oh             handlers.OrganizationHandlers
+	githubOAuth    handlers.GitHubOAuthHandlers
+	repoHandlers   handlers.RepositoryHandlers
+	memberHandlers handlers.MembersHandlers
 }
 
 func NewRestApiRouter(
@@ -28,13 +31,19 @@ func NewRestApiRouter(
 	uh handlers.UserHandlers,
 	ah handlers.AuthHandlers,
 	oh handlers.OrganizationHandlers,
+	githubOAuth handlers.GitHubOAuthHandlers,
+	repoHandlers handlers.RepositoryHandlers,
+	memberHandlers handlers.MembersHandlers,
 ) RestApiRouter {
 	return &RestApiRouterImpl{
-		env:    env,
-		logger: logger,
-		uh:     uh,
-		ah:     ah,
-		oh:     oh,
+		env:            env,
+		logger:         logger,
+		uh:             uh,
+		ah:             ah,
+		oh:             oh,
+		githubOAuth:    githubOAuth,
+		repoHandlers:   repoHandlers,
+		memberHandlers: memberHandlers,
 	}
 }
 
@@ -56,6 +65,12 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	auth.POST("/token", r.ah.Token)
 	auth.POST("/revoke", r.ah.Revoke)
 
+	// GitHub
+	github := api.Group("/github")
+	github.GET("/status", middleware.RequireAuth(r.env.JWT_SECRET), r.githubOAuth.Status)
+	github.GET("/authorize", middleware.RequireAuth(r.env.JWT_SECRET), r.githubOAuth.Authorize)
+	github.GET("/callback", r.githubOAuth.Callback)
+
 	users := api.Group("/users")
 
 	// Public user endpoints
@@ -67,11 +82,24 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 
 	// Organization endpoints
 	organizations := api.Group("/organizations")
-	// organizations.Use(middleware.RequireAuth(r.env.JWT_SECRET))
+	organizations.Use(middleware.RequireAuth(r.env.JWT_SECRET))
+	organizations.GET("", r.oh.ListMyOrganizations)
 	organizations.POST("/", r.oh.CreateOrganization)
 	organizations.GET("/:id", r.oh.GetOrganization)
 	organizations.PUT("/:id", r.oh.UpdateOrganization)
 	organizations.DELETE("/:id", r.oh.DeleteOrganization)
+
+	// Organization repositories
+	organizations.GET("/:id/repositories", r.repoHandlers.List)
+	organizations.GET("/:id/repositories/available", r.repoHandlers.ListAvailable)
+	organizations.POST("/:id/repositories", r.repoHandlers.Add)
+	organizations.DELETE("/:id/repositories/:owner/:repo", r.repoHandlers.Remove)
+
+	// Organization members
+	organizations.GET("/:id/members", r.memberHandlers.List)
+	organizations.POST("/:id/members", r.memberHandlers.Invite)
+	organizations.DELETE("/:id/members/:user_id", r.memberHandlers.Remove)
+	organizations.PATCH("/:id/members/:user_id", r.memberHandlers.UpdateRole)
 
 	return router
 }

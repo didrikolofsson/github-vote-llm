@@ -1,43 +1,59 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
-
-const navLink = ({ isActive }: { isActive: boolean }) =>
-  [
-    'text-[11px] tracking-[0.12em] uppercase transition-colors duration-150',
-    isActive ? 'text-gray-100' : 'text-gray-400 hover:text-gray-300',
-  ].join(' ');
+import { useQuery } from '@tanstack/react-query';
+import { listMyOrganizations } from '@/lib/api';
+import { LogOut } from 'lucide-react';
 
 export default function Layout() {
   const { logout } = useAuth();
+  const { data: orgs = [] } = useQuery({
+    queryKey: ['organizations'],
+    queryFn: () => listMyOrganizations(),
+  });
+  const org = orgs[0];
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
-      <header className="sticky top-0 z-10 bg-gray-950 border-b border-gray-800 h-10 flex items-center px-6 justify-between">
-        <div className="flex items-center gap-8">
-          <span className="text-emerald-400 text-[11px] tracking-[0.35em] uppercase font-semibold">
-            vote-llm
-          </span>
-          <nav className="flex items-center gap-6">
-            <NavLink to="/" end className={navLink}>
-              Roadmap
-            </NavLink>
-            <NavLink to="/runs" className={navLink}>
-              Runs
-            </NavLink>
-            <NavLink to="/config" className={navLink}>
-              Config
-            </NavLink>
-          </nav>
+    <div className="flex min-h-screen bg-background">
+      {/* Sidebar */}
+      <aside className="w-[240px] shrink-0 flex flex-col border-r border-border bg-sidebar">
+        {/* Organization */}
+        <div className="p-4 border-b border-border">
+          <div className="flex items-center gap-3 py-2 px-3">
+            <div className="size-9 rounded-[10px] bg-muted flex items-center justify-center shrink-0">
+              <span className="text-sm font-semibold text-foreground">
+                {org?.name?.charAt(0)?.toUpperCase() ?? 'v'}
+              </span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-foreground truncate">
+                {org?.name ?? 'vote-llm'}
+              </span>
+              <span className="block text-xs text-muted-foreground truncate">
+                Organization
+              </span>
+            </div>
+          </div>
         </div>
-        <button
-          onClick={() => void logout()}
-          className="text-[11px] tracking-[0.1em] uppercase text-gray-500 hover:text-gray-400 bg-transparent border-none cursor-pointer transition-colors duration-150"
-        >
-          Sign out
-        </button>
-      </header>
-      <main className="py-8 px-6 max-w-[1040px] mx-auto">
-        <Outlet />
+
+        {/* User / Sign out */}
+        <div className="flex-1" />
+        <div className="p-3 border-t border-border">
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-[8px] text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
+          >
+            <LogOut className="size-4 shrink-0 stroke-[1.5]" />
+            Sign out
+          </button>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <main className="flex-1 flex flex-col min-w-0 bg-background">
+        <div className="flex-1 p-8 max-w-[1280px] w-full mx-auto">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

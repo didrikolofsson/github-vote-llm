@@ -26,3 +26,12 @@ RETURNING id,
 -- name: DeleteOrganizationByID :exec
 DELETE FROM organizations
 WHERE id = $1;
+-- name: ListOrganizationsForUser :many
+SELECT o.id,
+    o.name,
+    o.created_at,
+    o.updated_at
+FROM organizations o
+JOIN organization_members om ON om.organization_id = o.id
+WHERE om.user_id = $1
+ORDER BY o.name;

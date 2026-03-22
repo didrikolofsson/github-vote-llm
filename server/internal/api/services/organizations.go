@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	ErrOrganizationNotFound   = errors.New("organization not found")
-	ErrOrganizationNameExists = errors.New("organization name already exists")
+	ErrOrganizationNotFound       = errors.New("organization not found")
+	ErrOrganizationNameExists     = errors.New("organization name already exists")
+	ErrUserAlreadyInOrganization = errors.New("you already belong to an organization")
 )
 
 type CreateOrganizationParams struct {
@@ -23,6 +24,7 @@ type CreateOrganizationParams struct {
 type OrganizationService interface {
 	CreateOrganization(ctx context.Context, params CreateOrganizationParams) (*dtos.OrganizationWithMembers, error)
 	GetOrganizationByID(ctx context.Context, organizationID int64) (*dtos.OrganizationWithMembers, error)
+	ListOrganizationsForUser(ctx context.Context, userID int64) ([]dtos.Organization, error)
 	UpdateOrganizationByID(ctx context.Context, organizationID int64, params *store.UpdateOrganizationByIDParams) (*dtos.Organization, error)
 	DeleteOrganization(ctx context.Context, organizationID int64) error
 }
@@ -36,7 +38,24 @@ func NewOrganizationService(db *pgx.Conn, q *store.Queries) OrganizationService 
 	return &OrganizationServiceImpl{db: db, q: q}
 }
 
+func (s *OrganizationServiceImpl) ListOrganizationsForUser(ctx context.Context, userID int64) ([]dtos.Organization, error) {
+	orgs, err := s.q.ListOrganizationsForUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]dtos.Organization, len(orgs))
+	for i, o := range orgs {
+		out[i] = storeOrgToDTO(o)
+	}
+	return out, nil
+}
+
 func (s *OrganizationServiceImpl) CreateOrganization(ctx context.Context, params CreateOrganizationParams) (*dtos.OrganizationWithMembers, error) {
+	existing, _ := s.q.ListOrganizationsForUser(ctx, params.OwnerID)
+	if len(existing) > 0 {
+		return nil, ErrUserAlreadyInOrganization
+	}
+
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, err
@@ -67,10 +86,10 @@ func (s *OrganizationServiceImpl) CreateOrganization(ctx context.Context, params
 		return nil, err
 	}
 
-	members, _ := s.q.GetOrganizationMembers(ctx, org.ID)
+	members, _ := s.q.GetOrganizationMembersWithUser(ctx, org.ID)
 	return &dtos.OrganizationWithMembers{
 		Organization: storeOrgToDTO(org),
-		Members:      storeMembersToDTOs(members),
+		Members:      storeMembersWithEmailToDTOs(members),
 	}, nil
 }
 
@@ -91,7 +110,7 @@ func (s *OrganizationServiceImpl) GetOrganizationByID(ctx context.Context, organ
 		return nil, err
 	}
 
-	members, err := qtx.GetOrganizationMembers(ctx, organizationID)
+	members, err := qtx.GetOrganizationMembersWithUser(ctx, organizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +121,7 @@ func (s *OrganizationServiceImpl) GetOrganizationByID(ctx context.Context, organ
 
 	return &dtos.OrganizationWithMembers{
 		Organization: storeOrgToDTO(org),
-		Members:      storeMembersToDTOs(members),
+		Members:      storeMembersWithEmailToDTOs(members),
 	}, nil
 }
 
@@ -149,6 +168,18 @@ func storeMembersToDTOs(members []store.OrganizationMember) []dtos.OrganizationM
 	for i, m := range members {
 		out[i] = dtos.OrganizationMember{
 			UserID: m.UserID,
+			Role:   string(m.Role),
+		}
+	}
+	return out
+}
+
+func storeMembersWithEmailToDTOs(members []store.GetOrganizationMembersWithUserRow) []dtos.OrganizationMember {
+	out := make([]dtos.OrganizationMember, len(members))
+	for i, m := range members {
+		out[i] = dtos.OrganizationMember{
+			UserID: m.UserID,
+			Email:  m.Email,
 			Role:   string(m.Role),
 		}
 	}

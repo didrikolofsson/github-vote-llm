@@ -64,6 +64,29 @@ export const ProposalSchema = z.object({
 
 export const ProposalListSchema = z.array(ProposalSchema);
 
+// ─── Organization ─────────────────────────────────────────────────────────────
+
+export const OrganizationSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const OrganizationMemberSchema = z.object({
+  user_id: z.number(),
+  email: z.string(),
+  role: z.string(),
+});
+
+export const OrganizationWithMembersSchema = OrganizationSchema.extend({
+  members: z.array(OrganizationMemberSchema),
+});
+
+export const OrganizationListResponseSchema = z.object({
+  organizations: z.array(OrganizationSchema),
+});
+
 // ─── ProposalComment ─────────────────────────────────────────────────────────
 
 export const ProposalCommentSchema = z.object({
@@ -82,3 +105,5 @@ export type RepoConfig = z.infer<typeof RepoConfigSchema>;
 export type UpdateRepoConfigRequest = z.infer<typeof UpdateRepoConfigRequestSchema>;
 export type Proposal = z.infer<typeof ProposalSchema>;
 export type ProposalComment = z.infer<typeof ProposalCommentSchema>;
+export type Organization = z.infer<typeof OrganizationSchema>;
+export type OrganizationWithMembers = z.infer<typeof OrganizationWithMembersSchema>;

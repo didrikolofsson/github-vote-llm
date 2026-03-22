@@ -15,8 +15,14 @@ CREATE TABLE organization_members (
 ALTER TABLE organizations
 ADD CONSTRAINT organization_name_unique UNIQUE (name);
 CREATE INDEX organization_members_organization_id_idx ON organization_members (organization_id);
+-- One organization per user (can relax later for multi-org)
+CREATE UNIQUE INDEX organization_members_user_id_idx ON organization_members (user_id);
 -- Trigger to ensure at least one owner per organization
-CREATE OR REPLACE FUNCTION enforce_organization_has_owner() RETURNS TRIGGER AS $$ BEGIN -- Case 1: Deleting an owner
+CREATE OR REPLACE FUNCTION enforce_organization_has_owner() RETURNS TRIGGER AS $$ BEGIN -- Skip check when the organization itself is being deleted (cascade)
+    IF NOT EXISTS (SELECT 1 FROM organizations WHERE id = OLD.organization_id) THEN
+        RETURN OLD;
+    END IF;
+-- Case 1: Deleting an owner
     IF TG_OP = 'DELETE'
     AND OLD.role = 'owner' THEN IF (
         SELECT COUNT(*)

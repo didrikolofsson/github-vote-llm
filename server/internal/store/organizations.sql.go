@@ -71,6 +71,42 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id int64) (Organizati
 	return i, err
 }
 
+const listOrganizationsForUser = `-- name: ListOrganizationsForUser :many
+SELECT o.id,
+    o.name,
+    o.created_at,
+    o.updated_at
+FROM organizations o
+JOIN organization_members om ON om.organization_id = o.id
+WHERE om.user_id = $1
+ORDER BY o.name
+`
+
+func (q *Queries) ListOrganizationsForUser(ctx context.Context, userID int64) ([]Organization, error) {
+	rows, err := q.db.Query(ctx, listOrganizationsForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Organization
+	for rows.Next() {
+		var i Organization
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateOrganizationByID = `-- name: UpdateOrganizationByID :one
 UPDATE organizations
 SET name = $2

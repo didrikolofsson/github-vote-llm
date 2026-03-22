@@ -47,6 +47,12 @@ func main() {
 	authHandlers := handlers.NewAuthHandlers(authService, env.JWT_SECRET)
 	organizationService := services.NewOrganizationService(conn, q)
 	organizationHandlers := handlers.NewOrganizationHandlers(organizationService, apiLogger)
+	githubOAuthService := services.NewGitHubOAuthService(env.GITHUB_CLIENT_ID, env.GITHUB_CLIENT_SECRET, q)
+	githubOAuthHandlers := handlers.NewGitHubOAuthHandlers(githubOAuthService, env)
+	reposService := services.NewRepositoriesService(q, githubOAuthService, env.TOKEN_ENCRYPTION_KEY)
+	reposHandlers := handlers.NewRepositoryHandlers(reposService, apiLogger)
+	membersService := services.NewMembersService(q)
+	membersHandlers := handlers.NewMembersHandlers(membersService, apiLogger)
 
 	router := api.NewRestApiRouter(
 		env,
@@ -54,6 +60,9 @@ func main() {
 		userHandlers,
 		authHandlers,
 		organizationHandlers,
+		githubOAuthHandlers,
+		reposHandlers,
+		membersHandlers,
 	).Create()
 
 	router.Run(":" + env.PORT)

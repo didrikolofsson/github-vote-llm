@@ -77,6 +77,17 @@ type Execution struct {
 	UpdatedAt   pgtype.Timestamptz
 }
 
+type GithubConnection struct {
+	UserID               int64
+	AccessTokenEncrypted string
+	RefreshToken         *string
+	TokenExpiresAt       pgtype.Timestamptz
+	GithubUserID         *int64
+	GithubLogin          *string
+	CreatedAt            pgtype.Timestamptz
+	UpdatedAt            pgtype.Timestamptz
+}
+
 type IssueVote struct {
 	ID          int64
 	Owner       string
@@ -98,6 +109,13 @@ type OrganizationMember struct {
 	OrganizationID int64
 	UserID         int64
 	Role           OrganizationMemberRole
+}
+
+type OrganizationRepository struct {
+	OrganizationID int64
+	Owner          string
+	Repo           string
+	CreatedAt      pgtype.Timestamptz
 }
 
 type Proposal struct {
@@ -141,9 +159,9 @@ type RepoConfig struct {
 	TimeoutMinutes      *int32
 	MaxBudgetUsd        pgtype.Numeric
 	AnthropicApiKey     *string
+	IsBoardPublic       bool
 	CreatedAt           pgtype.Timestamptz
 	UpdatedAt           pgtype.Timestamptz
-	IsBoardPublic       bool
 }
 
 type User struct {
