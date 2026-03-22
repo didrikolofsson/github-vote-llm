@@ -33,12 +33,7 @@ func (h *GitHubOAuthHandlersImpl) Authorize(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	// Build redirect_uri (this server's callback URL)
-	scheme := "https"
-	if c.GetHeader("X-Forwarded-Proto") == "http" || c.Request.URL.Scheme == "http" {
-		scheme = "http"
-	}
-	redirectURI := scheme + "://" + c.Request.Host + "/v1/auth/github/callback"
+	redirectURI := h.env.SERVER_URL + "/v1/github/callback"
 
 	// State: JWT with user_id so we know who to attach the token to
 	state, err := h.createStateJWT(userID)
@@ -66,11 +61,7 @@ func (h *GitHubOAuthHandlersImpl) Callback(c *gin.Context) {
 		return
 	}
 
-	scheme := "https"
-	if c.GetHeader("X-Forwarded-Proto") == "http" {
-		scheme = "http"
-	}
-	redirectURI := scheme + "://" + c.Request.Host + "/v1/auth/github/callback"
+	redirectURI := h.env.SERVER_URL + "/v1/github/callback"
 
 	tokens, err := h.oauthService.ExchangeCode(c.Request.Context(), code, redirectURI)
 	if err != nil {

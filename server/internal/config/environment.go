@@ -10,6 +10,7 @@ type Environment struct {
 	GITHUB_CLIENT_ID   string `env:"GITHUB_CLIENT_ID,required"`
 	GITHUB_CLIENT_SECRET string `env:"GITHUB_CLIENT_SECRET,required"`
 	FRONTEND_URL       string `env:"FRONTEND_URL,required"` // e.g. http://localhost:5173
+	SERVER_URL         string `env:"SERVER_URL,required"`   // e.g. http://localhost:8080
 	TOKEN_ENCRYPTION_KEY string `env:"TOKEN_ENCRYPTION_KEY,required"` // 32-byte hex for AES-256
 	API_KEY            string `env:"API_KEY,required"`
 	WEBHOOK_SECRET     string `env:"WEBHOOK_SECRET,required"`

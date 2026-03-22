@@ -197,11 +197,11 @@ export async function createOrganization(name: string) {
 
 // GitHub connection
 export async function getGitHubStatus(): Promise<{ connected: boolean; login?: string }> {
-  return requestWithRefresh('/auth/github/status', {}) as Promise<{ connected: boolean; login?: string }>;
+  return requestWithRefresh('/github/status', {}) as Promise<{ connected: boolean; login?: string }>;
 }
 
 export async function getGitHubAuthorizeUrl(): Promise<{ authorize_url: string }> {
-  return requestWithRefresh('/auth/github/authorize', {}) as Promise<{ authorize_url: string }>;
+  return requestWithRefresh('/github/authorize', {}) as Promise<{ authorize_url: string }>;
 }
 
 // Organization repositories
