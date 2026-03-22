@@ -11,7 +11,7 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
@@ -31,11 +31,11 @@ func main() {
 	defer appLogger.Sync()
 
 	ctx := context.Background()
-	conn, err := pgx.Connect(ctx, env.DATABASE_URL)
+	conn, err := pgxpool.New(ctx, env.DATABASE_URL)
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
-	defer conn.Close(ctx)
+	defer conn.Close()
 
 	apiLogger := logger.New().Named("api")
 	defer apiLogger.Sync()

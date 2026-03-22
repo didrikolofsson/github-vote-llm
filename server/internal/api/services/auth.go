@@ -16,6 +16,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var (
@@ -33,12 +34,12 @@ type AuthService interface {
 }
 
 type AuthServiceImpl struct {
-	db        *pgx.Conn
+	db        *pgxpool.Pool
 	q         *store.Queries
 	jwtSecret []byte
 }
 
-func NewAuthService(db *pgx.Conn, q *store.Queries, jwtSecret string) AuthService {
+func NewAuthService(db *pgxpool.Pool, q *store.Queries, jwtSecret string) AuthService {
 	return &AuthServiceImpl{db: db, q: q, jwtSecret: []byte(jwtSecret)}
 }
 

@@ -3,6 +3,7 @@ import { useAuth } from '../lib/auth';
 import { useQuery } from '@tanstack/react-query';
 import { listMyOrganizations } from '@/lib/api';
 import { LogOut } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export default function Layout() {
   const { logout } = useAuth();
@@ -38,14 +39,14 @@ export default function Layout() {
         {/* User / Sign out */}
         <div className="flex-1" />
         <div className="p-3 border-t border-border">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-3 text-muted-foreground hover:bg-sidebar-accent"
             onClick={() => void logout()}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-[8px] text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
           >
-            <LogOut className="size-4 shrink-0 stroke-[1.5]" />
+            <LogOut data-icon="inline-start" />
             Sign out
-          </button>
+          </Button>
         </div>
       </aside>
 

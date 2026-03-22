@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   listMyOrganizations,
@@ -13,10 +13,10 @@ import {
   removeMember,
   updateMemberRole,
   type OrgRepository,
-  type OrgMember,
 } from '@/lib/api';
 import { LayoutGrid, Github, Plus, Trash2, Users, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -24,14 +24,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useState } from 'react';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function OrganizationDashboardPage() {
   const queryClient = useQueryClient();
   const [addRepoOpen, setAddRepoOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
 
-  // Handle OAuth callback params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const connected = params.get('github_connected');
@@ -120,8 +121,10 @@ export default function OrganizationDashboardPage() {
 
   if (orgsLoading) {
     return (
-      <div className="flex items-center justify-center py-16">
-        <p className="text-sm text-muted-foreground">Loading…</p>
+      <div className="animate-slide-up flex flex-col gap-4">
+        <Skeleton className="h-10 w-48" />
+        <Skeleton className="h-[180px] w-full" />
+        <Skeleton className="h-[180px] w-full" />
       </div>
     );
   }
@@ -138,163 +141,168 @@ export default function OrganizationDashboardPage() {
       </div>
 
       {/* GitHub connection */}
-      <section className="mb-8 rounded-[16px] border border-border bg-card p-6">
-        <h3 className="text-[15px] font-semibold text-foreground mb-4 flex items-center gap-2">
-          <Github className="size-4" />
-          GitHub connection
-        </h3>
-        {ghLoading ? (
-          <p className="text-sm text-muted-foreground">Checking…</p>
-        ) : ghStatus?.connected ? (
-          <div className="flex items-center justify-between">
+      <Card className="mb-8">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-[15px] flex items-center gap-2">
+            <Github className="size-4" />
+            GitHub connection
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {ghLoading ? (
+            <Skeleton className="h-4 w-48" />
+          ) : ghStatus?.connected ? (
             <p className="text-sm text-muted-foreground">
               Connected as <span className="font-medium text-foreground">@{ghStatus.login}</span>
             </p>
-          </div>
-        ) : (
-          <div>
-            <p className="text-sm text-muted-foreground mb-3">
-              Connect your GitHub account to add repositories.
-            </p>
-            <Button
-              onClick={() => connectGitHub.mutate()}
-              disabled={connectGitHub.isPending}
-            >
-              <Github className="size-4 mr-2" />
-              Connect GitHub
-            </Button>
-          </div>
-        )}
-      </section>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <p className="text-sm text-muted-foreground">
+                Connect your GitHub account to add repositories.
+              </p>
+              <div>
+                <Button
+                  onClick={() => connectGitHub.mutate()}
+                  disabled={connectGitHub.isPending}
+                >
+                  <Github data-icon="inline-start" />
+                  Connect GitHub
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Repositories */}
-      <section className="rounded-[16px] border border-border bg-card p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-[15px] font-semibold text-foreground flex items-center gap-2">
-            <LayoutGrid className="size-4" />
-            Repositories
-          </h3>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setAddRepoOpen(true)}
-            disabled={!ghStatus?.connected}
-          >
-            <Plus className="size-4 mr-1" />
-            Add
-          </Button>
-        </div>
-
-        {reposLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : repos.length === 0 ? (
-          <div className="py-8 text-center rounded-lg bg-muted/50">
-            <p className="text-sm text-muted-foreground">
-              No repositories yet. Connect GitHub and add your first repo.
-            </p>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-[15px] flex items-center gap-2">
+              <LayoutGrid className="size-4" />
+              Repositories
+            </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAddRepoOpen(true)}
+              disabled={!ghStatus?.connected}
+            >
+              <Plus data-icon="inline-start" />
+              Add
+            </Button>
           </div>
-        ) : (
-          <ul className="space-y-2">
-            {repos.map((r) => (
-              <li
-                key={`${r.owner}/${r.repo}`}
-                className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/30"
-              >
-                <span className="text-sm font-mono">
-                  {r.owner}/{r.repo}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                  onClick={() => removeRepo.mutate({ owner: r.owner, repo: r.repo })}
-                  disabled={removeRepo.isPending}
+        </CardHeader>
+        <CardContent>
+          {reposLoading ? (
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+            </div>
+          ) : repos.length === 0 ? (
+            <div className="py-8 text-center rounded-lg bg-muted/50">
+              <p className="text-sm text-muted-foreground">
+                No repositories yet. Connect GitHub and add your first repo.
+              </p>
+            </div>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {repos.map((r) => (
+                <li
+                  key={`${r.owner}/${r.repo}`}
+                  className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/30"
                 >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {/* Members */}
-      <section className="mt-8 rounded-[16px] border border-border bg-card p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-[15px] font-semibold text-foreground flex items-center gap-2">
-            <Users className="size-4" />
-            Members
-          </h3>
-        </div>
-
-        <div className="flex gap-2 mb-4">
-          <input
-            type="email"
-            placeholder="Email to invite"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm"
-          />
-          <Button
-            size="sm"
-            onClick={() => inviteEmail && inviteMemberMutation.mutate(inviteEmail)}
-            disabled={!inviteEmail || inviteMemberMutation.isPending}
-          >
-            <Mail className="size-4 mr-1" />
-            Invite
-          </Button>
-        </div>
-
-        {membersLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : (
-          <ul className="space-y-2">
-            {members.map((m) => (
-              <li
-                key={m.user_id}
-                className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/30"
-              >
-                <div>
-                  <span className="text-sm text-foreground">{m.email}</span>
-                  <span className="ml-2 text-xs text-muted-foreground capitalize">({m.role})</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  {m.role === 'member' ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => updateRoleMutation.mutate({ userId: m.user_id, role: 'owner' })}
-                      disabled={updateRoleMutation.isPending}
-                    >
-                      Make owner
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => updateRoleMutation.mutate({ userId: m.user_id, role: 'member' })}
-                      disabled={updateRoleMutation.isPending}
-                    >
-                      Make member
-                    </Button>
-                  )}
+                  <span className="text-sm font-mono">
+                    {r.owner}/{r.repo}
+                  </span>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => removeMemberMutation.mutate(m.user_id)}
-                    disabled={removeMemberMutation.isPending}
+                    className="size-8 text-muted-foreground hover:text-destructive"
+                    onClick={() => removeRepo.mutate({ owner: r.owner, repo: r.repo })}
+                    disabled={removeRepo.isPending}
                   >
-                    <Trash2 className="size-3.5" />
+                    <Trash2 />
                   </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Members */}
+      <Card className="mt-8">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-[15px] flex items-center gap-2">
+            <Users className="size-4" />
+            Members
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2 mb-4">
+            <Input
+              type="email"
+              placeholder="Email to invite"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+            />
+            <Button
+              size="sm"
+              onClick={() => inviteEmail && inviteMemberMutation.mutate(inviteEmail)}
+              disabled={!inviteEmail || inviteMemberMutation.isPending}
+            >
+              <Mail data-icon="inline-start" />
+              Invite
+            </Button>
+          </div>
+          {membersLoading ? (
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+            </div>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {members.map((m) => (
+                <li
+                  key={m.user_id}
+                  className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/30"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-foreground">{m.email}</span>
+                    <Badge variant="secondary">{m.role}</Badge>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() =>
+                        updateRoleMutation.mutate({
+                          userId: m.user_id,
+                          role: m.role === 'member' ? 'owner' : 'member',
+                        })
+                      }
+                      disabled={updateRoleMutation.isPending}
+                    >
+                      {m.role === 'member' ? 'Make owner' : 'Make member'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeMemberMutation.mutate(m.user_id)}
+                      disabled={removeMemberMutation.isPending}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       <AddRepoDialog
         open={addRepoOpen}
@@ -346,31 +354,35 @@ function AddRepoDialog({
         </DialogHeader>
         <div className="max-h-[320px] overflow-y-auto mt-4">
           {isLoading ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
+            <div className="flex flex-col gap-2 py-4">
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+            </div>
           ) : repos.length === 0 ? (
             <p className="text-sm text-muted-foreground py-8 text-center">
               No repositories found.
             </p>
           ) : (
-            <ul className="space-y-1">
+            <ul className="flex flex-col gap-1">
               {repos.map((r) => {
                 const key = `${r.owner}/${r.repo}`;
                 const alreadyAdded = existingSet.has(key);
                 return (
                   <li key={key}>
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-between"
                       onClick={() => !alreadyAdded && onAdd({ owner: r.owner, repo: r.repo })}
                       disabled={alreadyAdded || adding}
-                      className="w-full flex items-center justify-between py-2 px-3 rounded-lg text-left text-sm hover:bg-muted transition-colors disabled:opacity-50"
                     >
                       <span className="font-mono">{key}</span>
                       {alreadyAdded ? (
                         <span className="text-xs text-muted-foreground">Added</span>
                       ) : (
-                        <Plus className="size-3.5 text-muted-foreground" />
+                        <Plus data-icon="inline-end" />
                       )}
-                    </button>
+                    </Button>
                   </li>
                 );
               })}

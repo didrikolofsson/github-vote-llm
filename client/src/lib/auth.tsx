@@ -20,7 +20,7 @@ import { generateCodeVerifier, generateCodeChallenge } from './pkce';
 
 const REFRESH_TOKEN_KEY = 'github-vote-llm-refresh-token';
 
-interface AuthContextType {
+type AuthContextType = {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;

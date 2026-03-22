@@ -8,6 +8,7 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var (
@@ -30,11 +31,11 @@ type OrganizationService interface {
 }
 
 type OrganizationServiceImpl struct {
-	db *pgx.Conn
+	db *pgxpool.Pool
 	q  *store.Queries
 }
 
-func NewOrganizationService(db *pgx.Conn, q *store.Queries) OrganizationService {
+func NewOrganizationService(db *pgxpool.Pool, q *store.Queries) OrganizationService {
 	return &OrganizationServiceImpl{db: db, q: q}
 }
 

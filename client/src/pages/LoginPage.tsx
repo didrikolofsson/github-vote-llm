@@ -1,103 +1,193 @@
-import { useState, type FormEvent } from 'react';
-import { useAuth } from '../lib/auth';
+import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { cn } from "@/lib/utils";
+import { useAuth } from "../lib/auth";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+const loginSchema = z.object({
+  email: z
+    .string()
+    .min(1, "Email is required")
+    .email("Please enter a valid email address"),
+  password: z
+    .string()
+    .min(1, "Password is required")
+    .min(8, "Password must be at least 8 characters"),
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const { login, signup, error, clearError } = useAuth();
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [mode, setMode] = useState<"login" | "signup">("login");
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    const trimmedEmail = email.trim();
-    const trimmedPassword = password.trim();
-    if (!trimmedEmail || !trimmedPassword) return;
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    mode: "onSubmit",
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
 
+  const isSubmitting = form.formState.isSubmitting;
+
+  async function onSubmit(data: LoginFormValues) {
     clearError();
-    setIsSubmitting(true);
     try {
-      if (mode === 'signup') {
-        await signup(trimmedEmail, trimmedPassword);
+      if (mode === "signup") {
+        await signup(data.email.trim(), data.password);
       } else {
-        await login(trimmedEmail, trimmedPassword);
+        await login(data.email.trim(), data.password);
       }
     } catch {
       // Error is set in auth context
-    } finally {
-      setIsSubmitting(false);
     }
+  }
+
+  function handleModeSwitch(e: React.MouseEvent) {
+    e.preventDefault();
+    setMode((m) => (m === "login" ? "signup" : "login"));
+    clearError();
   }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="fixed top-6 left-6 text-xs text-muted-foreground">
-        github-vote-llm
-      </div>
-      <div className="fixed bottom-6 right-6 text-xs text-muted-foreground">
-        v1.0
-      </div>
-
-      <div className="animate-slide-up w-[320px]">
-        <div className="mb-10 text-center">
-          <div className="text-primary font-bold text-[24px] mb-2">
-            vote-llm
-          </div>
-          <div className="w-8 h-px bg-border mx-auto" />
-          <div className="mt-3 text-[15px] text-muted-foreground">
-            {mode === 'signup' ? 'Create account' : 'Sign in'}
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <div>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                clearError();
-              }}
-              placeholder="Email"
-              autoComplete="email"
-              className="w-full py-3 px-4 bg-background border border-input text-foreground text-[15px] rounded-[8px] outline-none box-border transition-colors duration-150 focus:border-ring focus:ring-2 focus:ring-ring/20"
-            />
-          </div>
-          <div>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                clearError();
-              }}
-              placeholder="Password"
-              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-              className="w-full py-3 px-4 bg-background border border-input text-foreground text-[15px] rounded-[8px] outline-none box-border transition-colors duration-150 focus:border-ring focus:ring-2 focus:ring-ring/20"
-            />
-          </div>
-          {error && (
-            <p className="text-[14px] text-destructive">{error}</p>
-          )}
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full py-3 px-4 bg-primary text-primary-foreground text-[15px] font-semibold rounded-[8px] border-none cursor-pointer transition-opacity duration-150 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? '…' : mode === 'signup' ? 'Sign up' : 'Continue'}
-          </button>
-        </form>
-
-        <button
-          type="button"
-          onClick={() => {
-            setMode((m) => (m === 'login' ? 'signup' : 'login'));
-            clearError();
-          }}
-          className="mt-4 w-full text-[15px] text-muted-foreground bg-transparent border-none cursor-pointer hover:text-foreground transition-colors"
-        >
-          {mode === 'login' ? 'Create an account' : 'Already have an account? Sign in'}
-        </button>
+      <div className={cn("flex flex-col w-full max-w-sm animate-slide-up")}>
+        <Card className="px-4 py-4 sm:px-6 sm:py-6">
+          <CardHeader className="gap-2">
+            <CardTitle>
+              {mode === "signup"
+                ? "Create your account"
+                : "Login to your account"}
+            </CardTitle>
+            <CardDescription>
+              {mode === "signup"
+                ? "Enter your email below to create your account"
+                : "Enter your email below to login to your account"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <form onSubmit={form.handleSubmit(onSubmit)}>
+              <FieldGroup className="gap-6">
+                <Controller
+                  name="email"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="email">Email</FieldLabel>
+                      <Input
+                        {...field}
+                        id="email"
+                        type="email"
+                        placeholder="m@example.com"
+                        autoComplete="email"
+                        aria-invalid={fieldState.invalid}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          clearError();
+                        }}
+                      />
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
+                <Controller
+                  name="password"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="password">Password</FieldLabel>
+                      <Input
+                        {...field}
+                        id="password"
+                        type="password"
+                        autoComplete={
+                          mode === "signup"
+                            ? "new-password"
+                            : "current-password"
+                        }
+                        aria-invalid={fieldState.invalid}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          clearError();
+                        }}
+                      />
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+                <Field>
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full mt-2"
+                  >
+                    {isSubmitting
+                      ? "…"
+                      : mode === "signup"
+                        ? "Sign up"
+                        : "Login"}
+                  </Button>
+                  <FieldDescription className="text-center pt-2">
+                    {mode === "login" ? (
+                      <>
+                        Don&apos;t have an account?{" "}
+                        <Button
+                          type="button"
+                          variant="link"
+                          onClick={handleModeSwitch}
+                          className="h-auto p-0 text-sm"
+                        >
+                          Sign up
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        Already have an account?{" "}
+                        <Button
+                          type="button"
+                          variant="link"
+                          onClick={handleModeSwitch}
+                          className="h-auto p-0 text-sm"
+                        >
+                          Sign in
+                        </Button>
+                      </>
+                    )}
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

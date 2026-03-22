@@ -9,6 +9,7 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type UserService interface {
@@ -17,11 +18,11 @@ type UserService interface {
 }
 
 type UserServiceImpl struct {
-	db *pgx.Conn
+	db *pgxpool.Pool
 	q  *store.Queries
 }
 
-func NewUserService(db *pgx.Conn, q *store.Queries) UserService {
+func NewUserService(db *pgxpool.Pool, q *store.Queries) UserService {
 	return &UserServiceImpl{db: db, q: q}
 }
 

@@ -1,7 +1,17 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createOrganization } from '../lib/api';
-import { ApiError } from '../lib/api';
+import { createOrganization, ApiError } from '../lib/api';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface CreateOrganizationPageProps {
   onCreated?: () => void;
@@ -47,41 +57,41 @@ export default function CreateOrganizationPage({ onCreated }: CreateOrganization
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="animate-slide-up w-[320px]">
-        <div className="mb-10 text-center">
-          <h1 className="text-[24px] font-bold text-foreground mb-2">
-            Create your organization
-          </h1>
-          <p className="text-[15px] text-muted-foreground">
-            Give your organization a name to get started.
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <div>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                setError(null);
-              }}
-              placeholder="Organization name"
-              autoComplete="organization"
-              className="w-full py-3 px-4 bg-background border border-input text-foreground text-[15px] rounded-[8px] outline-none box-border transition-colors duration-150 focus:border-ring focus:ring-2 focus:ring-ring/20"
-            />
-          </div>
-          {error && (
-            <p className="text-[14px] text-destructive">{error}</p>
-          )}
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full py-3 px-4 bg-primary text-primary-foreground text-[15px] font-semibold rounded-[8px] border-none cursor-pointer transition-opacity duration-150 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? '…' : 'Create organization'}
-          </button>
-        </form>
+      <div className="animate-slide-up w-full max-w-sm">
+        <Card className="px-4 py-4 sm:px-6 sm:py-6">
+          <CardHeader className="gap-2">
+            <CardTitle>Create your organization</CardTitle>
+            <CardDescription>Give your organization a name to get started.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <form onSubmit={handleSubmit}>
+              <FieldGroup className="gap-4">
+                <Field>
+                  <FieldLabel htmlFor="org-name">Organization name</FieldLabel>
+                  <Input
+                    id="org-name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      setError(null);
+                    }}
+                    placeholder="Organization name"
+                    autoComplete="organization"
+                  />
+                </Field>
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+                <Button type="submit" disabled={isSubmitting} className="w-full">
+                  {isSubmitting ? '…' : 'Create organization'}
+                </Button>
+              </FieldGroup>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
