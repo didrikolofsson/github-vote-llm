@@ -5,8 +5,10 @@
  */
 
 import { z } from "zod";
+import { createLogger } from "./logger";
 
 const BASE = "/v1";
+const logger = createLogger("api");
 
 let accessToken: string | null = null;
 
@@ -32,7 +34,11 @@ export class ApiError extends Error {
 /** Format API/validation errors for display to users. */
 export function formatApiError(err: unknown): string {
   if (err instanceof ApiError) {
-    if (typeof err.body === "object" && err.body !== null && "error" in err.body) {
+    if (
+      typeof err.body === "object" &&
+      err.body !== null &&
+      "error" in err.body
+    ) {
       return String((err.body as { error: string }).error);
     }
     return err.message;
@@ -86,7 +92,10 @@ async function request<S extends z.ZodSchema>(
     );
   }
 
-  return schema.parse(data);
+  return schema.parseAsync(data).catch((err) => {
+    logger.error("Response validation failed", { path, err });
+    throw err;
+  });
 }
 
 // ─── Auth API (no token required) ─────────────────────────────────────────────
@@ -330,9 +339,10 @@ export const OrgMemberSchema = z.object({
 });
 export type OrgMember = z.infer<typeof OrgMemberSchema>;
 export async function listOrgMembers(orgId: number): Promise<OrgMember[]> {
-  return requestWithRefresh(`/organizations/${orgId}/members`, {
-    schema: z.array(OrgMemberSchema),
+  const data = await requestWithRefresh(`/organizations/${orgId}/members`, {
+    schema: z.object({ members: z.array(OrgMemberSchema) }),
   });
+  return data.members;
 }
 
 export async function inviteMember(

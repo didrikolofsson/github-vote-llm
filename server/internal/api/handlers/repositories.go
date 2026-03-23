@@ -8,6 +8,7 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api/middleware"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/request"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
+	"github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/gin-gonic/gin"
 )
@@ -151,7 +152,7 @@ func (h *RepositoryHandlersImpl) ListAvailable(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "not a member of this organization"})
 		return
 	}
-	if errors.Is(err, services.ErrGitHubNotConnected) {
+	if errors.Is(err, github.ErrNotConnected) {
 		c.JSON(http.StatusPreconditionFailed, gin.H{"error": "connect GitHub first", "code": "github_not_connected"})
 		return
 	}

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const AuthorizeResponseSchema = z.object({
   code: z.string(),
@@ -19,6 +19,20 @@ export const SignupResponseSchema = z.object({
   updated_at: z.string(),
 });
 
+export const UserSchema = z.object({
+  id: z.number(),
+  email: z.string(),
+});
+
+export const TokenPayloadSchema = z.object({
+  uid: z.number(),
+  email: z.string(),
+  iat: z.number(),
+  exp: z.number(),
+});
+
 export type AuthorizeResponse = z.infer<typeof AuthorizeResponseSchema>;
 export type TokenResponse = z.infer<typeof TokenResponseSchema>;
 export type SignupResponse = z.infer<typeof SignupResponseSchema>;
+export type User = z.infer<typeof UserSchema>;
+export type TokenPayload = z.infer<typeof TokenPayloadSchema>;

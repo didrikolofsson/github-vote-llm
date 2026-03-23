@@ -18,9 +18,9 @@ var (
 )
 
 type MemberWithEmail struct {
-	UserID int64
-	Email  string
-	Role   string
+	UserID int64  `json:"user_id"`
+	Email  string `json:"email"`
+	Role   string `json:"role"`
 }
 
 type MembersService interface {

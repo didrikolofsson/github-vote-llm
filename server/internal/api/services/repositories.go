@@ -12,9 +12,8 @@ import (
 
 var (
 	ErrRepositoryAlreadyAdded = errors.New("repository already added to organization")
-	ErrRepositoryNotFound    = errors.New("repository not found in organization")
-	ErrGitHubNotConnected     = errors.New("connect GitHub first to add repositories")
-	ErrNotOrgMember          = errors.New("not a member of this organization")
+	ErrRepositoryNotFound     = errors.New("repository not found in organization")
+	ErrNotOrgMember           = errors.New("not a member of this organization")
 )
 
 type Repository struct {
@@ -32,11 +31,11 @@ type RepositoriesService interface {
 
 type RepositoriesServiceImpl struct {
 	q             *store.Queries
-	githubOAuth   GitHubOAuthService
+	githubOAuth   github.OAuthService
 	encryptionKey string
 }
 
-func NewRepositoriesService(q *store.Queries, githubOAuth GitHubOAuthService, encryptionKey string) RepositoriesService {
+func NewRepositoriesService(q *store.Queries, githubOAuth github.OAuthService, encryptionKey string) RepositoriesService {
 	return &RepositoriesServiceImpl{
 		q:             q,
 		githubOAuth:   githubOAuth,
@@ -124,7 +123,7 @@ func (s *RepositoriesServiceImpl) ListAvailableFromGitHub(ctx context.Context, o
 	}
 	token, err := s.githubOAuth.GetDecryptedToken(ctx, userID, s.encryptionKey)
 	if err != nil || token == "" {
-		return nil, false, ErrGitHubNotConnected
+		return nil, false, github.ErrNotConnected
 	}
 
 	client := github.NewOAuthClient(token)

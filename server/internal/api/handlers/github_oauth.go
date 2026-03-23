@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api/middleware"
-	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
+	"github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -18,11 +18,11 @@ type GitHubOAuthHandlers interface {
 }
 
 type GitHubOAuthHandlersImpl struct {
-	oauthService services.GitHubOAuthService
+	oauthService github.OAuthService
 	env          *config.Environment
 }
 
-func NewGitHubOAuthHandlers(oauthService services.GitHubOAuthService, env *config.Environment) GitHubOAuthHandlers {
+func NewGitHubOAuthHandlers(oauthService github.OAuthService, env *config.Environment) GitHubOAuthHandlers {
 	return &GitHubOAuthHandlersImpl{oauthService: oauthService, env: env}
 }
 

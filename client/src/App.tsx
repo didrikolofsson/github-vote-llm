@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './lib/auth';
 import { listMyOrganizations } from './lib/api';
 import LoginPage from './pages/LoginPage';
 import CreateOrganizationPage from './pages/CreateOrganizationPage';
 import OrganizationDashboardPage from './pages/OrganizationDashboardPage';
+import SettingsPage from './pages/SettingsPage';
 import Layout from './components/Layout';
 
 export default function App() {
@@ -85,7 +86,9 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<Layout />}>
-          <Route index element={<OrganizationDashboardPage />} />
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<OrganizationDashboardPage />} />
+          <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

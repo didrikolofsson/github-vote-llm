@@ -8,6 +8,7 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
+	gh "github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
@@ -47,7 +48,7 @@ func main() {
 	authHandlers := handlers.NewAuthHandlers(authService, env.JWT_SECRET)
 	organizationService := services.NewOrganizationService(conn, q)
 	organizationHandlers := handlers.NewOrganizationHandlers(organizationService, apiLogger)
-	githubOAuthService := services.NewGitHubOAuthService(env.GITHUB_CLIENT_ID, env.GITHUB_CLIENT_SECRET, q)
+	githubOAuthService := gh.NewOAuthService(env.GITHUB_CLIENT_ID, env.GITHUB_CLIENT_SECRET, q)
 	githubOAuthHandlers := handlers.NewGitHubOAuthHandlers(githubOAuthService, env)
 	reposService := services.NewRepositoriesService(q, githubOAuthService, env.TOKEN_ENCRYPTION_KEY)
 	reposHandlers := handlers.NewRepositoryHandlers(reposService, apiLogger)
