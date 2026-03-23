@@ -18,9 +18,9 @@ var (
 )
 
 type Repository struct {
-	Owner     string
-	Repo      string
-	CreatedAt string
+	Owner     string `json:"owner"`
+	Repo      string `json:"repo"`
+	CreatedAt string `json:"created_at,omitempty"`
 }
 
 type RepositoriesService interface {

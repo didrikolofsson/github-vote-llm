@@ -8,10 +8,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   addRepository,
+  formatApiError,
   getGitHubAuthorizeUrl,
   getGitHubStatus,
   inviteMember,
@@ -26,25 +28,25 @@ import {
 } from "@/lib/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Github, LayoutGrid, Mail, Plus, Trash2, Users } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function OrganizationDashboardPage() {
   const queryClient = useQueryClient();
   const [addRepoOpen, setAddRepoOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
 
-  // useEffect(() => {
-  //   const params = new URLSearchParams(window.location.search);
-  //   const connected = params.get("github_connected");
-  //   const error = params.get("github_error");
-  //   if (connected === "1" || error) {
-  //     queryClient.invalidateQueries({ queryKey: ["github-status"] });
-  //     const url = new URL(window.location.href);
-  //     url.searchParams.delete("github_connected");
-  //     url.searchParams.delete("github_error");
-  //     window.history.replaceState({}, "", url.pathname);
-  //   }
-  // }, [queryClient]);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get("github_connected");
+    const error = params.get("github_error");
+    if (connected === "1" || error) {
+      queryClient.invalidateQueries({ queryKey: ["github-status"] });
+      const url = new URL(window.location.href);
+      url.searchParams.delete("github_connected");
+      url.searchParams.delete("github_error");
+      window.history.replaceState({}, "", url.pathname);
+    }
+  }, [queryClient]);
 
   const { data: orgs = [], isLoading: orgsLoading } = useQuery({
     queryKey: ["organizations"],
@@ -61,7 +63,7 @@ export default function OrganizationDashboardPage() {
   });
 
   const { data: repos = [], isLoading: reposLoading } = useQuery({
-    queryKey: ["organizations", orgId, "repositories"],
+    queryKey: ["organizations", orgId, "available"],
     queryFn: () => listOrgRepositories(orgId!),
     enabled: !!orgId,
   });
@@ -330,7 +332,7 @@ export default function OrganizationDashboardPage() {
         open={addRepoOpen}
         onOpenChange={setAddRepoOpen}
         orgId={orgId}
-        existingRepos={repos}
+        existingRepos={repos ?? []}
         onAdd={addRepo.mutate}
         adding={addRepo.isPending}
       />
@@ -356,7 +358,7 @@ function AddRepoDialog({
   const [page, setPage] = useState(1);
   const existingSet = new Set(existingRepos.map((r) => `${r.owner}/${r.repo}`));
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["available-repos", orgId, page],
     queryFn: () => listAvailableRepositories(orgId!, page),
     enabled: open && !!orgId,
@@ -376,6 +378,11 @@ function AddRepoDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[320px] overflow-y-auto mt-4">
+          {isError && error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{formatApiError(error)}</AlertDescription>
+            </Alert>
+          )}
           {isLoading ? (
             <div className="flex flex-col gap-2 py-4">
               <Skeleton className="h-9 w-full" />
@@ -383,9 +390,11 @@ function AddRepoDialog({
               <Skeleton className="h-9 w-full" />
             </div>
           ) : repos.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              No repositories found.
-            </p>
+            isError ? null : (
+              <p className="text-sm text-muted-foreground py-8 text-center">
+                No repositories found.
+              </p>
+            )
           ) : (
             <ul className="flex flex-col gap-1">
               {repos.map((r) => {

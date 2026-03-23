@@ -29,6 +29,23 @@ export class ApiError extends Error {
   }
 }
 
+/** Format API/validation errors for display to users. */
+export function formatApiError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (typeof err.body === "object" && err.body !== null && "error" in err.body) {
+      return String((err.body as { error: string }).error);
+    }
+    return err.message;
+  }
+  if (err instanceof z.ZodError) {
+    const parts = err.issues.map(
+      (i) => `${i.path.filter(Boolean).join(".") || "response"}: ${i.message}`,
+    );
+    return `Validation failed: ${parts.join("; ")}`;
+  }
+  return err instanceof Error ? err.message : String(err);
+}
+
 async function request<S extends z.ZodSchema>(
   path: string,
   options: RequestInit & { schema: S; skipAuth?: boolean },
@@ -242,6 +259,17 @@ export type OrgRepository = {
   repo: string;
   created_at?: string;
 };
+
+const OrgRepositoryListResponseSchema = z.object({
+  repositories: z.array(
+    z.object({
+      owner: z.string(),
+      repo: z.string(),
+      created_at: z.string().optional(),
+    }),
+  ),
+});
+
 export async function listOrgRepositories(
   orgId: number,
 ): Promise<OrgRepository[]> {
@@ -249,10 +277,10 @@ export async function listOrgRepositories(
     `/organizations/${orgId}/repositories`,
     {
       method: "GET",
-      schema: RepoConfigListSchema,
+      schema: OrgRepositoryListResponseSchema,
     },
   );
-  return data;
+  return data.repositories;
 }
 
 export const AvailableRepositoriesSchema = z.object({
