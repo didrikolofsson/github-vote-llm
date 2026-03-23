@@ -4,9 +4,9 @@
  * Validates responses with Zod schemas.
  */
 
-import type { z } from 'zod';
+import { z } from "zod";
 
-const BASE = '/v1';
+const BASE = "/v1";
 
 let accessToken: string | null = null;
 
@@ -25,23 +25,23 @@ export class ApiError extends Error {
     public body?: unknown,
   ) {
     super(message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
   }
 }
 
-async function request<T>(
+async function request<S extends z.ZodSchema>(
   path: string,
-  options: RequestInit & { schema?: z.ZodType<T>; skipAuth?: boolean } = {},
-): Promise<T> {
+  options: RequestInit & { schema: S; skipAuth?: boolean },
+): Promise<z.infer<S>> {
   const { schema, skipAuth, ...init } = options;
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
     ...(init.headers as Record<string, string>),
   };
 
   if (!skipAuth && accessToken) {
-    headers['Authorization'] = `Bearer ${accessToken}`;
+    headers["Authorization"] = `Bearer ${accessToken}`;
   }
 
   const res = await fetch(`${BASE}${path}`, {
@@ -58,30 +58,27 @@ async function request<T>(
   }
 
   if (!res.ok) {
-    const errBody = typeof data === 'object' && data !== null && 'error' in data
-      ? (data as { error: string }).error
-      : data;
+    const errBody =
+      typeof data === "object" && data !== null && "error" in data
+        ? (data as { error: string }).error
+        : data;
     throw new ApiError(
-      typeof errBody === 'string' ? errBody : `Request failed: ${res.status}`,
+      typeof errBody === "string" ? errBody : `Request failed: ${res.status}`,
       res.status,
       data,
     );
   }
 
-  if (schema && data !== undefined) {
-    return schema.parse(data) as T;
-  }
-
-  return data as T;
+  return schema.parse(data);
 }
 
 // ─── Auth API (no token required) ─────────────────────────────────────────────
 
 import {
   AuthorizeResponseSchema,
-  TokenResponseSchema,
   SignupResponseSchema,
-} from './auth-schemas';
+  TokenResponseSchema,
+} from "./auth-schemas";
 
 export async function authorize(params: {
   email: string;
@@ -89,8 +86,8 @@ export async function authorize(params: {
   code_challenge: string;
   redirect_uri: string;
 }) {
-  return request('/auth/authorize', {
-    method: 'POST',
+  return request("/auth/authorize", {
+    method: "POST",
     body: JSON.stringify(params),
     schema: AuthorizeResponseSchema,
     skipAuth: true,
@@ -98,13 +95,13 @@ export async function authorize(params: {
 }
 
 export async function exchangeToken(params: {
-  grant_type: 'authorization_code';
+  grant_type: "authorization_code";
   code: string;
   code_verifier: string;
   redirect_uri: string;
 }) {
-  return request('/auth/token', {
-    method: 'POST',
+  return request("/auth/token", {
+    method: "POST",
     body: JSON.stringify(params),
     schema: TokenResponseSchema,
     skipAuth: true,
@@ -112,25 +109,26 @@ export async function exchangeToken(params: {
 }
 
 export async function refreshToken(refresh_token: string) {
-  return request('/auth/token', {
-    method: 'POST',
-    body: JSON.stringify({ grant_type: 'refresh_token', refresh_token }),
+  return request("/auth/token", {
+    method: "POST",
+    body: JSON.stringify({ grant_type: "refresh_token", refresh_token }),
     schema: TokenResponseSchema,
     skipAuth: true,
   });
 }
 
 export async function revokeToken(refresh_token: string) {
-  return request('/auth/revoke', {
-    method: 'POST',
+  return request("/auth/revoke", {
+    method: "POST",
     body: JSON.stringify({ refresh_token }),
+    schema: z.void(),
     skipAuth: true,
   });
 }
 
 export async function signup(params: { email: string; password: string }) {
-  return request('/users/signup', {
-    method: 'POST',
+  return request("/users/signup", {
+    method: "POST",
     body: JSON.stringify(params),
     schema: SignupResponseSchema,
     skipAuth: true,
@@ -140,21 +138,35 @@ export async function signup(params: { email: string; password: string }) {
 // ─── App API (protected, requires token) ─────────────────────────────────────
 
 import {
-  RunSchema,
-  RunListSchema,
-  RepoConfigSchema,
-  RepoConfigListSchema,
-  UpdateRepoConfigRequestSchema,
-  ProposalSchema,
-  ProposalListSchema,
-  ProposalCommentSchema,
-  ProposalCommentListSchema,
   OrganizationListResponseSchema,
   OrganizationWithMembersSchema,
-} from './api-schemas';
+  ProposalCommentListSchema,
+  ProposalCommentSchema,
+  ProposalListSchema,
+  ProposalSchema,
+  RepoConfigListSchema,
+  RepoConfigSchema,
+  RunListSchema,
+  RunSchema,
+  UpdateRepoConfigRequestSchema,
+} from "./api-schemas";
 
-import type { Proposal, Organization, RepoConfig, Run, ProposalComment } from './api-schemas';
-export type { Run, RepoConfig, UpdateRepoConfigRequest, Proposal, ProposalComment, Organization, OrganizationWithMembers } from './api-schemas';
+import type {
+  Organization,
+  Proposal,
+  ProposalComment,
+  RepoConfig,
+  Run,
+} from "./api-schemas";
+export type {
+  Organization,
+  OrganizationWithMembers,
+  Proposal,
+  ProposalComment,
+  RepoConfig,
+  Run,
+  UpdateRepoConfigRequest,
+} from "./api-schemas";
 
 let onRefresh: (() => Promise<string | null>) | null = null;
 
@@ -162,18 +174,23 @@ export function setOnRefresh(fn: (() => Promise<string | null>) | null): void {
   onRefresh = fn;
 }
 
-async function requestWithRefresh<T>(
+async function requestWithRefresh<S extends z.ZodSchema>(
   path: string,
-  options: RequestInit & { schema?: z.ZodType<T>; skipAuth?: boolean },
-): Promise<T> {
+  options: RequestInit & { schema: S; skipAuth?: boolean },
+): Promise<z.infer<S>> {
   try {
-    return await request<T>(path, options);
+    return await request(path, options);
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401 && onRefresh && !options.skipAuth) {
+    if (
+      err instanceof ApiError &&
+      err.status === 401 &&
+      onRefresh &&
+      !options.skipAuth
+    ) {
       const newToken = await onRefresh();
       if (newToken) {
         setAccessToken(newToken);
-        return request<T>(path, options);
+        return request(path, options);
       }
     }
     throw err;
@@ -181,78 +198,150 @@ async function requestWithRefresh<T>(
 }
 
 export async function listMyOrganizations(): Promise<Organization[]> {
-  const data = await requestWithRefresh('/organizations', {
+  const data = await requestWithRefresh("/organizations", {
     schema: OrganizationListResponseSchema,
   });
   return data.organizations;
 }
 
 export async function createOrganization(name: string) {
-  return requestWithRefresh('/organizations', {
-    method: 'POST',
+  return requestWithRefresh("/organizations", {
+    method: "POST",
     body: JSON.stringify({ name }),
     schema: OrganizationWithMembersSchema,
   });
 }
 
 // GitHub connection
-export async function getGitHubStatus(): Promise<{ connected: boolean; login?: string }> {
-  return requestWithRefresh('/github/status', {}) as Promise<{ connected: boolean; login?: string }>;
+export const GitHubStatusSchema = z.object({
+  connected: z.boolean(),
+  login: z.string().nullable().optional(),
+});
+export async function getGitHubStatus(): Promise<
+  z.infer<typeof GitHubStatusSchema>
+> {
+  return requestWithRefresh("/github/status", {
+    schema: GitHubStatusSchema,
+  });
 }
 
-export async function getGitHubAuthorizeUrl(): Promise<{ authorize_url: string }> {
-  return requestWithRefresh('/github/authorize', {}) as Promise<{ authorize_url: string }>;
+export const GitHubAuthorizeUrlSchema = z.object({
+  authorize_url: z.string(),
+});
+export async function getGitHubAuthorizeUrl(): Promise<
+  z.infer<typeof GitHubAuthorizeUrlSchema>
+> {
+  return requestWithRefresh("/github/authorize", {
+    schema: GitHubAuthorizeUrlSchema,
+  });
 }
 
 // Organization repositories
-export type OrgRepository = { owner: string; repo: string; created_at?: string };
-export async function listOrgRepositories(orgId: number): Promise<OrgRepository[]> {
-  const data = await requestWithRefresh(`/organizations/${orgId}/repositories`, {}) as { repositories: OrgRepository[] };
-  return data.repositories;
+export type OrgRepository = {
+  owner: string;
+  repo: string;
+  created_at?: string;
+};
+export async function listOrgRepositories(
+  orgId: number,
+): Promise<OrgRepository[]> {
+  const data = await requestWithRefresh(
+    `/organizations/${orgId}/repositories`,
+    {
+      method: "GET",
+      schema: RepoConfigListSchema,
+    },
+  );
+  return data;
 }
 
-export async function listAvailableRepositories(orgId: number, page = 1): Promise<{ repositories: OrgRepository[]; has_more: boolean }> {
-  return requestWithRefresh(`/organizations/${orgId}/repositories/available?page=${page}`, {}) as Promise<{ repositories: OrgRepository[]; has_more: boolean }>;
+export const AvailableRepositoriesSchema = z.object({
+  repositories: z.array(z.object({ owner: z.string(), repo: z.string() })),
+  has_more: z.boolean(),
+});
+export async function listAvailableRepositories(
+  orgId: number,
+  page = 1,
+): Promise<z.infer<typeof AvailableRepositoriesSchema>> {
+  return requestWithRefresh(
+    `/organizations/${orgId}/repositories/available?page=${page}`,
+    {
+      schema: AvailableRepositoriesSchema,
+    },
+  );
 }
 
-export async function addRepository(orgId: number, owner: string, repo: string): Promise<void> {
+export async function addRepository(
+  orgId: number,
+  owner: string,
+  repo: string,
+): Promise<void> {
   await requestWithRefresh(`/organizations/${orgId}/repositories`, {
-    method: 'POST',
+    method: "POST",
     body: JSON.stringify({ owner, repo }),
+    schema: z.void(),
   });
 }
 
-export async function removeRepository(orgId: number, owner: string, repo: string): Promise<void> {
-  await requestWithRefresh(`/organizations/${orgId}/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, { method: 'DELETE' });
+export async function removeRepository(
+  orgId: number,
+  owner: string,
+  repo: string,
+): Promise<void> {
+  await requestWithRefresh(
+    `/organizations/${orgId}/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+    { method: "DELETE", schema: z.void() },
+  );
 }
 
 // Organization members
-export type OrgMember = { user_id: number; email: string; role: string };
+export const OrgMemberSchema = z.object({
+  user_id: z.number(),
+  email: z.string(),
+  role: z.string(),
+});
+export type OrgMember = z.infer<typeof OrgMemberSchema>;
 export async function listOrgMembers(orgId: number): Promise<OrgMember[]> {
-  const data = await requestWithRefresh(`/organizations/${orgId}/members`, {}) as { members: OrgMember[] };
-  return data.members;
-}
-
-export async function inviteMember(orgId: number, email: string): Promise<void> {
-  await requestWithRefresh(`/organizations/${orgId}/members`, {
-    method: 'POST',
-    body: JSON.stringify({ email }),
+  return requestWithRefresh(`/organizations/${orgId}/members`, {
+    schema: z.array(OrgMemberSchema),
   });
 }
 
-export async function removeMember(orgId: number, userId: number): Promise<void> {
-  await requestWithRefresh(`/organizations/${orgId}/members/${userId}`, { method: 'DELETE' });
+export async function inviteMember(
+  orgId: number,
+  email: string,
+): Promise<void> {
+  await requestWithRefresh(`/organizations/${orgId}/members`, {
+    method: "POST",
+    body: JSON.stringify({ email }),
+    schema: z.void(),
+  });
 }
 
-export async function updateMemberRole(orgId: number, userId: number, role: 'owner' | 'member'): Promise<void> {
+export async function removeMember(
+  orgId: number,
+  userId: number,
+): Promise<void> {
   await requestWithRefresh(`/organizations/${orgId}/members/${userId}`, {
-    method: 'PATCH',
+    method: "DELETE",
+    schema: z.void(),
+  });
+}
+
+export async function updateMemberRole(
+  orgId: number,
+  userId: number,
+  role: "owner" | "member",
+): Promise<void> {
+  await requestWithRefresh(`/organizations/${orgId}/members/${userId}`, {
+    method: "PATCH",
     body: JSON.stringify({ role }),
+    schema: z.void(),
   });
 }
 
 export async function listRepos(): Promise<RepoConfig[]> {
-  const data = await requestWithRefresh('/repos', {
+  const data = await requestWithRefresh("/repos", {
     schema: RepoConfigListSchema,
   });
   return data;
@@ -270,7 +359,7 @@ export async function updateRepoConfig(
   body: z.infer<typeof UpdateRepoConfigRequestSchema>,
 ) {
   return requestWithRefresh(`/repos/${owner}/${repo}/config`, {
-    method: 'PUT',
+    method: "PUT",
     body: JSON.stringify(body),
     schema: RepoConfigSchema,
   });
@@ -278,12 +367,13 @@ export async function updateRepoConfig(
 
 export async function deleteRepoConfig(owner: string, repo: string) {
   await requestWithRefresh(`/repos/${owner}/${repo}/config`, {
-    method: 'DELETE',
+    method: "DELETE",
+    schema: z.void(),
   });
 }
 
 export async function listRuns(): Promise<Run[]> {
-  const data = await requestWithRefresh('/runs', {
+  const data = await requestWithRefresh("/runs", {
     schema: RunListSchema,
   });
   return data;
@@ -295,15 +385,24 @@ export async function getRun(id: number) {
   });
 }
 
-export async function cancelRun(id: number) {
-  await requestWithRefresh(`/runs/${id}/cancel`, { method: 'POST' });
+export async function cancelRun(id: number): Promise<void> {
+  await requestWithRefresh(`/runs/${id}/cancel`, {
+    method: "POST",
+    schema: z.void(),
+  });
 }
 
-export async function retryRun(id: number) {
-  await requestWithRefresh(`/runs/${id}/retry`, { method: 'POST' });
+export async function retryRun(id: number): Promise<void> {
+  await requestWithRefresh(`/runs/${id}/retry`, {
+    method: "POST",
+    schema: z.void(),
+  });
 }
 
-export async function listRoadmapItems(owner: string, repo: string): Promise<Proposal[]> {
+export async function listRoadmapItems(
+  owner: string,
+  repo: string,
+): Promise<Proposal[]> {
   const data = await requestWithRefresh(`/repos/${owner}/${repo}/roadmap`, {
     schema: ProposalListSchema,
   });
@@ -314,16 +413,19 @@ export async function updateProposalStatus(
   owner: string,
   repo: string,
   id: number,
-  body: { status: Proposal['status'] },
+  body: { status: Proposal["status"] },
 ) {
   return requestWithRefresh(`/repos/${owner}/${repo}/proposals/${id}`, {
-    method: 'PATCH',
+    method: "PATCH",
     body: JSON.stringify(body),
     schema: ProposalSchema,
   });
 }
 
-export async function listBoardProposals(owner: string, repo: string): Promise<Proposal[]> {
+export async function listBoardProposals(
+  owner: string,
+  repo: string,
+): Promise<Proposal[]> {
   const data = await requestWithRefresh(`/board/${owner}/${repo}/proposals`, {
     schema: ProposalListSchema,
   });
@@ -336,15 +438,19 @@ export async function createBoardProposal(
   body: { title: string; description?: string; author_name?: string },
 ) {
   return requestWithRefresh(`/board/${owner}/${repo}/proposals`, {
-    method: 'POST',
+    method: "POST",
     body: JSON.stringify(body),
     schema: ProposalSchema,
   });
 }
 
-export async function voteProposal(owner: string, repo: string, id: number): Promise<Proposal> {
+export async function voteProposal(
+  owner: string,
+  repo: string,
+  id: number,
+): Promise<Proposal> {
   return requestWithRefresh(`/board/${owner}/${repo}/proposals/${id}/vote`, {
-    method: 'POST',
+    method: "POST",
     schema: ProposalSchema,
   });
 }
@@ -354,9 +460,12 @@ export async function listBoardComments(
   repo: string,
   id: number,
 ): Promise<ProposalComment[]> {
-  const data = await requestWithRefresh(`/board/${owner}/${repo}/proposals/${id}/comments`, {
-    schema: ProposalCommentListSchema,
-  });
+  const data = await requestWithRefresh(
+    `/board/${owner}/${repo}/proposals/${id}/comments`,
+    {
+      schema: ProposalCommentListSchema,
+    },
+  );
   return data;
 }
 
@@ -366,9 +475,12 @@ export async function createBoardComment(
   id: number,
   body: { body: string; author_name?: string },
 ) {
-  return requestWithRefresh(`/board/${owner}/${repo}/proposals/${id}/comments`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-    schema: ProposalCommentSchema,
-  });
+  return requestWithRefresh(
+    `/board/${owner}/${repo}/proposals/${id}/comments`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+      schema: ProposalCommentSchema,
+    },
+  );
 }
