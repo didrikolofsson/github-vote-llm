@@ -121,14 +121,11 @@ func (s *RepositoriesServiceImpl) ListAvailableFromGitHub(ctx context.Context, o
 	if err := s.verifyOrgMember(ctx, orgID, userID); err != nil {
 		return nil, false, err
 	}
-	token, err := s.githubOAuth.GetDecryptedToken(ctx, userID, s.encryptionKey)
-	if err != nil || token == "" {
-		return nil, false, github.ErrNotConnected
-	}
-
-	client := github.NewOAuthClient(token)
-	summaries, hasMore, err := client.ListRepos(ctx, page)
+	summaries, hasMore, err := s.githubOAuth.ListGitHubReposForUser(ctx, userID, page, s.encryptionKey)
 	if err != nil {
+		if errors.Is(err, github.ErrNotConnected) {
+			return nil, false, github.ErrNotConnected
+		}
 		return nil, false, err
 	}
 
