@@ -3,15 +3,19 @@ package services
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/encryption"
 	"github.com/didrikolofsson/github-vote-llm/internal/oauth2"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/google/go-github/v68/github"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	oa "golang.org/x/oauth2"
 )
+
+var ErrGitHubNotConnected = errors.New("github: no connection found for user")
 
 type GithubService interface {
 	Callback(ctx context.Context, code string, userID int64, tokenEncryptionKey string) error
@@ -64,11 +68,17 @@ func (s *GithubServiceImpl) Callback(ctx context.Context, code string, userID in
 
 type GithubUserResponse struct {
 	ID    int64  `json:"id"`
-	Name  string `json:"name"`
 	Login string `json:"login"`
 }
 
 func (s *GithubServiceImpl) Status(ctx context.Context, userID int64) (*GithubUserResponse, error) {
+	if _, err := s.q.GetGitHubConnectionByUserID(ctx, userID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrGitHubNotConnected
+		}
+		return nil, err
+	}
+
 	ts := oauth2.NewGithubTokenSource(userID, s.q, s.config, s.tokenEncryptionKey)
 	httpClient := oa.NewClient(ctx, ts)
 	githubClient := github.NewClient(httpClient)
@@ -78,7 +88,6 @@ func (s *GithubServiceImpl) Status(ctx context.Context, userID int64) (*GithubUs
 	}
 	return &GithubUserResponse{
 		ID:    *user.ID,
-		Name:  *user.Name,
 		Login: *user.Login,
 	}, nil
 }

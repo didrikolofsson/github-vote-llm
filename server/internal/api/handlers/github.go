@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -121,4 +122,24 @@ func (h *GithubHandlersImpl) Callback(c *gin.Context) {
 }
 
 func (h *GithubHandlersImpl) Status(c *gin.Context) {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	status, err := h.s.Status(c.Request.Context(), userID)
+	if err != nil {
+		if errors.Is(err, services.ErrGitHubNotConnected) {
+			c.JSON(http.StatusOK, gin.H{"connected": false})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check github status"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"connected": true,
+		"login":     status.Login,
+	})
 }

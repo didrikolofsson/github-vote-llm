@@ -2,6 +2,7 @@ package oauth2
 
 import (
 	"context"
+	"encoding/base64"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/encryption"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
@@ -45,7 +46,11 @@ func (s *GithubTokenSource) Token() (*oa.Token, error) {
 	}
 
 	// Decrypt access token
-	decrypted, err := encryption.Decrypt([]byte(connection.AccessTokenEncrypted), s.tokenEncryptionKey)
+	accessTokenBytes, err := base64.StdEncoding.DecodeString(connection.AccessTokenEncrypted)
+	if err != nil {
+		return nil, err
+	}
+	decrypted, err := encryption.Decrypt(accessTokenBytes, s.tokenEncryptionKey)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +59,11 @@ func (s *GithubTokenSource) Token() (*oa.Token, error) {
 	// Decrypt refresh token
 	var refreshToken string
 	if connection.RefreshToken != nil {
-		decrypted, err := encryption.Decrypt([]byte(*connection.RefreshToken), s.tokenEncryptionKey)
+		refreshTokenBytes, err := base64.StdEncoding.DecodeString(*connection.RefreshToken)
+		if err != nil {
+			return nil, err
+		}
+		decrypted, err := encryption.Decrypt(refreshTokenBytes, s.tokenEncryptionKey)
 		if err != nil {
 			return nil, err
 		}
@@ -84,7 +93,7 @@ func (s *GithubTokenSource) Token() (*oa.Token, error) {
 	if err != nil {
 		return nil, err
 	}
-	encryptedAccessToken = string(encryptedAccessTokenBytes)
+	encryptedAccessToken = base64.StdEncoding.EncodeToString(encryptedAccessTokenBytes)
 
 	// Encrypt new refresh token
 	var encryptedRefreshToken *string
@@ -93,7 +102,7 @@ func (s *GithubTokenSource) Token() (*oa.Token, error) {
 		if err != nil {
 			return nil, err
 		}
-		encoded := string(encrypted)
+		encoded := base64.StdEncoding.EncodeToString(encrypted)
 		encryptedRefreshToken = &encoded
 	}
 
