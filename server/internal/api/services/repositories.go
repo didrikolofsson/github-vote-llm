@@ -26,7 +26,6 @@ type RepositoriesService interface {
 	ListForOrganization(ctx context.Context, orgID, userID int64) ([]Repository, error)
 	AddRepository(ctx context.Context, orgID, userID int64, owner, repo string) error
 	RemoveRepository(ctx context.Context, orgID, userID int64, owner, repo string) error
-	ListAvailableFromGitHub(ctx context.Context, orgID, userID int64, page int) ([]Repository, bool, error)
 }
 
 type RepositoriesServiceImpl struct {
@@ -113,25 +112,4 @@ func (s *RepositoriesServiceImpl) verifyOrgMember(ctx context.Context, orgID, us
 		}
 	}
 	return ErrNotOrgMember
-}
-
-func (s *RepositoriesServiceImpl) ListAvailableFromGitHub(ctx context.Context, orgID, userID int64, page int) ([]Repository, bool, error) {
-
-	// if err := s.verifyOrgMember(ctx, orgID, userID); err != nil {
-	// 	return nil, false, err
-	// }
-	// summaries, hasMore, err := s.gh.ListRepos(ctx, page)
-	// if err != nil {
-	// 	if errors.Is(err, github.ErrNotConnected) {
-	// 		return nil, false, github.ErrNotConnected
-	// 	}
-	// 	return nil, false, err
-	// }
-
-	// out := make([]Repository, len(summaries))
-	// for i, r := range summaries {
-	// 	out[i] = Repository{Owner: r.Owner, Repo: r.Repo}
-	// }
-	// return out, hasMore, nil
-	return nil, false, nil
 }

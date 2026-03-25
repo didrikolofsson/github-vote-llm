@@ -195,7 +195,7 @@ function AddRepoDialog({
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["available-repos", orgId, page],
-    queryFn: () => listAvailableRepositories(orgId!, page),
+    queryFn: () => listAvailableRepositories(page),
     enabled: open && !!orgId,
   });
 

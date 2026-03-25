@@ -14,8 +14,8 @@ A community-driven roadmap platform with integrated AI-powered feature implement
 ```
 client/                     React SPA (Vite + TypeScript + Tailwind + shadcn/ui)
   src/
-    pages/                  LoginPage, RoadmapPage, RunsPage, RunDetailPage, ConfigPage, BoardPage
-    components/             Layout, StatusBadge, shadcn/ui primitives
+    pages/                  LoginPage, SettingsPage, OrganizationDashboardPage, CreateOrganizationPage
+    components/             Layout, shadcn/ui primitives
     lib/
       api.ts                API client (fetch + Bearer JWT + Zod validation)
       api-schemas.ts        Zod schemas for API responses
@@ -33,16 +33,16 @@ server/                     Go backend (Gin + pgx/v5 + sqlc)
   internal/
     api/
       api.go                Router setup (Gin)
-      handlers/             auth.go, users.go, organizations.go
-      services/             auth.go, users.go, organizations.go
-      dtos/                 auth.go, users.go, organizations.go
+      handlers/             auth.go, users.go, organizations.go, github.go, repositories.go, members.go
+      services/             auth.go, users.go, organizations.go, github.go, repositories.go, members.go
+      dtos/                 auth.go, users.go, organizations.go, github.go
       middleware/           JWT auth, API key validation, request ID, request logging
       request/              Context helpers (request ID extraction)
     config/                 Env var parsing (caarlos0/env) + token TTL constants
-    github/                 GitHub OAuth client for listing repos (go-github)
+    encryption/             AES-256-GCM token encryption/decryption
+    oauth2/                 GitHub OAuth2 config + per-user token source (auto-refresh)
     helpers/                Shared utilities (password hashing, numeric conversion)
     logger/                 Structured logging with colored output (zap)
-    spinner/                Terminal progress spinner
     store/                  PostgreSQL store (pgx/v5 + sqlc generated code)
   Makefile
 ```
@@ -61,19 +61,20 @@ server/                     Go backend (Gin + pgx/v5 + sqlc)
 
 All config is via environment variables (loaded from `.env` in debug mode):
 
-| Variable                 | Required | Description                                                                      |
-| ------------------------ | -------- | -------------------------------------------------------------------------------- |
-| `GITHUB_CLIENT_ID`       | yes      | GitHub OAuth App client ID                                                      |
-| `GITHUB_CLIENT_SECRET`   | yes      | GitHub OAuth App client secret                                                  |
-| `FRONTEND_URL`           | yes      | Frontend base URL for OAuth redirect (e.g. `http://localhost:5173`)             |
-| `TOKEN_ENCRYPTION_KEY`   | yes      | 32-byte hex key for encrypting GitHub tokens at rest (64 hex chars)             |
-| `WEBHOOK_SECRET`         | yes      | HMAC secret (legacy, for future webhook support)                                |
-| `ANTHROPIC_API_KEY`  | yes      | API key passed to the `claude` CLI                                               |
-| `API_KEY`            | yes      | API key for REST endpoints (sent as `X-Api-Key` header)                          |
-| `DATABASE_URL`       | yes      | PostgreSQL connection string (e.g. `postgres://user:pass@localhost:5432/dbname`) |
-| `JWT_SECRET`         | yes      | Secret for signing JWT access tokens                                             |
-| `PORT`               | no       | HTTP listen port (default: `8080`)                                               |
-| `WORKSPACE_DIR`      | no       | Base dir for repo clones (default: `/tmp/vote-llm-workspaces`)                   |
+| Variable               | Required | Description                                                                      |
+| ---------------------- | -------- | -------------------------------------------------------------------------------- |
+| `GITHUB_CLIENT_ID`     | yes      | GitHub OAuth App client ID                                                       |
+| `GITHUB_CLIENT_SECRET` | yes      | GitHub OAuth App client secret                                                   |
+| `FRONTEND_URL`         | yes      | Frontend base URL, used for post-OAuth redirect (e.g. `http://localhost:5173`)   |
+| `SERVER_URL`           | yes      | Server base URL, used as the OAuth callback base (e.g. `http://localhost:8080`)  |
+| `TOKEN_ENCRYPTION_KEY` | yes      | 64 hex chars (32 bytes) for AES-256-GCM encryption of stored GitHub tokens      |
+| `WEBHOOK_SECRET`       | yes      | HMAC secret (for future webhook support)                                         |
+| `ANTHROPIC_API_KEY`    | yes      | API key passed to the `claude` CLI                                               |
+| `API_KEY`              | yes      | API key for `X-Api-Key` protected endpoints                                      |
+| `DATABASE_URL`         | yes      | PostgreSQL connection string (e.g. `postgres://user:pass@localhost:5432/dbname`) |
+| `JWT_SECRET`           | yes      | Secret for signing JWT access tokens                                             |
+| `PORT`                 | no       | HTTP listen port (default: `8080`)                                               |
+| `WORKSPACE_DIR`        | no       | Base dir for repo clones (default: `/tmp/vote-llm-workspaces`)                   |
 
 ## Database
 
@@ -91,20 +92,20 @@ make migrate-down
 
 ### Tables
 
-| Table                   | Purpose                                                            |
-| ----------------------- | ------------------------------------------------------------------ |
-| `users`                 | User accounts (email + bcrypt password)                            |
-| `authorization_codes`   | OAuth2 authorization codes (PKCE, single-use, short-lived)         |
-| `refresh_tokens`        | Long-lived refresh tokens (stored as SHA-256 hash)                 |
-| `organizations`         | Tenant organizations                                               |
-| `organization_members`  | Many-to-many: users in organizations with roles (owner, member)    |
-| `organization_repositories` | Junction: orgs link to repos (owner/repo)                       |
-| `github_connections`   | Encrypted GitHub OAuth tokens per user                            |
-| `proposals`             | Community feature proposals with vote counts and status            |
-| `proposal_comments`     | Comments on proposals                                              |
-| `repo_config`           | Per-repo overrides for labels, timeout, budget, and API key        |
-| `executions`            | Tracks every agent run — status, branch, PR URL, error, timestamps |
-| `issue_votes`           | Vote tracking per GitHub issue                                     |
+| Table                       | Purpose                                                             |
+| --------------------------- | ------------------------------------------------------------------- |
+| `users`                     | User accounts (email + bcrypt password)                             |
+| `authorization_codes`       | OAuth2 authorization codes (PKCE, single-use, short-lived)          |
+| `refresh_tokens`            | Long-lived refresh tokens (stored as SHA-256 hash)                  |
+| `organizations`             | Tenant organizations                                                |
+| `organization_members`      | Many-to-many: users in organizations with roles (owner, member)     |
+| `organization_repositories` | Junction: orgs link to repos (owner/repo)                           |
+| `github_connections`        | Encrypted GitHub OAuth tokens per user (AES-256-GCM + base64)      |
+| `proposals`                 | Community feature proposals with vote counts and status             |
+| `proposal_comments`         | Comments on proposals                                               |
+| `repo_config`               | Per-repo overrides for labels, timeout, budget, and API key         |
+| `executions`                | Tracks every agent run — status, branch, PR URL, error, timestamps  |
+| `issue_votes`               | Vote tracking per GitHub issue                                      |
 
 ## Running
 
@@ -139,54 +140,54 @@ All endpoints are prefixed with `/v1`.
 
 ### Auth (OAuth2 Authorization Code + PKCE)
 
-| Method | Path               | Auth | Description                                      |
-| ------ | ------------------ | ---- | ------------------------------------------------ |
-| `POST` | `/v1/auth/authorize` | none | Validate credentials, return authorization code |
+| Method | Path                 | Auth | Description                                      |
+| ------ | -------------------- | ---- | ------------------------------------------------ |
+| `POST` | `/v1/auth/authorize` | none | Validate credentials, return authorization code  |
 | `POST` | `/v1/auth/token`     | none | Exchange code or refresh token for access token  |
 | `POST` | `/v1/auth/revoke`    | none | Revoke a refresh token                           |
 
 ### Users
 
-| Method   | Path                | Auth   | Description     |
-| -------- | ------------------- | ------ | --------------- |
-| `POST`   | `/v1/users/signup`  | none   | Create account  |
-| `DELETE` | `/v1/users/:id`     | Bearer | Delete account  |
+| Method   | Path               | Auth   | Description    |
+| -------- | ------------------ | ------ | -------------- |
+| `POST`   | `/v1/users/signup` | none   | Create account |
+| `DELETE` | `/v1/users/:id`    | Bearer | Delete account |
+
+### GitHub (connect GitHub account)
+
+| Method | Path                        | Auth   | Description                                    |
+| ------ | --------------------------- | ------ | ---------------------------------------------- |
+| `GET`  | `/v1/github/callback`       | none   | OAuth callback — GitHub redirects here         |
+| `GET`  | `/v1/github/authorize`      | Bearer | Get GitHub OAuth authorization URL             |
+| `GET`  | `/v1/github/status`         | Bearer | Check if GitHub is connected (`{connected, login}`) |
+| `GET`  | `/v1/github/repositories`   | Bearer | List authenticated user's GitHub repos (`?page=N`) |
 
 ### Organizations
 
-| Method   | Path                      | Auth | Description              |
-| -------- | ------------------------- | ---- | ------------------------ |
-| `GET`    | `/v1/organizations`       | Bearer | List my organizations |
-| `POST`   | `/v1/organizations/`      | Bearer | Create organization   |
-| `GET`    | `/v1/organizations/:id`   | Bearer | Get organization      |
-| `PUT`    | `/v1/organizations/:id`   | Bearer | Update organization   |
-| `DELETE` | `/v1/organizations/:id`   | Bearer | Delete organization   |
-
-### GitHub OAuth (Connect GitHub account)
-
-| Method | Path                         | Auth   | Description                            |
-| ------ | ---------------------------- | ------ | -------------------------------------- |
-| `GET`  | `/v1/auth/github/status`    | Bearer | Check if GitHub is connected           |
-| `GET`  | `/v1/auth/github/authorize`  | Bearer | Get GitHub OAuth URL (redirect user)   |
-| `GET`  | `/v1/auth/github/callback`   | none   | OAuth callback (GitHub redirects here)  |
+| Method   | Path                    | Auth   | Description           |
+| -------- | ----------------------- | ------ | --------------------- |
+| `GET`    | `/v1/organizations`     | Bearer | List my organizations |
+| `POST`   | `/v1/organizations`     | Bearer | Create organization   |
+| `GET`    | `/v1/organizations/:id` | Bearer | Get organization      |
+| `PUT`    | `/v1/organizations/:id` | Bearer | Update organization   |
+| `DELETE` | `/v1/organizations/:id` | Bearer | Delete organization   |
 
 ### Organization repositories
 
-| Method | Path                                    | Auth   | Description                    |
-| ------ | --------------------------------------- | ------ | ------------------------------ |
-| `GET`  | `/v1/organizations/:id/repositories`    | Bearer | List org repositories          |
-| `GET`  | `/v1/organizations/:id/repositories/available` | Bearer | List repos from GitHub (for adding) |
-| `POST` | `/v1/organizations/:id/repositories`   | Bearer | Add repository (body: `{owner, repo}`) |
-| `DELETE` | `/v1/organizations/:id/repositories/:owner/:repo` | Bearer | Remove repository     |
+| Method   | Path                                              | Auth   | Description                          |
+| -------- | ------------------------------------------------- | ------ | ------------------------------------ |
+| `GET`    | `/v1/organizations/:id/repositories`              | Bearer | List repos connected to org          |
+| `POST`   | `/v1/organizations/:id/repositories`              | Bearer | Add repo (body: `{owner, repo}`)     |
+| `DELETE` | `/v1/organizations/:id/repositories/:owner/:repo` | Bearer | Remove repo from org                 |
 
 ### Organization members
 
-| Method | Path                              | Auth   | Description                    |
-| ------ | --------------------------------- | ------ | ------------------------------ |
-| `GET`  | `/v1/organizations/:id/members`   | Bearer | List members (with email)      |
-| `POST` | `/v1/organizations/:id/members`   | Bearer | Invite by email (body: `{email}`) |
-| `DELETE` | `/v1/organizations/:id/members/:user_id` | Bearer | Remove member          |
-| `PATCH` | `/v1/organizations/:id/members/:user_id` | Bearer | Update role (body: `{role}`)    |
+| Method   | Path                                        | Auth   | Description                        |
+| -------- | ------------------------------------------- | ------ | ---------------------------------- |
+| `GET`    | `/v1/organizations/:id/members`             | Bearer | List members (with email)          |
+| `POST`   | `/v1/organizations/:id/members`             | Bearer | Invite by email (`{email}`)        |
+| `DELETE` | `/v1/organizations/:id/members/:user_id`    | Bearer | Remove member                      |
+| `PATCH`  | `/v1/organizations/:id/members/:user_id`    | Bearer | Update role (`{role}`)             |
 
 ## Auth flow
 
@@ -196,6 +197,16 @@ All endpoints are prefixed with `/v1`.
 4. Protected requests include `Authorization: Bearer <access_token>`
 5. On 401, client calls `POST /v1/auth/token` with `grant_type=refresh_token` to get a new access token
 6. `POST /v1/auth/revoke` invalidates the refresh token on logout
+
+## GitHub OAuth flow
+
+1. Client calls `GET /v1/github/authorize` (Bearer) → server returns `{authorize_url}`
+2. Client redirects user to `authorize_url` (GitHub)
+3. User approves → GitHub redirects to `GET /v1/github/callback?code=...&state=...`
+4. Server validates the signed JWT state, exchanges the code for a GitHub token
+5. Token is AES-256-GCM encrypted and base64-encoded before storing in `github_connections`
+6. Server redirects to `FRONTEND_URL?github_connected=1`
+7. Subsequent GitHub API calls use `GithubTokenSource` which decrypts, returns valid tokens, and auto-refreshes when expired
 
 ## Development
 

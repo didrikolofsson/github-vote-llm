@@ -297,15 +297,11 @@ export const AvailableRepositoriesSchema = z.object({
   has_more: z.boolean(),
 });
 export async function listAvailableRepositories(
-  orgId: number,
   page = 1,
 ): Promise<z.infer<typeof AvailableRepositoriesSchema>> {
-  return requestWithRefresh(
-    `/organizations/${orgId}/repositories/available?page=${page}`,
-    {
-      schema: AvailableRepositoriesSchema,
-    },
-  );
+  return requestWithRefresh(`/github/repositories?page=${page}`, {
+    schema: AvailableRepositoriesSchema,
+  });
 }
 
 export async function addRepository(

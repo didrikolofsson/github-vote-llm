@@ -16,7 +16,6 @@ type RepositoryHandlers interface {
 	List(c *gin.Context)
 	Add(c *gin.Context)
 	Remove(c *gin.Context)
-	ListAvailable(c *gin.Context)
 }
 
 type RepositoryHandlersImpl struct {
@@ -125,44 +124,4 @@ func (h *RepositoryHandlersImpl) Remove(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
-}
-
-var (
-	ErrNotConnected = errors.New("not connected to GitHub")
-)
-
-func (h *RepositoryHandlersImpl) ListAvailable(c *gin.Context) {
-	userID, ok := middleware.GetUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
-	orgID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization ID"})
-		return
-	}
-	page := 1
-	if p := c.Query("page"); p != "" {
-		if n, err := strconv.Atoi(p); err == nil && n > 0 {
-			page = n
-		}
-	}
-
-	repos, hasMore, err := h.s.ListAvailableFromGitHub(c.Request.Context(), orgID, userID, page)
-	if errors.Is(err, services.ErrNotOrgMember) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "not a member of this organization"})
-		return
-	}
-	if errors.Is(err, ErrNotConnected) {
-		c.JSON(http.StatusPreconditionFailed, gin.H{"error": "connect GitHub first", "code": "github_not_connected"})
-		return
-	}
-	if err != nil {
-		h.l.Errorw("Failed to list GitHub repositories", "error", err, "request_id", request.GetRequestID(c))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch repositories from GitHub"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"repositories": repos, "has_more": hasMore})
 }

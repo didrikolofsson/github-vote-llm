@@ -15,14 +15,14 @@ type RestApiRouter interface {
 }
 
 type RestApiRouterImpl struct {
-	env            *config.Environment
-	logger         *logger.Logger
-	uh             handlers.UserHandlers
-	ah             handlers.AuthHandlers
-	oh             handlers.OrganizationHandlers
-	gh             handlers.GithubHandlers
-	repoHandlers   handlers.RepositoryHandlers
-	memberHandlers handlers.MembersHandlers
+	env    *config.Environment
+	logger *logger.Logger
+	uh     handlers.UserHandlers
+	ah     handlers.AuthHandlers
+	oh     handlers.OrganizationHandlers
+	gh     handlers.GithubHandlers
+	rh     handlers.RepositoryHandlers
+	mh     handlers.MembersHandlers
 }
 
 func NewRestApiRouter(
@@ -32,18 +32,18 @@ func NewRestApiRouter(
 	ah handlers.AuthHandlers,
 	oh handlers.OrganizationHandlers,
 	gh handlers.GithubHandlers,
-	repoHandlers handlers.RepositoryHandlers,
-	memberHandlers handlers.MembersHandlers,
+	rh handlers.RepositoryHandlers,
+	mh handlers.MembersHandlers,
 ) RestApiRouter {
 	return &RestApiRouterImpl{
-		env:            env,
-		logger:         logger,
-		uh:             uh,
-		ah:             ah,
-		oh:             oh,
-		gh:             gh,
-		repoHandlers:   repoHandlers,
-		memberHandlers: memberHandlers,
+		env:    env,
+		logger: logger,
+		uh:     uh,
+		ah:     ah,
+		oh:     oh,
+		gh:     gh,
+		rh:     rh,
+		mh:     mh,
 	}
 }
 
@@ -65,20 +65,19 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	auth.POST("/token", r.ah.Token)
 	auth.POST("/revoke", r.ah.Revoke)
 
-	// GitHub OAuth: callback is hit by the browser (no JWT); authorize/status need the logged-in user.
 	github := api.Group("/github")
 	// Public
+	// GitHub OAuth: callback is hit by the browser (no JWT); authorize/status need the logged-in user.
 	github.GET("/callback", r.gh.Callback)
 	// Private
 	github.Use(middleware.RequireAuth(r.env.JWT_SECRET))
 	github.GET("/authorize", r.gh.Authorize)
 	github.GET("/status", r.gh.Status)
+	github.GET("/repositories", r.gh.ListReposByAuthenticatedUser)
 
 	users := api.Group("/users")
-
 	// Public user endpoints
 	users.POST("/signup", r.uh.SignupUser)
-
 	// Protected user endpoints
 	users.Use(middleware.RequireAuth(r.env.JWT_SECRET))
 	users.DELETE("/:id", r.uh.DeleteUser)
@@ -93,16 +92,15 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	organizations.DELETE("/:id", r.oh.DeleteOrganization)
 
 	// Organization repositories
-	organizations.GET("/:id/repositories", r.repoHandlers.List)
-	organizations.GET("/:id/repositories/available", r.repoHandlers.ListAvailable)
-	organizations.POST("/:id/repositories", r.repoHandlers.Add)
-	organizations.DELETE("/:id/repositories/:owner/:repo", r.repoHandlers.Remove)
+	organizations.GET("/:id/repositories", r.rh.List)
+	organizations.POST("/:id/repositories", r.rh.Add)
+	organizations.DELETE("/:id/repositories/:owner/:repo", r.rh.Remove)
 
 	// Organization members
-	organizations.GET("/:id/members", r.memberHandlers.List)
-	organizations.POST("/:id/members", r.memberHandlers.Invite)
-	organizations.DELETE("/:id/members/:user_id", r.memberHandlers.Remove)
-	organizations.PATCH("/:id/members/:user_id", r.memberHandlers.UpdateRole)
+	organizations.GET("/:id/members", r.mh.List)
+	organizations.POST("/:id/members", r.mh.Invite)
+	organizations.DELETE("/:id/members/:user_id", r.mh.Remove)
+	organizations.PATCH("/:id/members/:user_id", r.mh.UpdateRole)
 
 	return router
 }

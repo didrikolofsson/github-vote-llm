@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,6 +26,7 @@ type GithubHandlers interface {
 	Authorize(c *gin.Context)
 	Callback(c *gin.Context)
 	Status(c *gin.Context)
+	ListReposByAuthenticatedUser(c *gin.Context)
 }
 
 type GithubHandlersImpl struct {
@@ -142,4 +144,30 @@ func (h *GithubHandlersImpl) Status(c *gin.Context) {
 		"connected": true,
 		"login":     status.Login,
 	})
+}
+
+func (h *GithubHandlersImpl) ListReposByAuthenticatedUser(c *gin.Context) {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	page := 1
+	if p := c.Query("page"); p != "" {
+		if n, err := strconv.Atoi(p); err == nil && n > 0 {
+			page = n
+		}
+	}
+
+	repos, hasMore, err := h.s.ListReposByAuthenticatedUser(c.Request.Context(), userID, page)
+	if err != nil {
+		if errors.Is(err, services.ErrGitHubNotConnected) {
+			c.JSON(http.StatusPreconditionFailed, gin.H{"connected": false})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"repositories": repos, "has_more": hasMore})
 }
