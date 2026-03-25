@@ -5,6 +5,7 @@ import { listMyOrganizations } from './lib/api';
 import LoginPage from './pages/LoginPage';
 import CreateOrganizationPage from './pages/CreateOrganizationPage';
 import OrganizationDashboardPage from './pages/OrganizationDashboardPage';
+import RepositoriesPage from './pages/RepositoriesPage';
 import SettingsPage from './pages/SettingsPage';
 import Layout from './components/Layout';
 
@@ -88,6 +89,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<OrganizationDashboardPage />} />
+          <Route path="repositories" element={<RepositoriesPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>

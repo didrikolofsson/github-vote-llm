@@ -40,6 +40,7 @@ import { cn } from "@/lib/utils";
 export default function Layout() {
   const { logout, user } = useAuth();
   const isDashboard = useMatch("/dashboard");
+  const isRepositories = useMatch("/repositories");
   const isSettings = useMatch("/settings");
   const { data: orgs = [] } = useQuery({
     queryKey: ["organizations"],
@@ -55,9 +56,11 @@ export default function Layout() {
 
   const breadcrumb = isDashboard
     ? [{ label: "Dashboard" }]
-    : isSettings
-      ? [{ label: "Settings" }]
-      : [];
+    : isRepositories
+      ? [{ label: "Repositories" }]
+      : isSettings
+        ? [{ label: "Settings" }]
+        : [];
 
   return (
     <SidebarProvider>
@@ -91,6 +94,13 @@ export default function Layout() {
                   <SidebarMenuButton asChild isActive={!!isDashboard}>
                     <Link to="/dashboard">
                       Dashboard
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={!!isRepositories}>
+                    <Link to="/repositories">
+                      Repositories
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

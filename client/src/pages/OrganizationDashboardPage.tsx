@@ -1,32 +1,37 @@
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  addRepository,
-  formatApiError,
+  getGitHubAuthorizeUrl,
   getGitHubStatus,
-  listAvailableRepositories,
   listMyOrganizations,
+  listOrgMembers,
   listOrgRepositories,
-  removeRepository,
-  type OrgRepository,
 } from "@/lib/api";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, LayoutGrid, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import {
+  ArrowRight,
+  ArrowUpRight,
+  Github,
+  GitFork,
+  Plus,
+  Settings,
+  UserPlus,
+  Users,
+} from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 export default function OrganizationDashboardPage() {
-  const queryClient = useQueryClient();
-  const [addRepoOpen, setAddRepoOpen] = useState(false);
+  const navigate = useNavigate();
 
   const { data: orgs = [], isLoading: orgsLoading } = useQuery({
     queryKey: ["organizations"],
@@ -48,63 +53,177 @@ export default function OrganizationDashboardPage() {
     enabled: !!orgId,
   });
 
-  const addRepo = useMutation({
-    mutationFn: ({ owner, repo }: { owner: string; repo: string }) =>
-      addRepository(orgId!, owner, repo),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["organizations", orgId, "repositories"],
-      });
+  const { data: members = [], isLoading: membersLoading } = useQuery({
+    queryKey: ["organizations", orgId, "members"],
+    queryFn: () => listOrgMembers(orgId!),
+    enabled: !!orgId,
+  });
+
+  const connectGitHub = useMutation({
+    mutationFn: async () => {
+      const { authorize_url } = await getGitHubAuthorizeUrl();
+      window.location.href = authorize_url;
     },
   });
 
-  const removeRepo = useMutation({
-    mutationFn: ({ owner, repo }: { owner: string; repo: string }) =>
-      removeRepository(orgId!, owner, repo),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["organizations", orgId, "repositories"],
-      });
-    },
-  });
+  const recentRepos = repos.slice(0, 3);
+  const statsLoading = orgsLoading || reposLoading || membersLoading || ghStatusLoading;
 
   if (orgsLoading) {
     return (
       <div className="flex flex-col gap-6">
         <Skeleton className="h-9 w-48" />
-        <Skeleton className="h-[300px] w-full" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Skeleton className="h-[120px] w-full" />
+          <Skeleton className="h-[120px] w-full" />
+          <Skeleton className="h-[120px] w-full" />
+        </div>
+        <Skeleton className="h-[200px] w-full" />
       </div>
     );
   }
 
   return (
-    <div className="animate-slide-up flex flex-col gap-6">
+    <div className="animate-slide-up flex flex-col gap-8">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Your connected repositories
+          Overview of {org?.name ?? "your organization"}
         </p>
       </div>
 
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Repositories stat */}
+        <Link to="/repositories" tabIndex={-1}>
+          <Card className="group hover:bg-muted/30 transition-colors cursor-pointer h-full">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-center size-9 rounded-md bg-primary/8 text-primary">
+                  <GitFork className="size-4" />
+                </div>
+                <ArrowUpRight className="size-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
+              </div>
+              {reposLoading ? (
+                <Skeleton className="h-8 w-12 mb-1" />
+              ) : (
+                <div className="text-2xl font-semibold tabular-nums">{repos.length}</div>
+              )}
+              <p className="text-sm text-muted-foreground mt-0.5">Repositories</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        {/* Members stat */}
+        <Link to="/settings" tabIndex={-1}>
+          <Card className="group hover:bg-muted/30 transition-colors cursor-pointer h-full">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-center size-9 rounded-md bg-primary/8 text-primary">
+                  <Users className="size-4" />
+                </div>
+                <ArrowUpRight className="size-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
+              </div>
+              {membersLoading ? (
+                <Skeleton className="h-8 w-12 mb-1" />
+              ) : (
+                <div className="text-2xl font-semibold tabular-nums">{members.length}</div>
+              )}
+              <p className="text-sm text-muted-foreground mt-0.5">Members</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        {/* GitHub stat */}
+        <Link to="/settings" tabIndex={-1}>
+          <Card className="group hover:bg-muted/30 transition-colors cursor-pointer h-full">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-center size-9 rounded-md bg-primary/8 text-primary">
+                  <Github className="size-4" />
+                </div>
+                <ArrowUpRight className="size-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
+              </div>
+              {ghStatusLoading ? (
+                <>
+                  <Skeleton className="h-6 w-24 mb-1" />
+                  <Skeleton className="h-4 w-16 mt-1" />
+                </>
+              ) : ghStatus?.connected ? (
+                <>
+                  <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+                    Connected
+                  </span>
+                  {ghStatus.login && (
+                    <p className="text-sm text-muted-foreground mt-1.5">as @{ghStatus.login}</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-400">
+                    Not connected
+                  </span>
+                  <p className="text-sm text-muted-foreground mt-1.5">GitHub</p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
+
+      {/* Quick actions */}
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">
+          Quick actions
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/repositories">
+              <Plus />
+              Add repository
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/settings">
+              <UserPlus />
+              Invite member
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/settings">
+              <Settings />
+              Settings
+            </Link>
+          </Button>
+          {!ghStatus?.connected && !ghStatusLoading && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => connectGitHub.mutate()}
+              disabled={connectGitHub.isPending}
+            >
+              <Github />
+              Connect GitHub
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Recent repositories */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-[15px] flex items-center gap-2">
-                Repositories
-              </CardTitle>
+              <CardTitle className="text-[15px]">Recent repositories</CardTitle>
               <CardDescription className="mt-1">
-                Repositories connected to this organization.
+                Your latest connected repositories
               </CardDescription>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setAddRepoOpen(true)}
-              disabled={!ghStatus?.connected}
-            >
-              <Plus data-icon="inline-start" />
-              Add
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/repositories">
+                View all
+                <ArrowRight />
+              </Link>
             </Button>
           </div>
         </CardHeader>
@@ -113,43 +232,25 @@ export default function OrganizationDashboardPage() {
             <div className="flex flex-col gap-2">
               <Skeleton className="h-9 w-full" />
               <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
             </div>
-          ) : repos.length === 0 ? (
-            <div className="py-12 text-center rounded-lg bg-muted/50">
-              <LayoutGrid className="size-8 mx-auto text-muted-foreground/40 mb-3" />
+          ) : recentRepos.length === 0 ? (
+            <div className="py-10 text-center rounded-lg bg-muted/50">
+              <GitFork className="size-7 mx-auto text-muted-foreground/40 mb-3" />
               <p className="text-sm font-medium text-muted-foreground">
                 No repositories yet
               </p>
-              <p className="text-xs text-muted-foreground/70 mt-1">
-                {ghStatus?.connected ? (
-                  "Click Add to connect your first repository."
-                ) : (
-                  <>
-                    Connect GitHub in{" "}
-                    <Link to="/settings" className="underline underline-offset-2">
-                      Settings
-                    </Link>{" "}
-                    to add repositories.
-                  </>
-                )}
+              <p className="text-xs text-muted-foreground/70 mt-1 mb-4">
+                Connect your first GitHub repository to get started.
               </p>
+              <Button variant="outline" size="sm" onClick={() => navigate("/repositories")}>
+                <Plus />
+                Add repository
+              </Button>
             </div>
           ) : (
-            <div className="flex flex-col gap-3">
-            {!ghStatus?.connected && !ghStatusLoading && (
-              <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-400">
-                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                <span>
-                  GitHub account disconnected. Repositories are preserved but you can't add new ones until you{" "}
-                  <Link to="/settings" className="font-medium underline underline-offset-2">
-                    reconnect
-                  </Link>
-                  .
-                </span>
-              </div>
-            )}
             <ul className="flex flex-col gap-2">
-              {repos.map((r) => (
+              {recentRepos.map((r) => (
                 <li
                   key={`${r.owner}/${r.repo}`}
                   className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/30"
@@ -157,134 +258,17 @@ export default function OrganizationDashboardPage() {
                   <span className="text-sm font-mono">
                     {r.owner}/{r.repo}
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8 text-muted-foreground hover:text-destructive"
-                    onClick={() =>
-                      removeRepo.mutate({ owner: r.owner, repo: r.repo })
-                    }
-                    disabled={removeRepo.isPending}
-                  >
-                    <Trash2 />
-                  </Button>
+                  {r.created_at && (
+                    <span className="text-xs text-muted-foreground shrink-0 ml-4">
+                      {formatDate(r.created_at)}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
-            </div>
           )}
         </CardContent>
       </Card>
-
-      <AddRepoDialog
-        open={addRepoOpen}
-        onOpenChange={setAddRepoOpen}
-        orgId={orgId}
-        existingRepos={repos ?? []}
-        onAdd={addRepo.mutate}
-        adding={addRepo.isPending}
-      />
     </div>
-  );
-}
-
-function AddRepoDialog({
-  open,
-  onOpenChange,
-  orgId,
-  existingRepos,
-  onAdd,
-  adding,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  orgId?: number;
-  existingRepos: OrgRepository[];
-  onAdd: (params: { owner: string; repo: string }) => void;
-  adding: boolean;
-}) {
-  const [page, setPage] = useState(1);
-  const existingSet = new Set(existingRepos.map((r) => `${r.owner}/${r.repo}`));
-
-  const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["available-repos", orgId, page],
-    queryFn: () => listAvailableRepositories(page),
-    enabled: open && !!orgId,
-  });
-
-  const repos = data?.repositories ?? [];
-  const hasMore = data?.has_more ?? false;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Add repository</DialogTitle>
-          <DialogDescription>
-            Select a repository from your GitHub account to add to this
-            organization.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="max-h-[320px] overflow-y-auto mt-4">
-          {isError && error && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertDescription>{formatApiError(error)}</AlertDescription>
-            </Alert>
-          )}
-          {isLoading ? (
-            <div className="flex flex-col gap-2 py-4">
-              <Skeleton className="h-9 w-full" />
-              <Skeleton className="h-9 w-full" />
-              <Skeleton className="h-9 w-full" />
-            </div>
-          ) : repos.length === 0 ? (
-            isError ? null : (
-              <p className="text-sm text-muted-foreground py-8 text-center">
-                No repositories found.
-              </p>
-            )
-          ) : (
-            <ul className="flex flex-col gap-1">
-              {repos.map((r) => {
-                const key = `${r.owner}/${r.repo}`;
-                const alreadyAdded = existingSet.has(key);
-                return (
-                  <li key={key}>
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-between"
-                      onClick={() =>
-                        !alreadyAdded && onAdd({ owner: r.owner, repo: r.repo })
-                      }
-                      disabled={alreadyAdded || adding}
-                    >
-                      <span className="font-mono">{key}</span>
-                      {alreadyAdded ? (
-                        <span className="text-xs text-muted-foreground">
-                          Added
-                        </span>
-                      ) : (
-                        <Plus data-icon="inline-end" />
-                      )}
-                    </Button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {hasMore && (
-            <div className="mt-4 flex justify-center">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Load more
-              </Button>
-            </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }
