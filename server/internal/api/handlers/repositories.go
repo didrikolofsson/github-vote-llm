@@ -8,7 +8,6 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api/middleware"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/request"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
-	"github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/gin-gonic/gin"
 )
@@ -128,6 +127,10 @@ func (h *RepositoryHandlersImpl) Remove(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+var (
+	ErrNotConnected = errors.New("not connected to GitHub")
+)
+
 func (h *RepositoryHandlersImpl) ListAvailable(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
@@ -152,7 +155,7 @@ func (h *RepositoryHandlersImpl) ListAvailable(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "not a member of this organization"})
 		return
 	}
-	if errors.Is(err, github.ErrNotConnected) {
+	if errors.Is(err, ErrNotConnected) {
 		c.JSON(http.StatusPreconditionFailed, gin.H{"error": "connect GitHub first", "code": "github_not_connected"})
 		return
 	}

@@ -8,8 +8,8 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
-	gh "github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
+	appoauth2 "github.com/didrikolofsson/github-vote-llm/internal/oauth2"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -48,12 +48,18 @@ func main() {
 	authHandlers := handlers.NewAuthHandlers(authService, env.JWT_SECRET)
 	organizationService := services.NewOrganizationService(conn, q)
 	organizationHandlers := handlers.NewOrganizationHandlers(organizationService, apiLogger)
-	githubOAuthService := gh.NewOAuthService(env.GITHUB_CLIENT_ID, env.GITHUB_CLIENT_SECRET, q)
-	githubOAuthHandlers := handlers.NewGitHubOAuthHandlers(githubOAuthService, env)
-	reposService := services.NewRepositoriesService(q, githubOAuthService, env.TOKEN_ENCRYPTION_KEY)
+	reposService := services.NewRepositoriesService(conn, q)
 	reposHandlers := handlers.NewRepositoryHandlers(reposService, apiLogger)
 	membersService := services.NewMembersService(q)
 	membersHandlers := handlers.NewMembersHandlers(membersService, apiLogger)
+
+	githubOAuthCfg := appoauth2.NewGitHubOAuthConfig(
+		env.GITHUB_CLIENT_ID,
+		env.GITHUB_CLIENT_SECRET,
+		env.SERVER_URL+"/v1/github/callback",
+	)
+	githubService := services.NewGithubService(conn, q, githubOAuthCfg, env.TOKEN_ENCRYPTION_KEY)
+	githubHandlers := handlers.NewGithubHandlers(env, githubService)
 
 	router := api.NewRestApiRouter(
 		env,
@@ -61,7 +67,7 @@ func main() {
 		userHandlers,
 		authHandlers,
 		organizationHandlers,
-		githubOAuthHandlers,
+		githubHandlers,
 		reposHandlers,
 		membersHandlers,
 	).Create()

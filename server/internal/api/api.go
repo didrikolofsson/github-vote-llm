@@ -20,7 +20,7 @@ type RestApiRouterImpl struct {
 	uh             handlers.UserHandlers
 	ah             handlers.AuthHandlers
 	oh             handlers.OrganizationHandlers
-	githubOAuth    handlers.GitHubOAuthHandlers
+	gh             handlers.GithubHandlers
 	repoHandlers   handlers.RepositoryHandlers
 	memberHandlers handlers.MembersHandlers
 }
@@ -31,7 +31,7 @@ func NewRestApiRouter(
 	uh handlers.UserHandlers,
 	ah handlers.AuthHandlers,
 	oh handlers.OrganizationHandlers,
-	githubOAuth handlers.GitHubOAuthHandlers,
+	gh handlers.GithubHandlers,
 	repoHandlers handlers.RepositoryHandlers,
 	memberHandlers handlers.MembersHandlers,
 ) RestApiRouter {
@@ -41,7 +41,7 @@ func NewRestApiRouter(
 		uh:             uh,
 		ah:             ah,
 		oh:             oh,
-		githubOAuth:    githubOAuth,
+		gh:             gh,
 		repoHandlers:   repoHandlers,
 		memberHandlers: memberHandlers,
 	}
@@ -65,11 +65,14 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	auth.POST("/token", r.ah.Token)
 	auth.POST("/revoke", r.ah.Revoke)
 
-	// GitHub
+	// GitHub OAuth: callback is hit by the browser (no JWT); authorize/status need the logged-in user.
 	github := api.Group("/github")
-	github.GET("/status", middleware.RequireAuth(r.env.JWT_SECRET), r.githubOAuth.Status)
-	github.GET("/authorize", middleware.RequireAuth(r.env.JWT_SECRET), r.githubOAuth.Authorize)
-	github.GET("/callback", r.githubOAuth.Callback)
+	// Public
+	github.GET("/callback", r.gh.Callback)
+	// Private
+	github.Use(middleware.RequireAuth(r.env.JWT_SECRET))
+	github.GET("/authorize", r.gh.Authorize)
+	github.GET("/status", r.gh.Status)
 
 	users := api.Group("/users")
 
@@ -84,7 +87,7 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	organizations := api.Group("/organizations")
 	organizations.Use(middleware.RequireAuth(r.env.JWT_SECRET))
 	organizations.GET("", r.oh.ListMyOrganizations)
-	organizations.POST("/", r.oh.CreateOrganization)
+	organizations.POST("", r.oh.CreateOrganization)
 	organizations.GET("/:id", r.oh.GetOrganization)
 	organizations.PUT("/:id", r.oh.UpdateOrganization)
 	organizations.DELETE("/:id", r.oh.DeleteOrganization)
@@ -103,37 +106,3 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 
 	return router
 }
-
-// func SetupAPIRouter(router *gin.Engine, logger *logger.Logger, handlers *api_handlers.ApiHandlers, env *config.Environment) {
-// 	logger.Infow("Setting up API router")
-
-// 	api := router.Group("/v1/api")
-
-// 	api.GET("/health", func(c *gin.Context) {
-// 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-// 	})
-
-// 	api.Use(api_middleware.ValidateAPIKey(env.API_KEY))
-
-// 	api.GET("/runs", handlers.Runs.List)
-// 	api.POST("/runs", handlers.Runs.Create)
-// 	api.GET("/runs/:id", handlers.Runs.Get)
-// 	api.POST("/runs/:id/retry", handlers.Runs.Retry)
-// 	api.POST("/runs/:id/cancel", handlers.Runs.Cancel)
-// 	api.GET("/repos", handlers.Repos.List)
-// 	api.GET("/repos/:owner/:repo/config", handlers.Repos.GetConfig)
-// 	api.PUT("/repos/:owner/:repo/config", handlers.Repos.UpdateConfig)
-// 	api.DELETE("/repos/:owner/:repo/config", handlers.Repos.DeleteConfig)
-// 	api.GET("/repos/:owner/:repo/roadmap", handlers.Repos.ListRoadmapItems)
-// 	api.PATCH("/repos/:owner/:repo/proposals/:id", handlers.Repos.UpdateProposalStatus)
-// }
-
-// func SetupPublicBoardRouter(router *gin.Engine, handlers *api_handlers.ApiHandlers) *gin.Engine {
-// 	board := router.Group("/board")
-// 	board.GET("/:owner/:repo/proposals", handlers.Board.ListProposals)
-// 	board.POST("/:owner/:repo/proposals", handlers.Board.CreateProposal)
-// 	board.POST("/:owner/:repo/proposals/:id/vote", handlers.Board.VoteProposal)
-// 	board.GET("/:owner/:repo/proposals/:id/comments", handlers.Board.ListComments)
-// 	board.POST("/:owner/:repo/proposals/:id/comments", handlers.Board.CreateComment)
-// 	return router
-// }

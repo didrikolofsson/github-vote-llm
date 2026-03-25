@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var (
@@ -30,16 +30,14 @@ type RepositoriesService interface {
 }
 
 type RepositoriesServiceImpl struct {
-	q             *store.Queries
-	githubOAuth   github.OAuthService
-	encryptionKey string
+	db *pgxpool.Pool
+	q  *store.Queries
 }
 
-func NewRepositoriesService(q *store.Queries, githubOAuth github.OAuthService, encryptionKey string) RepositoriesService {
+func NewRepositoriesService(db *pgxpool.Pool, q *store.Queries) RepositoriesService {
 	return &RepositoriesServiceImpl{
-		q:             q,
-		githubOAuth:   githubOAuth,
-		encryptionKey: encryptionKey,
+		db: db,
+		q:  q,
 	}
 }
 
@@ -118,20 +116,22 @@ func (s *RepositoriesServiceImpl) verifyOrgMember(ctx context.Context, orgID, us
 }
 
 func (s *RepositoriesServiceImpl) ListAvailableFromGitHub(ctx context.Context, orgID, userID int64, page int) ([]Repository, bool, error) {
-	if err := s.verifyOrgMember(ctx, orgID, userID); err != nil {
-		return nil, false, err
-	}
-	summaries, hasMore, err := s.githubOAuth.ListGitHubReposForUser(ctx, userID, page, s.encryptionKey)
-	if err != nil {
-		if errors.Is(err, github.ErrNotConnected) {
-			return nil, false, github.ErrNotConnected
-		}
-		return nil, false, err
-	}
 
-	out := make([]Repository, len(summaries))
-	for i, r := range summaries {
-		out[i] = Repository{Owner: r.Owner, Repo: r.Repo}
-	}
-	return out, hasMore, nil
+	// if err := s.verifyOrgMember(ctx, orgID, userID); err != nil {
+	// 	return nil, false, err
+	// }
+	// summaries, hasMore, err := s.gh.ListRepos(ctx, page)
+	// if err != nil {
+	// 	if errors.Is(err, github.ErrNotConnected) {
+	// 		return nil, false, github.ErrNotConnected
+	// 	}
+	// 	return nil, false, err
+	// }
+
+	// out := make([]Repository, len(summaries))
+	// for i, r := range summaries {
+	// 	out[i] = Repository{Owner: r.Owner, Repo: r.Repo}
+	// }
+	// return out, hasMore, nil
+	return nil, false, nil
 }

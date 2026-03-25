@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	ErrOrganizationNotFound       = errors.New("organization not found")
-	ErrOrganizationNameExists     = errors.New("organization name already exists")
+	ErrOrganizationNotFound      = errors.New("organization not found")
+	ErrOrganizationNameExists    = errors.New("organization name already exists")
 	ErrUserAlreadyInOrganization = errors.New("you already belong to an organization")
 )
 
