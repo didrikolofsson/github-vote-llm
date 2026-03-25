@@ -92,9 +92,17 @@ FROM users
 WHERE email = $1
 `
 
-func (q *Queries) GetUserByEmailWithPassword(ctx context.Context, email string) (User, error) {
+type GetUserByEmailWithPasswordRow struct {
+	ID        int64
+	Email     string
+	Password  string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) GetUserByEmailWithPassword(ctx context.Context, email string) (GetUserByEmailWithPasswordRow, error) {
 	row := q.db.QueryRow(ctx, getUserByEmailWithPassword, email)
-	var i User
+	var i GetUserByEmailWithPasswordRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
@@ -118,7 +126,7 @@ WHERE id = $1
 type GetUserByIDRow struct {
 	ID        int64
 	Email     string
-	Username  pgtype.Text
+	Username  *string
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 }
@@ -145,13 +153,13 @@ RETURNING id, email, username, created_at, updated_at
 
 type UpdateUserUsernameParams struct {
 	ID       int64
-	Username pgtype.Text
+	Username *string
 }
 
 type UpdateUserUsernameRow struct {
 	ID        int64
 	Email     string
-	Username  pgtype.Text
+	Username  *string
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 }

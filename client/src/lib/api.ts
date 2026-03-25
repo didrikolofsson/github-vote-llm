@@ -180,6 +180,14 @@ export async function updateUsername(username: string): Promise<UserProfile> {
   });
 }
 
+/** Delete a user by id. Allowed for self, or for an org owner deleting a member of the same org. */
+export async function deleteUser(userId: number): Promise<void> {
+  await requestWithRefresh(`/users/${userId}`, {
+    method: "DELETE",
+    schema: z.void(),
+  });
+}
+
 // ─── App API (protected, requires token) ─────────────────────────────────────
 
 import {
@@ -290,6 +298,13 @@ export async function getGitHubAuthorizeUrl(): Promise<
 > {
   return requestWithRefresh("/github/authorize", {
     schema: GitHubAuthorizeUrlSchema,
+  });
+}
+
+export async function disconnectGitHub(): Promise<void> {
+  return requestWithRefresh("/github/connection", {
+    method: "DELETE",
+    schema: z.void(),
   });
 }
 

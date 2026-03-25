@@ -14,6 +14,16 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  deleteUser,
+  disconnectGitHub,
   formatApiError,
   getGitHubAuthorizeUrl,
   getGitHubStatus,
@@ -27,7 +37,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Github, MoreHorizontal, Users } from "lucide-react";
+import { Github, MoreHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export default function SettingsPage() {
@@ -107,6 +117,13 @@ function OrganizationTab() {
     mutationFn: async () => {
       const { authorize_url } = await getGitHubAuthorizeUrl();
       window.location.href = authorize_url;
+    },
+  });
+
+  const disconnectGitHubMutation = useMutation({
+    mutationFn: () => disconnectGitHub(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["github-status"] });
     },
   });
 
@@ -201,29 +218,39 @@ function OrganizationTab() {
             {ghLoading ? (
               <Skeleton className="h-4 w-48" />
             ) : ghStatus?.connected ? (
-              <div className="flex items-center gap-2">
-                <span className="size-2 rounded-full bg-green-500 shrink-0" />
-                <span className="text-sm text-muted-foreground">
-                  Connected as{" "}
-                  <span className="font-medium text-foreground">
-                    @{ghStatus.login}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="size-2 rounded-full bg-green-500 shrink-0" />
+                  <span className="text-sm text-muted-foreground">
+                    Connected as{" "}
+                    <span className="font-medium text-foreground">
+                      @{ghStatus.login}
+                    </span>
                   </span>
-                </span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => disconnectGitHubMutation.mutate()}
+                  disabled={disconnectGitHubMutation.isPending}
+                >
+                  {disconnectGitHubMutation.isPending ? "Disconnecting..." : "Disconnect"}
+                </Button>
               </div>
             ) : (
-              <div className="flex flex-col gap-3">
-                <p className="text-sm text-muted-foreground">
-                  No GitHub account connected.
-                </p>
-                <div>
-                  <Button
-                    onClick={() => connectGitHub.mutate()}
-                    disabled={connectGitHub.isPending}
-                  >
-                    <Github data-icon="inline-start" />
-                    Connect GitHub
-                  </Button>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="size-2 rounded-full bg-muted-foreground/40 shrink-0" />
+                  <span className="text-sm text-muted-foreground">No account connected</span>
                 </div>
+                <Button
+                  size="xs"
+                  onClick={() => connectGitHub.mutate()}
+                  disabled={connectGitHub.isPending}
+                >
+                  <Github data-icon="inline-start" />
+                  {connectGitHub.isPending ? "Connecting..." : "Connect"}
+                </Button>
               </div>
             )}
           </CardContent>
@@ -312,6 +339,9 @@ function AccountTab() {
   const queryClient = useQueryClient();
   const [usernameInput, setUsernameInput] = useState("");
   const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ["users", "me"],
@@ -331,7 +361,25 @@ function AccountTab() {
     onError: (err) => setUsernameError(formatApiError(err)),
   });
 
+  const deleteAccountMutation = useMutation({
+    mutationFn: () => {
+      const id = profile?.id ?? user?.id;
+      if (id == null) throw new Error("Account not loaded");
+      return deleteUser(id);
+    },
+    onSuccess: async () => {
+      setDeleteDialogOpen(false);
+      setDeleteConfirmEmail("");
+      setDeleteError(null);
+      queryClient.clear();
+      await logout();
+    },
+    onError: (err) => setDeleteError(formatApiError(err)),
+  });
+
   const displayName = profile?.username ?? user?.email ?? "";
+  const emailMatchesConfirm =
+    !!user?.email && deleteConfirmEmail.trim().toLowerCase() === user.email.toLowerCase();
 
   return (
     <>
@@ -398,19 +446,75 @@ function AccountTab() {
           <CardDescription>Irreversible account actions.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-medium">Sign out</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                End your current session.
+              <p className="text-sm font-medium">Delete account</p>
+              <p className="text-xs text-muted-foreground mt-0.5 max-w-md">
+                Permanently remove your user, sessions, and GitHub connection. If you are the only
+                member of an organization, that organization and its linked repositories are
+                removed. If others remain, ownership transfers to another member.
               </p>
             </div>
-            <Button variant="destructive" size="sm" onClick={() => void logout()}>
-              Sign out
+            <Button
+              variant="destructive"
+              size="sm"
+              className="shrink-0"
+              onClick={() => {
+                setDeleteConfirmEmail("");
+                setDeleteError(null);
+                setDeleteDialogOpen(true);
+              }}
+            >
+              Delete account
             </Button>
           </div>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open);
+          if (!open) {
+            setDeleteConfirmEmail("");
+            setDeleteError(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete your account?</DialogTitle>
+            <DialogDescription>
+              This cannot be undone. Type <span className="font-medium text-foreground">{user?.email}</span>{" "}
+              to confirm.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 py-2">
+            <Label htmlFor="delete-confirm-email">Email</Label>
+            <Input
+              id="delete-confirm-email"
+              type="email"
+              autoComplete="off"
+              value={deleteConfirmEmail}
+              onChange={(e) => setDeleteConfirmEmail(e.target.value)}
+              placeholder="your@email.com"
+            />
+            {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!emailMatchesConfirm || deleteAccountMutation.isPending}
+              onClick={() => deleteAccountMutation.mutate()}
+            >
+              {deleteAccountMutation.isPending ? "Deleting…" : "Delete account"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

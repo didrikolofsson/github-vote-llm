@@ -170,4 +170,5 @@ type User struct {
 	Password  string
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
+	Username  *string
 }

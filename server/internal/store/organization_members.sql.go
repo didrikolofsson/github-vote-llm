@@ -97,6 +97,21 @@ func (q *Queries) GetOrganizationMembersWithUser(ctx context.Context, organizati
 	return items, nil
 }
 
+const getOrganizationMembershipByUserID = `-- name: GetOrganizationMembershipByUserID :one
+SELECT organization_id,
+    user_id,
+    role
+FROM organization_members
+WHERE user_id = $1
+`
+
+func (q *Queries) GetOrganizationMembershipByUserID(ctx context.Context, userID int64) (OrganizationMember, error) {
+	row := q.db.QueryRow(ctx, getOrganizationMembershipByUserID, userID)
+	var i OrganizationMember
+	err := row.Scan(&i.OrganizationID, &i.UserID, &i.Role)
+	return i, err
+}
+
 const removeOrganizationMember = `-- name: RemoveOrganizationMember :exec
 DELETE FROM organization_members
 WHERE organization_id = $1

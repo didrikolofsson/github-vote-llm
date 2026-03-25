@@ -20,7 +20,7 @@ import {
   type OrgRepository,
 } from "@/lib/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayoutGrid, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, LayoutGrid, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -36,7 +36,7 @@ export default function OrganizationDashboardPage() {
   const org = orgs[0];
   const orgId = org?.id;
 
-  const { data: ghStatus } = useQuery({
+  const { data: ghStatus, isLoading: ghStatusLoading } = useQuery({
     queryKey: ["github-status"],
     queryFn: () => getGitHubStatus(),
     enabled: !!orgId,
@@ -135,6 +135,19 @@ export default function OrganizationDashboardPage() {
               </p>
             </div>
           ) : (
+            <div className="flex flex-col gap-3">
+            {!ghStatus?.connected && !ghStatusLoading && (
+              <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-400">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <span>
+                  GitHub account disconnected. Repositories are preserved but you can't add new ones until you{" "}
+                  <Link to="/settings" className="font-medium underline underline-offset-2">
+                    reconnect
+                  </Link>
+                  .
+                </span>
+              </div>
+            )}
             <ul className="flex flex-col gap-2">
               {repos.map((r) => (
                 <li
@@ -158,6 +171,7 @@ export default function OrganizationDashboardPage() {
                 </li>
               ))}
             </ul>
+            </div>
           )}
         </CardContent>
       </Card>

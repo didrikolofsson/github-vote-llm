@@ -74,6 +74,7 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	github.GET("/authorize", r.gh.Authorize)
 	github.GET("/status", r.gh.Status)
 	github.GET("/repositories", r.gh.ListReposByAuthenticatedUser)
+	github.DELETE("/connection", r.gh.Disconnect)
 
 	users := api.Group("/users")
 	// Public user endpoints

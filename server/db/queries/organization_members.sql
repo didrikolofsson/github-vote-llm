@@ -1,3 +1,10 @@
+-- name: GetOrganizationMembershipByUserID :one
+SELECT organization_id,
+    user_id,
+    role
+FROM organization_members
+WHERE user_id = $1;
+
 -- name: AddOrganizationMember :one
 INSERT INTO organization_members (organization_id, user_id, role)
 VALUES ($1, $2, $3)

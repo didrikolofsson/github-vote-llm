@@ -27,6 +27,7 @@ type GithubHandlers interface {
 	Callback(c *gin.Context)
 	Status(c *gin.Context)
 	ListReposByAuthenticatedUser(c *gin.Context)
+	Disconnect(c *gin.Context)
 }
 
 type GithubHandlersImpl struct {
@@ -71,6 +72,7 @@ func (h *GithubHandlersImpl) Authorize(c *gin.Context) {
 	v.Set("redirect_uri", h.env.SERVER_URL+"/v1/github/callback")
 	v.Set("scope", "repo read:org")
 	v.Set("state", stateStr)
+	v.Set("prompt", "select_account")
 
 	authorizeURL := GitHubAuthURL + "?" + v.Encode()
 	c.JSON(http.StatusOK, gin.H{"authorize_url": authorizeURL})
@@ -119,7 +121,7 @@ func (h *GithubHandlersImpl) Callback(c *gin.Context) {
 		return
 	}
 
-	success := strings.TrimSuffix(h.env.FRONTEND_URL, "/") + "?github_connected=1"
+	success := strings.TrimSuffix(h.env.FRONTEND_URL, "/") + "/settings?github_connected=1"
 	c.Redirect(http.StatusTemporaryRedirect, success)
 }
 
@@ -144,6 +146,21 @@ func (h *GithubHandlersImpl) Status(c *gin.Context) {
 		"connected": true,
 		"login":     status.Login,
 	})
+}
+
+func (h *GithubHandlersImpl) Disconnect(c *gin.Context) {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if err := h.s.Disconnect(c.Request.Context(), userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to disconnect github account"})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
 
 func (h *GithubHandlersImpl) ListReposByAuthenticatedUser(c *gin.Context) {

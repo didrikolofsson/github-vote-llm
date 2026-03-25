@@ -99,18 +99,28 @@ func (h *UserHandlersImpl) UpdateUsername(c *gin.Context) {
 }
 
 func (h *UserHandlersImpl) DeleteUser(c *gin.Context) {
-	userID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	requestingUserID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	targetUserID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID"})
 		return
 	}
-	if err := h.s.DeleteUser(c.Request.Context(), userID); err != nil {
+	if err := h.s.DeleteUser(c.Request.Context(), requestingUserID, targetUserID); err != nil {
 		if errors.Is(err, services.ErrUserNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
+		if errors.Is(err, services.ErrForbiddenUserDelete) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "you cannot delete this user"})
+			return
+		}
+		h.l.Errorw("Failed to delete user", "error", err, "request_id", request.GetRequestID(c))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "deleted user " + strconv.FormatInt(userID, 10)})
+	c.Status(http.StatusNoContent)
 }
