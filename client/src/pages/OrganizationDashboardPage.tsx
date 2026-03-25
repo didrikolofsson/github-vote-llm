@@ -91,7 +91,6 @@ export default function OrganizationDashboardPage() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-[15px] flex items-center gap-2">
-                <LayoutGrid className="size-4" />
                 Repositories
               </CardTitle>
               <CardDescription className="mt-1">

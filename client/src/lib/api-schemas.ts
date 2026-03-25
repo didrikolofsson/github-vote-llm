@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 // ─── Run ────────────────────────────────────────────────────────────────────
 
@@ -7,7 +7,7 @@ export const RunSchema = z.object({
   owner: z.string(),
   repo: z.string(),
   issue_number: z.number(),
-  status: z.enum(['pending', 'in_progress', 'done', 'failed', 'cancelled']),
+  status: z.enum(["pending", "in_progress", "done", "failed", "cancelled"]),
   branch: z.string().nullable().optional(),
   pr_url: z.string().nullable().optional(),
   error: z.string().nullable().optional(),
@@ -57,7 +57,7 @@ export const ProposalSchema = z.object({
   title: z.string(),
   description: z.string().nullable().optional(),
   vote_count: z.number(),
-  status: z.enum(['open', 'planned', 'done']),
+  status: z.enum(["open", "planned", "done"]),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -102,8 +102,12 @@ export const ProposalCommentListSchema = z.array(ProposalCommentSchema);
 
 export type Run = z.infer<typeof RunSchema>;
 export type RepoConfig = z.infer<typeof RepoConfigSchema>;
-export type UpdateRepoConfigRequest = z.infer<typeof UpdateRepoConfigRequestSchema>;
+export type UpdateRepoConfigRequest = z.infer<
+  typeof UpdateRepoConfigRequestSchema
+>;
 export type Proposal = z.infer<typeof ProposalSchema>;
 export type ProposalComment = z.infer<typeof ProposalCommentSchema>;
 export type Organization = z.infer<typeof OrganizationSchema>;
-export type OrganizationWithMembers = z.infer<typeof OrganizationWithMembersSchema>;
+export type OrganizationWithMembers = z.infer<
+  typeof OrganizationWithMembersSchema
+>;

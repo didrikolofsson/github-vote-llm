@@ -108,6 +108,7 @@ func (q *Queries) GetUserByEmailWithPassword(ctx context.Context, email string) 
 const getUserByID = `-- name: GetUserByID :one
 SELECT id,
     email,
+    username,
     created_at,
     updated_at
 FROM users
@@ -117,6 +118,7 @@ WHERE id = $1
 type GetUserByIDRow struct {
 	ID        int64
 	Email     string
+	Username  pgtype.Text
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 }
@@ -127,6 +129,40 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, er
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
+		&i.Username,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateUserUsername = `-- name: UpdateUserUsername :one
+UPDATE users
+SET username = $2, updated_at = now()
+WHERE id = $1
+RETURNING id, email, username, created_at, updated_at
+`
+
+type UpdateUserUsernameParams struct {
+	ID       int64
+	Username pgtype.Text
+}
+
+type UpdateUserUsernameRow struct {
+	ID        int64
+	Email     string
+	Username  pgtype.Text
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) UpdateUserUsername(ctx context.Context, arg UpdateUserUsernameParams) (UpdateUserUsernameRow, error) {
+	row := q.db.QueryRow(ctx, updateUserUsername, arg.ID, arg.Username)
+	var i UpdateUserUsernameRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Username,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

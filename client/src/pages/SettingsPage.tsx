@@ -1,4 +1,3 @@
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +8,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -16,15 +17,18 @@ import {
   formatApiError,
   getGitHubAuthorizeUrl,
   getGitHubStatus,
+  getMe,
   listMyOrganizations,
   listOrgMembers,
   removeMember,
   updateMemberRole,
+  updateOrganization,
+  updateUsername,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Github, MoreHorizontal, Users } from "lucide-react";
-import { useEffect } from "react";
+import { Building2, Github, MoreHorizontal, Users } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
@@ -80,6 +84,13 @@ function OrganizationTab() {
   const org = orgs[0];
   const orgId = org?.id;
 
+  const [orgName, setOrgName] = useState(org?.name ?? "");
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (org?.name) setOrgName(org.name);
+  }, [org?.name]);
+
   const { data: ghStatus, isLoading: ghLoading } = useQuery({
     queryKey: ["github-status"],
     queryFn: () => getGitHubStatus(),
@@ -99,12 +110,19 @@ function OrganizationTab() {
     },
   });
 
+  const updateOrgMutation = useMutation({
+    mutationFn: () => updateOrganization(orgId!, orgName.trim()),
+    onSuccess: () => {
+      setSaveError(null);
+      queryClient.invalidateQueries({ queryKey: ["organizations"] });
+    },
+    onError: (err) => setSaveError(formatApiError(err)),
+  });
+
   const removeMemberMutation = useMutation({
     mutationFn: (userId: number) => removeMember(orgId!, userId),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["organizations", orgId, "members"],
-      });
+      queryClient.invalidateQueries({ queryKey: ["organizations", orgId, "members"] });
     },
   });
 
@@ -112,150 +130,208 @@ function OrganizationTab() {
     mutationFn: ({ userId, role }: { userId: number; role: "owner" | "member" }) =>
       updateMemberRole(orgId!, userId, role),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["organizations", orgId, "members"],
-      });
+      queryClient.invalidateQueries({ queryKey: ["organizations", orgId, "members"] });
     },
   });
 
   if (orgsLoading) {
     return (
-      <>
-        <Skeleton className="h-[120px] w-full" />
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4">
         <Skeleton className="h-[200px] w-full" />
-      </>
+        <div className="flex flex-col gap-4">
+          <Skeleton className="h-[100px] w-full" />
+          <Skeleton className="h-[200px] w-full" />
+        </div>
+      </div>
     );
   }
 
   return (
-    <>
-      {/* GitHub connection */}
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 items-start">
+      {/* Left: org info form */}
       <Card>
         <CardHeader>
           <CardTitle className="text-[15px] flex items-center gap-2">
-            <Github className="size-4" />
-            GitHub connection
+            Organization
           </CardTitle>
-          <CardDescription>
-            Connect your GitHub account to enable repository management.
-          </CardDescription>
+          <CardDescription>Edit your organization details.</CardDescription>
         </CardHeader>
-        <CardContent>
-          {ghLoading ? (
-            <Skeleton className="h-4 w-48" />
-          ) : ghStatus?.connected ? (
-            <div className="flex items-center gap-2">
-              <span className="size-2 rounded-full bg-green-500 shrink-0" />
-              <span className="text-sm text-muted-foreground">
-                Connected as{" "}
-                <span className="font-medium text-foreground">
-                  @{ghStatus.login}
-                </span>
-              </span>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <p className="text-sm text-muted-foreground">
-                No GitHub account connected.
-              </p>
-              <div>
-                <Button
-                  onClick={() => connectGitHub.mutate()}
-                  disabled={connectGitHub.isPending}
-                >
-                  <Github data-icon="inline-start" />
-                  Connect GitHub
-                </Button>
-              </div>
-            </div>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="org-name">Name</Label>
+            <Input
+              id="org-name"
+              value={orgName}
+              onChange={(e) => setOrgName(e.target.value)}
+              placeholder="Organization name"
+            />
+          </div>
+          {saveError && (
+            <p className="text-sm text-destructive">{saveError}</p>
           )}
+          <div>
+            <Button
+              onClick={() => updateOrgMutation.mutate()}
+              disabled={
+                updateOrgMutation.isPending ||
+                !orgName.trim() ||
+                orgName.trim() === org?.name
+              }
+              size="sm"
+            >
+              {updateOrgMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Members */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-[15px] flex items-center gap-2">
-            <Users className="size-4" />
-            Members
-          </CardTitle>
-          <CardDescription>
-            Manage who has access to this organization.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {membersLoading ? (
-            <div className="flex flex-col gap-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : members.length === 0 ? (
-            <div className="py-8 text-center rounded-lg bg-muted/50">
-              <p className="text-sm text-muted-foreground">No members yet.</p>
-            </div>
-          ) : (
-            <ul className="flex flex-col">
-              {members.map((m, i) => (
-                <li key={m.user_id}>
-                  {i > 0 && <Separator className="my-1" />}
-                  <div className="flex items-center justify-between py-2">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="size-8 shrink-0">
-                        <AvatarFallback className="text-xs">
-                          {m.email.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col">
-                        <span className="text-sm text-foreground">{m.email}</span>
-                        <Badge variant="secondary" className="w-fit text-[10px] px-1 py-0 h-4 mt-0.5">
-                          {m.role}
-                        </Badge>
+      {/* Right: GitHub + Members */}
+      <div className="flex flex-col gap-4">
+        {/* GitHub connection */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-[15px] flex items-center gap-2">
+              GitHub connection
+            </CardTitle>
+            <CardDescription>
+              Connect your GitHub account to enable repository management.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {ghLoading ? (
+              <Skeleton className="h-4 w-48" />
+            ) : ghStatus?.connected ? (
+              <div className="flex items-center gap-2">
+                <span className="size-2 rounded-full bg-green-500 shrink-0" />
+                <span className="text-sm text-muted-foreground">
+                  Connected as{" "}
+                  <span className="font-medium text-foreground">
+                    @{ghStatus.login}
+                  </span>
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm text-muted-foreground">
+                  No GitHub account connected.
+                </p>
+                <div>
+                  <Button
+                    onClick={() => connectGitHub.mutate()}
+                    disabled={connectGitHub.isPending}
+                  >
+                    <Github data-icon="inline-start" />
+                    Connect GitHub
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Members */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-[15px] flex items-center gap-2">
+              Members
+            </CardTitle>
+            <CardDescription>
+              Manage who has access to this organization.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {membersLoading ? (
+              <div className="flex flex-col gap-2">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : members.length === 0 ? (
+              <div className="py-8 text-center rounded-lg bg-muted/50">
+                <p className="text-sm text-muted-foreground">No members yet.</p>
+              </div>
+            ) : (
+              <ul className="flex flex-col">
+                {members.map((m, i) => (
+                  <li key={m.user_id}>
+                    {i > 0 && <Separator className="my-1" />}
+                    <div className="flex items-center justify-between py-2">
+                      <div className="flex items-center gap-3">
+                        <Avatar className="size-8 shrink-0">
+                          <AvatarFallback className="text-xs">
+                            {m.email.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col">
+                          <span className="text-sm text-foreground">{m.email}</span>
+                          <Badge variant="secondary" className="w-fit text-[10px] px-1 py-0 h-4 mt-0.5">
+                            {m.role}
+                          </Badge>
+                        </div>
                       </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="size-8 text-muted-foreground">
+                            <MoreHorizontal />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() =>
+                              updateRoleMutation.mutate({
+                                userId: m.user_id,
+                                role: m.role === "member" ? "owner" : "member",
+                              })
+                            }
+                            disabled={updateRoleMutation.isPending}
+                          >
+                            {m.role === "member" ? "Make owner" : "Make member"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => removeMemberMutation.mutate(m.user_id)}
+                            disabled={removeMemberMutation.isPending}
+                          >
+                            Remove
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 text-muted-foreground"
-                        >
-                          <MoreHorizontal />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() =>
-                            updateRoleMutation.mutate({
-                              userId: m.user_id,
-                              role: m.role === "member" ? "owner" : "member",
-                            })
-                          }
-                          disabled={updateRoleMutation.isPending}
-                        >
-                          {m.role === "member" ? "Make owner" : "Make member"}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => removeMemberMutation.mutate(m.user_id)}
-                          disabled={removeMemberMutation.isPending}
-                        >
-                          Remove
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-    </>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 }
 
 function AccountTab() {
   const { user, logout } = useAuth();
+  const queryClient = useQueryClient();
+  const [usernameInput, setUsernameInput] = useState("");
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+
+  const { data: profile, isLoading: profileLoading } = useQuery({
+    queryKey: ["users", "me"],
+    queryFn: () => getMe(),
+  });
+
+  useEffect(() => {
+    if (profile?.username) setUsernameInput(profile.username);
+  }, [profile?.username]);
+
+  const updateUsernameMutation = useMutation({
+    mutationFn: () => updateUsername(usernameInput.trim()),
+    onSuccess: () => {
+      setUsernameError(null);
+      queryClient.invalidateQueries({ queryKey: ["users", "me"] });
+    },
+    onError: (err) => setUsernameError(formatApiError(err)),
+  });
+
+  const displayName = profile?.username ?? user?.email ?? "";
 
   return (
     <>
@@ -264,16 +340,54 @@ function AccountTab() {
           <CardTitle className="text-[15px]">Account</CardTitle>
           <CardDescription>Your personal account details.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-4">
           <div className="flex items-center gap-3">
             <Avatar className="size-10 shrink-0">
               <AvatarFallback className="text-sm font-medium">
-                {user?.email.charAt(0).toUpperCase()}
+                {displayName.charAt(0).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div>
-              <p className="text-sm font-medium">{user?.email}</p>
+              <p className="text-sm font-medium">{profile?.username ?? user?.email}</p>
+              {profile?.username && (
+                <p className="text-xs text-muted-foreground">{user?.email}</p>
+              )}
             </div>
+          </div>
+
+          <Separator />
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="username">Username</Label>
+            {profileLoading ? (
+              <Skeleton className="h-9 w-full" />
+            ) : (
+              <Input
+                id="username"
+                value={usernameInput}
+                onChange={(e) => setUsernameInput(e.target.value)}
+                placeholder={user?.email}
+              />
+            )}
+            <p className="text-xs text-muted-foreground">
+              Used as your display name. Defaults to your email if not set.
+            </p>
+          </div>
+          {usernameError && (
+            <p className="text-sm text-destructive">{usernameError}</p>
+          )}
+          <div>
+            <Button
+              size="sm"
+              onClick={() => updateUsernameMutation.mutate()}
+              disabled={
+                updateUsernameMutation.isPending ||
+                !usernameInput.trim() ||
+                usernameInput.trim() === (profile?.username ?? "")
+              }
+            >
+              {updateUsernameMutation.isPending ? "Saving..." : "Save"}
+            </Button>
           </div>
         </CardContent>
       </Card>

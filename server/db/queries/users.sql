@@ -27,7 +27,14 @@ WHERE id = $1;
 -- name: GetUserByID :one
 SELECT id,
     email,
+    username,
     created_at,
     updated_at
 FROM users
 WHERE id = $1;
+
+-- name: UpdateUserUsername :one
+UPDATE users
+SET username = $2, updated_at = now()
+WHERE id = $1
+RETURNING id, email, username, created_at, updated_at;

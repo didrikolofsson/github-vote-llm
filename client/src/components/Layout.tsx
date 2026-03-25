@@ -30,11 +30,12 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { listMyOrganizations } from "@/lib/api";
+import { getMe, listMyOrganizations } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, ChevronsUpDown, LayoutDashboard, Settings } from "lucide-react";
+import { Building2, ChevronsUpDown } from "lucide-react";
 import { Link, Outlet, useMatch } from "react-router-dom";
 import { useAuth } from "../lib/auth";
+import { cn } from "@/lib/utils";
 
 export default function Layout() {
   const { logout, user } = useAuth();
@@ -44,8 +45,13 @@ export default function Layout() {
     queryKey: ["organizations"],
     queryFn: () => listMyOrganizations(),
   });
+  const { data: profile } = useQuery({
+    queryKey: ["users", "me"],
+    queryFn: () => getMe(),
+  });
 
   const org = orgs[0];
+  const displayName = profile?.username ?? user?.email ?? "";
 
   const breadcrumb = isDashboard
     ? [{ label: "Dashboard" }]
@@ -84,7 +90,6 @@ export default function Layout() {
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={!!isDashboard}>
                     <Link to="/dashboard">
-                      <LayoutDashboard />
                       Dashboard
                     </Link>
                   </SidebarMenuButton>
@@ -106,11 +111,11 @@ export default function Layout() {
                     className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                   >
                     <div className="flex aspect-square size-8 items-center justify-center rounded-full bg-muted text-sm font-semibold shrink-0">
-                      {user?.email.charAt(0).toUpperCase()}
+                      {displayName.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex flex-col gap-0.5 leading-none min-w-0">
-                      <span className="text-xs text-muted-foreground truncate">
-                        {user?.email}
+                      <span className="text-xs truncate">
+                        {displayName}
                       </span>
                     </div>
                     <ChevronsUpDown className="ml-auto shrink-0" />
@@ -121,9 +126,10 @@ export default function Layout() {
                   side="top"
                   className="w-(--radix-dropdown-menu-trigger-width)"
                 >
-                  <DropdownMenuItem asChild>
+                  <DropdownMenuItem asChild className={
+                    cn(isSettings ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium" : "")
+                  }>
                     <Link to="/settings">
-                      <Settings />
                       Settings
                     </Link>
                   </DropdownMenuItem>

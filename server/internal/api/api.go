@@ -80,6 +80,8 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	users.POST("/signup", r.uh.SignupUser)
 	// Protected user endpoints
 	users.Use(middleware.RequireAuth(r.env.JWT_SECRET))
+	users.GET("/me", r.uh.GetMe)
+	users.PATCH("/me/username", r.uh.UpdateUsername)
 	users.DELETE("/:id", r.uh.DeleteUser)
 
 	// Organization endpoints

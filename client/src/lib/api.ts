@@ -161,10 +161,30 @@ export async function signup(params: { email: string; password: string }) {
   });
 }
 
+export const UserProfileSchema = z.object({
+  id: z.number(),
+  email: z.string(),
+  username: z.string().nullable().optional(),
+});
+export type UserProfile = z.infer<typeof UserProfileSchema>;
+
+export async function getMe(): Promise<UserProfile> {
+  return requestWithRefresh("/users/me", { schema: UserProfileSchema });
+}
+
+export async function updateUsername(username: string): Promise<UserProfile> {
+  return requestWithRefresh("/users/me/username", {
+    method: "PATCH",
+    body: JSON.stringify({ username }),
+    schema: UserProfileSchema,
+  });
+}
+
 // ─── App API (protected, requires token) ─────────────────────────────────────
 
 import {
   OrganizationListResponseSchema,
+  OrganizationSchema,
   OrganizationWithMembersSchema,
   ProposalCommentListSchema,
   ProposalCommentSchema,
@@ -235,6 +255,17 @@ export async function createOrganization(name: string) {
     method: "POST",
     body: JSON.stringify({ name }),
     schema: OrganizationWithMembersSchema,
+  });
+}
+
+export async function updateOrganization(
+  orgId: number,
+  name: string,
+): Promise<Organization> {
+  return requestWithRefresh(`/organizations/${orgId}`, {
+    method: "PUT",
+    body: JSON.stringify({ name }),
+    schema: OrganizationSchema,
   });
 }
 

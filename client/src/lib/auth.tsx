@@ -158,6 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRefreshTokenState(null);
     setAccessTokenState(null);
     setAccessToken(null);
+    window.history.replaceState({}, "", "/");
   }, []);
 
   const isAuthenticated = !!accessTokenState;
