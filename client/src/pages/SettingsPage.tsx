@@ -39,6 +39,7 @@ import { useAuth } from "@/lib/auth";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Github, MoreHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
+import { userRoleToBadgeColor } from "@/lib/utils";
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
@@ -220,7 +221,7 @@ function OrganizationTab() {
             ) : ghStatus?.connected ? (
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="size-2 rounded-full bg-green-500 shrink-0" />
+                  <span className="size-2 rounded-full bg-lime-400 shrink-0" />
                   <span className="text-sm text-muted-foreground">
                     Connected as{" "}
                     <span className="font-medium text-foreground">
@@ -290,7 +291,7 @@ function OrganizationTab() {
                         </Avatar>
                         <div className="flex flex-col">
                           <span className="text-sm text-foreground">{m.email}</span>
-                          <Badge variant="secondary" className="w-fit text-[10px] px-1 py-0 h-4 mt-0.5">
+                          <Badge color={userRoleToBadgeColor(m.role)} small>
                             {m.role}
                           </Badge>
                         </div>

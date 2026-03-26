@@ -192,6 +192,7 @@ export async function deleteUser(userId: number): Promise<void> {
 
 import {
   OrganizationListResponseSchema,
+  OrganizationMemberRoleSchema,
   OrganizationSchema,
   OrganizationWithMembersSchema,
   ProposalCommentListSchema,
@@ -377,7 +378,7 @@ export async function removeRepository(
 export const OrgMemberSchema = z.object({
   user_id: z.number(),
   email: z.string(),
-  role: z.string(),
+  role: OrganizationMemberRoleSchema,
 });
 export type OrgMember = z.infer<typeof OrgMemberSchema>;
 export async function listOrgMembers(orgId: number): Promise<OrgMember[]> {

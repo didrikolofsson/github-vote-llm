@@ -65,6 +65,7 @@ export const ProposalSchema = z.object({
 export const ProposalListSchema = z.array(ProposalSchema);
 
 // ─── Organization ─────────────────────────────────────────────────────────────
+export const OrganizationMemberRoleSchema = z.enum(["owner", "member"]);
 
 export const OrganizationSchema = z.object({
   id: z.number(),
@@ -76,7 +77,7 @@ export const OrganizationSchema = z.object({
 export const OrganizationMemberSchema = z.object({
   user_id: z.number(),
   email: z.string(),
-  role: z.string(),
+  role: OrganizationMemberRoleSchema,
 });
 
 export const OrganizationWithMembersSchema = OrganizationSchema.extend({
@@ -110,4 +111,7 @@ export type ProposalComment = z.infer<typeof ProposalCommentSchema>;
 export type Organization = z.infer<typeof OrganizationSchema>;
 export type OrganizationWithMembers = z.infer<
   typeof OrganizationWithMembersSchema
+>;
+export type OrganizationMemberRole = z.infer<
+  typeof OrganizationMemberRoleSchema
 >;
