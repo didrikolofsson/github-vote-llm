@@ -60,6 +60,8 @@ func main() {
 	reposHandlers := handlers.NewRepositoryHandlers(reposService, apiLogger)
 	membersService := services.NewMembersService(q)
 	membersHandlers := handlers.NewMembersHandlers(membersService, apiLogger)
+	featuresService := services.NewFeaturesService(conn, q)
+	featuresHandlers := handlers.NewFeatureHandlers(featuresService, apiLogger)
 
 	router := api.NewRestApiRouter(
 		env,
@@ -70,6 +72,7 @@ func main() {
 		githubHandlers,
 		reposHandlers,
 		membersHandlers,
+		featuresHandlers,
 	).Create()
 
 	router.Run(":" + env.PORT)

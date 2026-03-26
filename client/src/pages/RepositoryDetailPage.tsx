@@ -13,8 +13,9 @@ import { ArrowLeft, ArrowUpRight, CalendarDays, GitFork, Trash2 } from "lucide-r
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 export default function RepositoryDetailPage() {
-  const { owner, repo } = useParams<{ owner: string; repo: string }>();
+  const { repoId } = useParams<{ repoId: string }>();
   const navigate = useNavigate();
+  const repoIdNum = repoId ? parseInt(repoId, 10) : undefined;
 
   const { data: orgs = [] } = useQuery({
     queryKey: ["organizations"],
@@ -27,11 +28,11 @@ export default function RepositoryDetailPage() {
     queryFn: () => listOrgRepositories(orgId!),
     enabled: !!orgId,
   });
-  const repoData = repos.find((r) => r.owner === owner && r.repo === repo);
+  const repoData = repos.find((r) => r.id === repoIdNum);
 
   const queryClient = useQueryClient();
   const removeRepo = useMutation({
-    mutationFn: () => removeRepository(orgId!, owner!, repo!),
+    mutationFn: () => removeRepository(orgId!, repoIdNum!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["organizations", orgId, "repositories"] });
       navigate("/repositories");
@@ -49,15 +50,23 @@ export default function RepositoryDetailPage() {
           Repositories
         </Link>
         <h1 className="text-2xl font-semibold tracking-tight font-mono">
-          <span className="text-muted-foreground font-normal">{owner}/</span>
-          {repo}
+          {repoData ? (
+            <>
+              <span className="text-muted-foreground font-normal">{repoData.owner}/</span>
+              {repoData.name}
+            </>
+          ) : (
+            <span className="text-muted-foreground">Loading…</span>
+          )}
         </h1>
       </div>
 
       <Tabs defaultValue="details">
         <TabsList>
           <TabsTrigger value="details">Details</TabsTrigger>
-          <TabsTrigger value="roadmap">Roadmap</TabsTrigger>
+          <TabsTrigger value="roadmap" asChild>
+            <Link to={`/repositories/${repoId}/roadmap`}>Roadmap</Link>
+          </TabsTrigger>
           <TabsTrigger value="runs">Runs</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
@@ -69,22 +78,24 @@ export default function RepositoryDetailPage() {
               <CardDescription>Overview and quick links for this repository.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              <div className="flex items-center justify-between py-3 border-b border-border/50">
-                <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
-                  <GitFork className="size-4 shrink-0" />
-                  <span>GitHub</span>
+              {repoData && (
+                <div className="flex items-center justify-between py-3 border-b border-border/50">
+                  <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
+                    <GitFork className="size-4 shrink-0" />
+                    <span>GitHub</span>
+                  </div>
+                  <Button variant="outline" size="sm" asChild>
+                    <a
+                      href={`https://github.com/${repoData.owner}/${repoData.name}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {repoData.owner}/{repoData.name}
+                      <ArrowUpRight className="size-3.5" />
+                    </a>
+                  </Button>
                 </div>
-                <Button variant="outline" size="sm" asChild>
-                  <a
-                    href={`https://github.com/${owner}/${repo}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {owner}/{repo}
-                    <ArrowUpRight className="size-3.5" />
-                  </a>
-                </Button>
-              </div>
+              )}
               {repoData?.created_at && (
                 <div className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2.5 text-muted-foreground">
@@ -104,15 +115,6 @@ export default function RepositoryDetailPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="roadmap" className="mt-6">
-          <div className="py-16 text-center rounded-lg bg-muted/50">
-            <p className="text-sm font-medium text-muted-foreground">Roadmap coming soon</p>
-            <p className="text-xs text-muted-foreground/70 mt-1">
-              Approved proposals and their status will appear here.
-            </p>
-          </div>
-        </TabsContent>
-
         <TabsContent value="runs" className="mt-6">
           <div className="py-16 text-center rounded-lg bg-muted/50">
             <p className="text-sm font-medium text-muted-foreground">No implementations yet</p>
@@ -127,7 +129,7 @@ export default function RepositoryDetailPage() {
             <CardHeader>
               <CardTitle className="text-[15px]">Danger zone</CardTitle>
               <CardDescription>
-                Remove this repository from your organization. Proposals and data will be
+                Remove this repository from your organization. Features and data will be
                 preserved but the repository will no longer be managed here.
               </CardDescription>
             </CardHeader>
@@ -136,7 +138,7 @@ export default function RepositoryDetailPage() {
                 variant="destructive"
                 size="sm"
                 onClick={() => removeRepo.mutate()}
-                disabled={removeRepo.isPending || !orgId}
+                disabled={removeRepo.isPending || !orgId || !repoIdNum}
               >
                 <Trash2 />
                 {removeRepo.isPending ? "Removing…" : "Remove repository"}

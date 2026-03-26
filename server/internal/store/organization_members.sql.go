@@ -23,9 +23,15 @@ type AddOrganizationMemberParams struct {
 	Role           OrganizationMemberRole
 }
 
-func (q *Queries) AddOrganizationMember(ctx context.Context, arg AddOrganizationMemberParams) (OrganizationMember, error) {
+type AddOrganizationMemberRow struct {
+	OrganizationID int64
+	UserID         int64
+	Role           OrganizationMemberRole
+}
+
+func (q *Queries) AddOrganizationMember(ctx context.Context, arg AddOrganizationMemberParams) (AddOrganizationMemberRow, error) {
 	row := q.db.QueryRow(ctx, addOrganizationMember, arg.OrganizationID, arg.UserID, arg.Role)
-	var i OrganizationMember
+	var i AddOrganizationMemberRow
 	err := row.Scan(&i.OrganizationID, &i.UserID, &i.Role)
 	return i, err
 }
@@ -38,15 +44,21 @@ FROM organization_members
 WHERE organization_id = $1
 `
 
-func (q *Queries) GetOrganizationMembers(ctx context.Context, organizationID int64) ([]OrganizationMember, error) {
+type GetOrganizationMembersRow struct {
+	OrganizationID int64
+	UserID         int64
+	Role           OrganizationMemberRole
+}
+
+func (q *Queries) GetOrganizationMembers(ctx context.Context, organizationID int64) ([]GetOrganizationMembersRow, error) {
 	rows, err := q.db.Query(ctx, getOrganizationMembers, organizationID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []OrganizationMember
+	var items []GetOrganizationMembersRow
 	for rows.Next() {
-		var i OrganizationMember
+		var i GetOrganizationMembersRow
 		if err := rows.Scan(&i.OrganizationID, &i.UserID, &i.Role); err != nil {
 			return nil, err
 		}
@@ -105,9 +117,15 @@ FROM organization_members
 WHERE user_id = $1
 `
 
-func (q *Queries) GetOrganizationMembershipByUserID(ctx context.Context, userID int64) (OrganizationMember, error) {
+type GetOrganizationMembershipByUserIDRow struct {
+	OrganizationID int64
+	UserID         int64
+	Role           OrganizationMemberRole
+}
+
+func (q *Queries) GetOrganizationMembershipByUserID(ctx context.Context, userID int64) (GetOrganizationMembershipByUserIDRow, error) {
 	row := q.db.QueryRow(ctx, getOrganizationMembershipByUserID, userID)
-	var i OrganizationMember
+	var i GetOrganizationMembershipByUserIDRow
 	err := row.Scan(&i.OrganizationID, &i.UserID, &i.Role)
 	return i, err
 }
@@ -141,9 +159,15 @@ type UpdateOrganizationMemberRoleParams struct {
 	Role           OrganizationMemberRole
 }
 
-func (q *Queries) UpdateOrganizationMemberRole(ctx context.Context, arg UpdateOrganizationMemberRoleParams) (OrganizationMember, error) {
+type UpdateOrganizationMemberRoleRow struct {
+	OrganizationID int64
+	UserID         int64
+	Role           OrganizationMemberRole
+}
+
+func (q *Queries) UpdateOrganizationMemberRole(ctx context.Context, arg UpdateOrganizationMemberRoleParams) (UpdateOrganizationMemberRoleRow, error) {
 	row := q.db.QueryRow(ctx, updateOrganizationMemberRole, arg.OrganizationID, arg.UserID, arg.Role)
-	var i OrganizationMember
+	var i UpdateOrganizationMemberRoleRow
 	err := row.Scan(&i.OrganizationID, &i.UserID, &i.Role)
 	return i, err
 }

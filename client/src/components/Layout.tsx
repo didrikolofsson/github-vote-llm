@@ -31,7 +31,7 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { getMe, listMyOrganizations } from "@/lib/api";
+import { getMe, listMyOrganizations, listOrgRepositories } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { Building2, ChevronsUpDown } from "lucide-react";
 import { Link, Outlet, useMatch } from "react-router-dom";
@@ -42,8 +42,10 @@ export default function Layout() {
   const { logout, user } = useAuth();
   const isDashboard = useMatch("/dashboard");
   const isRepositories = useMatch("/repositories");
-  const isRepositoryDetail = useMatch("/repositories/:owner/:repo");
+  const isRepositoryDetail = useMatch("/repositories/:repoId");
+  const isRepositoryRoadmap = useMatch("/repositories/:repoId/roadmap");
   const isSettings = useMatch("/settings");
+
   const { data: orgs = [] } = useQuery({
     queryKey: ["organizations"],
     queryFn: () => listMyOrganizations(),
@@ -54,20 +56,39 @@ export default function Layout() {
   });
 
   const org = orgs[0];
+  const orgId = org?.id;
   const displayName = profile?.username ?? user?.email ?? "";
+
+  const activeRepoMatch = isRepositoryDetail ?? isRepositoryRoadmap;
+  const activeRepoId = activeRepoMatch ? parseInt(activeRepoMatch.params.repoId ?? "", 10) : null;
+
+  const { data: repos = [] } = useQuery({
+    queryKey: ["organizations", orgId, "repositories"],
+    queryFn: () => listOrgRepositories(orgId!),
+    enabled: !!orgId && activeRepoId !== null,
+  });
+
+  const activeRepo = activeRepoId ? repos.find((r) => r.id === activeRepoId) : null;
+  const repoLabel = activeRepo ? `${activeRepo.owner}/${activeRepo.name}` : "Repository";
 
   const breadcrumb = isDashboard
     ? [{ label: "Dashboard" }]
-    : isRepositoryDetail
+    : isRepositoryRoadmap
       ? [
           { label: "Repositories", href: "/repositories" },
-          { label: `${isRepositoryDetail.params.owner}/${isRepositoryDetail.params.repo}` },
+          { label: repoLabel, href: `/repositories/${activeRepoId}` },
+          { label: "Roadmap" },
         ]
-      : isRepositories
-        ? [{ label: "Repositories" }]
-        : isSettings
-          ? [{ label: "Settings" }]
-          : [];
+      : isRepositoryDetail
+        ? [
+            { label: "Repositories", href: "/repositories" },
+            { label: repoLabel },
+          ]
+        : isRepositories
+          ? [{ label: "Repositories" }]
+          : isSettings
+            ? [{ label: "Settings" }]
+            : [];
 
   return (
     <SidebarProvider>
@@ -105,7 +126,7 @@ export default function Layout() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={!!isRepositories || !!isRepositoryDetail}>
+                  <SidebarMenuButton asChild isActive={!!isRepositories || !!isRepositoryDetail || !!isRepositoryRoadmap}>
                     <Link to="/repositories">
                       Repositories
                     </Link>

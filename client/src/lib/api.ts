@@ -161,67 +161,40 @@ export async function signup(params: { email: string; password: string }) {
   });
 }
 
+// ─── App API (protected, requires token) ─────────────────────────────────────
+
+import {
+  FeatureCommentListResponseSchema,
+  FeatureCommentSchema,
+  FeatureListResponseSchema,
+  FeatureSchema,
+  OrganizationListResponseSchema,
+  OrganizationMemberRoleSchema,
+  OrganizationSchema,
+  OrganizationWithMembersSchema,
+  RepositoryListResponseSchema,
+  RepositorySchema,
+  RoadmapSchema,
+} from "./api-schemas";
+
+export type {
+  Feature,
+  FeatureComment,
+  FeatureDependency,
+  FeatureStatus,
+  Organization,
+  OrganizationMemberRole,
+  OrganizationWithMembers,
+  Repository,
+  Roadmap,
+} from "./api-schemas";
+
 export const UserProfileSchema = z.object({
   id: z.number(),
   email: z.string(),
   username: z.string().nullable().optional(),
 });
 export type UserProfile = z.infer<typeof UserProfileSchema>;
-
-export async function getMe(): Promise<UserProfile> {
-  return requestWithRefresh("/users/me", { schema: UserProfileSchema });
-}
-
-export async function updateUsername(username: string): Promise<UserProfile> {
-  return requestWithRefresh("/users/me/username", {
-    method: "PATCH",
-    body: JSON.stringify({ username }),
-    schema: UserProfileSchema,
-  });
-}
-
-/** Delete a user by id. Allowed for self, or for an org owner deleting a member of the same org. */
-export async function deleteUser(userId: number): Promise<void> {
-  await requestWithRefresh(`/users/${userId}`, {
-    method: "DELETE",
-    schema: z.void(),
-  });
-}
-
-// ─── App API (protected, requires token) ─────────────────────────────────────
-
-import {
-  OrganizationListResponseSchema,
-  OrganizationMemberRoleSchema,
-  OrganizationSchema,
-  OrganizationWithMembersSchema,
-  ProposalCommentListSchema,
-  ProposalCommentSchema,
-  ProposalListSchema,
-  ProposalSchema,
-  RepoConfigListSchema,
-  RepoConfigSchema,
-  RunListSchema,
-  RunSchema,
-  UpdateRepoConfigRequestSchema,
-} from "./api-schemas";
-
-import type {
-  Organization,
-  Proposal,
-  ProposalComment,
-  RepoConfig,
-  Run,
-} from "./api-schemas";
-export type {
-  Organization,
-  OrganizationWithMembers,
-  Proposal,
-  ProposalComment,
-  RepoConfig,
-  Run,
-  UpdateRepoConfigRequest,
-} from "./api-schemas";
 
 let onRefresh: (() => Promise<string | null>) | null = null;
 
@@ -252,7 +225,30 @@ async function requestWithRefresh<S extends z.ZodSchema>(
   }
 }
 
-export async function listMyOrganizations(): Promise<Organization[]> {
+// ─── Users ────────────────────────────────────────────────────────────────────
+
+export async function getMe(): Promise<UserProfile> {
+  return requestWithRefresh("/users/me", { schema: UserProfileSchema });
+}
+
+export async function updateUsername(username: string): Promise<UserProfile> {
+  return requestWithRefresh("/users/me/username", {
+    method: "PATCH",
+    body: JSON.stringify({ username }),
+    schema: UserProfileSchema,
+  });
+}
+
+export async function deleteUser(userId: number): Promise<void> {
+  await requestWithRefresh(`/users/${userId}`, {
+    method: "DELETE",
+    schema: z.void(),
+  });
+}
+
+// ─── Organizations ────────────────────────────────────────────────────────────
+
+export async function listMyOrganizations() {
   const data = await requestWithRefresh("/organizations", {
     schema: OrganizationListResponseSchema,
   });
@@ -267,10 +263,7 @@ export async function createOrganization(name: string) {
   });
 }
 
-export async function updateOrganization(
-  orgId: number,
-  name: string,
-): Promise<Organization> {
+export async function updateOrganization(orgId: number, name: string) {
   return requestWithRefresh(`/organizations/${orgId}`, {
     method: "PUT",
     body: JSON.stringify({ name }),
@@ -278,25 +271,20 @@ export async function updateOrganization(
   });
 }
 
-// GitHub connection
+// ─── GitHub ───────────────────────────────────────────────────────────────────
+
 export const GitHubStatusSchema = z.object({
   connected: z.boolean(),
   login: z.string().nullable().optional(),
 });
-export async function getGitHubStatus(): Promise<
-  z.infer<typeof GitHubStatusSchema>
-> {
-  return requestWithRefresh("/github/status", {
-    schema: GitHubStatusSchema,
-  });
+export async function getGitHubStatus() {
+  return requestWithRefresh("/github/status", { schema: GitHubStatusSchema });
 }
 
 export const GitHubAuthorizeUrlSchema = z.object({
   authorize_url: z.string(),
 });
-export async function getGitHubAuthorizeUrl(): Promise<
-  z.infer<typeof GitHubAuthorizeUrlSchema>
-> {
+export async function getGitHubAuthorizeUrl() {
   return requestWithRefresh("/github/authorize", {
     schema: GitHubAuthorizeUrlSchema,
   });
@@ -309,78 +297,49 @@ export async function disconnectGitHub(): Promise<void> {
   });
 }
 
-// Organization repositories
-export type OrgRepository = {
-  owner: string;
-  repo: string;
-  created_at?: string;
-};
-
-const OrgRepositoryListResponseSchema = z.object({
-  repositories: z.array(
-    z.object({
-      owner: z.string(),
-      repo: z.string(),
-      created_at: z.string().optional(),
-    }),
-  ),
-});
-
-export async function listOrgRepositories(
-  orgId: number,
-): Promise<OrgRepository[]> {
-  const data = await requestWithRefresh(
-    `/organizations/${orgId}/repositories`,
-    {
-      method: "GET",
-      schema: OrgRepositoryListResponseSchema,
-    },
-  );
-  return data.repositories;
-}
-
 export const AvailableRepositoriesSchema = z.object({
   repositories: z.array(z.object({ owner: z.string(), repo: z.string() })),
   has_more: z.boolean(),
 });
-export async function listAvailableRepositories(
-  page = 1,
-): Promise<z.infer<typeof AvailableRepositoriesSchema>> {
+export async function listAvailableRepositories(page = 1) {
   return requestWithRefresh(`/github/repositories?page=${page}`, {
     schema: AvailableRepositoriesSchema,
   });
 }
 
-export async function addRepository(
-  orgId: number,
-  owner: string,
-  repo: string,
-): Promise<void> {
-  await requestWithRefresh(`/organizations/${orgId}/repositories`, {
+// ─── Repositories ─────────────────────────────────────────────────────────────
+
+export async function listOrgRepositories(orgId: number) {
+  const data = await requestWithRefresh(`/organizations/${orgId}/repositories`, {
+    schema: RepositoryListResponseSchema,
+  });
+  return data.repositories;
+}
+
+export async function addRepository(orgId: number, owner: string, repo: string) {
+  return requestWithRefresh(`/organizations/${orgId}/repositories`, {
     method: "POST",
     body: JSON.stringify({ owner, repo }),
+    schema: RepositorySchema,
+  });
+}
+
+export async function removeRepository(orgId: number, repoId: number): Promise<void> {
+  await requestWithRefresh(`/organizations/${orgId}/repositories/${repoId}`, {
+    method: "DELETE",
     schema: z.void(),
   });
 }
 
-export async function removeRepository(
-  orgId: number,
-  owner: string,
-  repo: string,
-): Promise<void> {
-  await requestWithRefresh(
-    `/organizations/${orgId}/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
-    { method: "DELETE", schema: z.void() },
-  );
-}
+// ─── Members ──────────────────────────────────────────────────────────────────
 
-// Organization members
 export const OrgMemberSchema = z.object({
   user_id: z.number(),
   email: z.string(),
   role: OrganizationMemberRoleSchema,
 });
 export type OrgMember = z.infer<typeof OrgMemberSchema>;
+
 export async function listOrgMembers(orgId: number): Promise<OrgMember[]> {
   const data = await requestWithRefresh(`/organizations/${orgId}/members`, {
     schema: z.object({ members: z.array(OrgMemberSchema) }),
@@ -388,10 +347,7 @@ export async function listOrgMembers(orgId: number): Promise<OrgMember[]> {
   return data.members;
 }
 
-export async function inviteMember(
-  orgId: number,
-  email: string,
-): Promise<void> {
+export async function inviteMember(orgId: number, email: string): Promise<void> {
   await requestWithRefresh(`/organizations/${orgId}/members`, {
     method: "POST",
     body: JSON.stringify({ email }),
@@ -399,10 +355,7 @@ export async function inviteMember(
   });
 }
 
-export async function removeMember(
-  orgId: number,
-  userId: number,
-): Promise<void> {
+export async function removeMember(orgId: number, userId: number): Promise<void> {
   await requestWithRefresh(`/organizations/${orgId}/members/${userId}`, {
     method: "DELETE",
     schema: z.void(),
@@ -421,147 +374,145 @@ export async function updateMemberRole(
   });
 }
 
-export async function listRepos(): Promise<RepoConfig[]> {
-  const data = await requestWithRefresh("/repos", {
-    schema: RepoConfigListSchema,
+// ─── Features ─────────────────────────────────────────────────────────────────
+
+export async function listFeatures(repoId: number) {
+  const data = await requestWithRefresh(`/repositories/${repoId}/features`, {
+    schema: FeatureListResponseSchema,
   });
-  return data;
+  return data.features;
 }
 
-export async function getRepoConfig(owner: string, repo: string) {
-  return requestWithRefresh(`/repos/${owner}/${repo}/config`, {
-    schema: RepoConfigSchema,
+export async function getFeature(repoId: number, featureId: number) {
+  return requestWithRefresh(`/repositories/${repoId}/features/${featureId}`, {
+    schema: FeatureSchema,
   });
 }
 
-export async function updateRepoConfig(
-  owner: string,
-  repo: string,
-  body: z.infer<typeof UpdateRepoConfigRequestSchema>,
+export async function createFeature(
+  repoId: number,
+  body: { title: string; description?: string },
 ) {
-  return requestWithRefresh(`/repos/${owner}/${repo}/config`, {
-    method: "PUT",
-    body: JSON.stringify(body),
-    schema: RepoConfigSchema,
-  });
-}
-
-export async function deleteRepoConfig(owner: string, repo: string) {
-  await requestWithRefresh(`/repos/${owner}/${repo}/config`, {
-    method: "DELETE",
-    schema: z.void(),
-  });
-}
-
-export async function listRuns(): Promise<Run[]> {
-  const data = await requestWithRefresh("/runs", {
-    schema: RunListSchema,
-  });
-  return data;
-}
-
-export async function getRun(id: number) {
-  return requestWithRefresh(`/runs/${id}`, {
-    schema: RunSchema,
-  });
-}
-
-export async function cancelRun(id: number): Promise<void> {
-  await requestWithRefresh(`/runs/${id}/cancel`, {
-    method: "POST",
-    schema: z.void(),
-  });
-}
-
-export async function retryRun(id: number): Promise<void> {
-  await requestWithRefresh(`/runs/${id}/retry`, {
-    method: "POST",
-    schema: z.void(),
-  });
-}
-
-export async function listRoadmapItems(
-  owner: string,
-  repo: string,
-): Promise<Proposal[]> {
-  const data = await requestWithRefresh(`/repos/${owner}/${repo}/roadmap`, {
-    schema: ProposalListSchema,
-  });
-  return data;
-}
-
-export async function updateProposalStatus(
-  owner: string,
-  repo: string,
-  id: number,
-  body: { status: Proposal["status"] },
-) {
-  return requestWithRefresh(`/repos/${owner}/${repo}/proposals/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(body),
-    schema: ProposalSchema,
-  });
-}
-
-export async function listBoardProposals(
-  owner: string,
-  repo: string,
-): Promise<Proposal[]> {
-  const data = await requestWithRefresh(`/board/${owner}/${repo}/proposals`, {
-    schema: ProposalListSchema,
-  });
-  return data;
-}
-
-export async function createBoardProposal(
-  owner: string,
-  repo: string,
-  body: { title: string; description?: string; author_name?: string },
-) {
-  return requestWithRefresh(`/board/${owner}/${repo}/proposals`, {
+  return requestWithRefresh(`/repositories/${repoId}/features`, {
     method: "POST",
     body: JSON.stringify(body),
-    schema: ProposalSchema,
+    schema: FeatureSchema,
   });
 }
 
-export async function voteProposal(
-  owner: string,
-  repo: string,
-  id: number,
-): Promise<Proposal> {
-  return requestWithRefresh(`/board/${owner}/${repo}/proposals/${id}/vote`, {
-    method: "POST",
-    schema: ProposalSchema,
-  });
-}
-
-export async function listBoardComments(
-  owner: string,
-  repo: string,
-  id: number,
-): Promise<ProposalComment[]> {
-  const data = await requestWithRefresh(
-    `/board/${owner}/${repo}/proposals/${id}/comments`,
+export async function updateFeatureStatus(
+  repoId: number,
+  featureId: number,
+  status: string,
+) {
+  return requestWithRefresh(
+    `/repositories/${repoId}/features/${featureId}/status`,
     {
-      schema: ProposalCommentListSchema,
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+      schema: FeatureSchema,
     },
   );
-  return data;
 }
 
-export async function createBoardComment(
-  owner: string,
-  repo: string,
-  id: number,
+export async function updateFeatureArea(
+  repoId: number,
+  featureId: number,
+  area: string | null,
+) {
+  return requestWithRefresh(
+    `/repositories/${repoId}/features/${featureId}/area`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ area }),
+      schema: FeatureSchema,
+    },
+  );
+}
+
+export async function updateFeaturePosition(
+  repoId: number,
+  featureId: number,
+  x: number | null,
+  y: number | null,
+  locked: boolean,
+) {
+  return requestWithRefresh(
+    `/repositories/${repoId}/features/${featureId}/position`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ x, y, locked }),
+      schema: FeatureSchema,
+    },
+  );
+}
+
+export async function getRoadmap(repoId: number) {
+  return requestWithRefresh(`/repositories/${repoId}/roadmap`, {
+    schema: RoadmapSchema,
+  });
+}
+
+export async function addFeatureDependency(
+  repoId: number,
+  featureId: number,
+  dependsOn: number,
+): Promise<void> {
+  await requestWithRefresh(
+    `/repositories/${repoId}/features/${featureId}/dependencies`,
+    {
+      method: "POST",
+      body: JSON.stringify({ depends_on: dependsOn }),
+      schema: z.void(),
+    },
+  );
+}
+
+export async function removeFeatureDependency(
+  repoId: number,
+  featureId: number,
+  dependsOn: number,
+): Promise<void> {
+  await requestWithRefresh(
+    `/repositories/${repoId}/features/${featureId}/dependencies/${dependsOn}`,
+    { method: "DELETE", schema: z.void() },
+  );
+}
+
+export async function toggleFeatureVote(
+  repoId: number,
+  featureId: number,
+  voterToken: string,
+): Promise<{ vote_count: number }> {
+  return requestWithRefresh(
+    `/repositories/${repoId}/features/${featureId}/vote`,
+    {
+      method: "POST",
+      body: JSON.stringify({ voter_token: voterToken }),
+      schema: z.object({ vote_count: z.number() }),
+    },
+  );
+}
+
+export async function listFeatureComments(repoId: number, featureId: number) {
+  const data = await requestWithRefresh(
+    `/repositories/${repoId}/features/${featureId}/comments`,
+    { schema: FeatureCommentListResponseSchema },
+  );
+  return data.comments;
+}
+
+export async function createFeatureComment(
+  repoId: number,
+  featureId: number,
   body: { body: string; author_name?: string },
 ) {
   return requestWithRefresh(
-    `/board/${owner}/${repo}/proposals/${id}/comments`,
+    `/repositories/${repoId}/features/${featureId}/comments`,
     {
       method: "POST",
       body: JSON.stringify(body),
-      schema: ProposalCommentSchema,
+      schema: FeatureCommentSchema,
     },
   );
 }

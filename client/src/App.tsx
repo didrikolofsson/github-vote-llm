@@ -7,6 +7,7 @@ import CreateOrganizationPage from './pages/CreateOrganizationPage';
 import OrganizationDashboardPage from './pages/OrganizationDashboardPage';
 import RepositoriesPage from './pages/RepositoriesPage';
 import RepositoryDetailPage from './pages/RepositoryDetailPage';
+import RoadmapPage from './pages/RoadmapPage';
 import SettingsPage from './pages/SettingsPage';
 import Layout from './components/Layout';
 
@@ -91,7 +92,8 @@ export default function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<OrganizationDashboardPage />} />
           <Route path="repositories" element={<RepositoriesPage />} />
-          <Route path="repositories/:owner/:repo" element={<RepositoryDetailPage />} />
+          <Route path="repositories/:repoId" element={<RepositoryDetailPage />} />
+          <Route path="repositories/:repoId/roadmap" element={<RoadmapPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>

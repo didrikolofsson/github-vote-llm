@@ -14,13 +14,6 @@ export default defineConfig({
   server: {
     proxy: {
       '/v1': 'http://localhost:8080',
-      '/board': {
-        target: 'http://localhost:8080',
-        bypass: (req) => {
-          const path = req.url?.split('?')[0] ?? '';
-          return path.match(/^\/board\/[^/]+\/[^/]+\/?$/) ? '/board.html' : undefined;
-        },
-      },
     },
   },
   build: {

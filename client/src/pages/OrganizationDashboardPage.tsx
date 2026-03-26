@@ -67,7 +67,6 @@ export default function OrganizationDashboardPage() {
   });
 
   const recentRepos = repos.slice(0, 3);
-  const statsLoading = orgsLoading || reposLoading || membersLoading || ghStatusLoading;
 
   if (orgsLoading) {
     return (
@@ -247,13 +246,13 @@ export default function OrganizationDashboardPage() {
           ) : (
             <ul className="flex flex-col gap-1">
               {recentRepos.map((r) => (
-                <li key={`${r.owner}/${r.repo}`}>
+                <li key={r.id}>
                   <Link
-                    to={`/repositories/${r.owner}/${r.repo}`}
+                    to={`/repositories/${r.id}`}
                     className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/30 hover:bg-muted/60 transition-colors group"
                   >
                     <span className="text-sm font-mono">
-                      {r.owner}/{r.repo}
+                      {r.owner}/{r.name}
                     </span>
                     <div className="flex items-center gap-3 shrink-0 ml-4">
                       {r.created_at && (

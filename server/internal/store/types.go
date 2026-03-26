@@ -11,6 +11,51 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type FeatureStatus string
+
+const (
+	FeatureStatusOpen       FeatureStatus = "open"
+	FeatureStatusPlanned    FeatureStatus = "planned"
+	FeatureStatusInProgress FeatureStatus = "in_progress"
+	FeatureStatusDone       FeatureStatus = "done"
+	FeatureStatusRejected   FeatureStatus = "rejected"
+)
+
+func (e *FeatureStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = FeatureStatus(s)
+	case string:
+		*e = FeatureStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for FeatureStatus: %T", src)
+	}
+	return nil
+}
+
+type NullFeatureStatus struct {
+	FeatureStatus FeatureStatus
+	Valid         bool // Valid is true if FeatureStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullFeatureStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.FeatureStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.FeatureStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullFeatureStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.FeatureStatus), nil
+}
+
 type OrganizationMemberRole string
 
 const (
@@ -64,17 +109,38 @@ type AuthorizationCode struct {
 	CreatedAt     pgtype.Timestamptz
 }
 
-type Execution struct {
-	ID          int64
-	Owner       string
-	Repo        string
-	IssueNumber int32
-	Status      string
-	Branch      *string
-	PrUrl       *string
-	Error       *string
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+type Feature struct {
+	ID            int64
+	RepositoryID  int64
+	Title         string
+	Description   string
+	Status        FeatureStatus
+	Area          *string
+	RoadmapX      *float64
+	RoadmapY      *float64
+	RoadmapLocked bool
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+}
+
+type FeatureComment struct {
+	ID         int64
+	FeatureID  int64
+	Body       string
+	AuthorName string
+	CreatedAt  pgtype.Timestamptz
+}
+
+type FeatureDependency struct {
+	FeatureID int64
+	DependsOn int64
+}
+
+type FeatureVote struct {
+	ID         int64
+	FeatureID  int64
+	VoterToken string
+	CreatedAt  pgtype.Timestamptz
 }
 
 type GithubConnection struct {
@@ -88,16 +154,6 @@ type GithubConnection struct {
 	UpdatedAt            pgtype.Timestamptz
 }
 
-type IssueVote struct {
-	ID          int64
-	Owner       string
-	Repo        string
-	IssueNumber int32
-	VoteCount   int32
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-}
-
 type Organization struct {
 	ID        int64
 	Name      string
@@ -109,33 +165,7 @@ type OrganizationMember struct {
 	OrganizationID int64
 	UserID         int64
 	Role           OrganizationMemberRole
-}
-
-type OrganizationRepository struct {
-	OrganizationID int64
-	Owner          string
-	Repo           string
 	CreatedAt      pgtype.Timestamptz
-}
-
-type Proposal struct {
-	ID          int64
-	Owner       string
-	Repo        string
-	Title       string
-	Description string
-	VoteCount   int32
-	Status      string
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-}
-
-type ProposalComment struct {
-	ID         int64
-	ProposalID int64
-	Body       string
-	AuthorName string
-	CreatedAt  pgtype.Timestamptz
 }
 
 type RefreshToken struct {
@@ -146,29 +176,20 @@ type RefreshToken struct {
 	CreatedAt pgtype.Timestamptz
 }
 
-type RepoConfig struct {
-	ID                  int64
-	Owner               string
-	Repo                string
-	LabelApproved       *string
-	LabelInProgress     *string
-	LabelDone           *string
-	LabelFailed         *string
-	LabelFeatureRequest *string
-	VoteThreshold       *int32
-	TimeoutMinutes      *int32
-	MaxBudgetUsd        pgtype.Numeric
-	AnthropicApiKey     *string
-	IsBoardPublic       bool
-	CreatedAt           pgtype.Timestamptz
-	UpdatedAt           pgtype.Timestamptz
+type Repository struct {
+	ID             int64
+	OrganizationID int64
+	Owner          string
+	Name           string
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
 }
 
 type User struct {
 	ID        int64
 	Email     string
 	Password  string
+	Username  *string
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
-	Username  *string
 }

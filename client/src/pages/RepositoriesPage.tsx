@@ -17,32 +17,30 @@ import {
   listAvailableRepositories,
   listMyOrganizations,
   listOrgRepositories,
-  type OrgRepository,
+  type Repository,
 } from "@/lib/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, GitFork, Plus } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-// Mock meta until proposals/implementations come from the API
+// Mock meta until features/implementations come from the API
 type RepoMeta = {
   description: string;
-  proposals: number;
+  features: number;
   implementations: number;
   status: "active" | "idle";
 };
 
 const DEFAULT_META: RepoMeta = {
   description: "No description provided.",
-  proposals: 0,
+  features: 0,
   implementations: 0,
   status: "idle",
 };
 
-const MOCK_REPO_META: Record<string, RepoMeta> = {};
-
-function getRepoMeta(key: string): RepoMeta {
-  return MOCK_REPO_META[key] ?? DEFAULT_META;
+function getRepoMeta(_key: string): RepoMeta {
+  return DEFAULT_META;
 }
 
 function formatDate(dateStr: string) {
@@ -163,10 +161,9 @@ export default function RepositoriesPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {repos.map((r) => {
-            const key = `${r.owner}/${r.repo}`;
-            return <RepoCard key={key} repo={r} meta={getRepoMeta(key)} />;
-          })}
+          {repos.map((r) => (
+            <RepoCard key={r.id} repo={r} meta={getRepoMeta(`${r.owner}/${r.name}`)} />
+          ))}
         </div>
       )}
 
@@ -174,7 +171,7 @@ export default function RepositoriesPage() {
         open={addRepoOpen}
         onOpenChange={setAddRepoOpen}
         orgId={orgId}
-        existingRepos={repos ?? []}
+        existingRepos={repos}
         onAdd={addRepo.mutate}
         adding={addRepo.isPending}
       />
@@ -182,19 +179,16 @@ export default function RepositoriesPage() {
   );
 }
 
-function RepoCard({ repo, meta }: { repo: OrgRepository; meta: RepoMeta }) {
+function RepoCard({ repo, meta }: { repo: Repository; meta: RepoMeta }) {
   return (
-    <Link
-      to={`/repositories/${repo.owner}/${repo.repo}`}
-      className="group block"
-    >
+    <Link to={`/repositories/${repo.id}`} className="group block">
       <Card className="h-full transition-all duration-150 group-hover:shadow">
         <CardContent className="p-5 flex flex-col gap-3 h-full">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="text-xs text-muted-foreground font-mono">{repo.owner}/</p>
               <p className="text-[15px] font-semibold font-mono leading-tight truncate">
-                {repo.repo}
+                {repo.name}
               </p>
             </div>
             <Badge
@@ -211,7 +205,7 @@ function RepoCard({ repo, meta }: { repo: OrgRepository; meta: RepoMeta }) {
 
           <div className="flex items-center justify-between pt-2 border-t border-border/50 text-xs text-muted-foreground">
             <div className="flex items-center gap-3">
-              <span>{meta.proposals} proposals</span>
+              <span>{meta.features} features</span>
               <span>{meta.implementations} implementations</span>
             </div>
             {repo.created_at && (
@@ -235,12 +229,12 @@ function AddRepoDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   orgId?: number;
-  existingRepos: OrgRepository[];
+  existingRepos: Repository[];
   onAdd: (params: { owner: string; repo: string }) => void;
   adding: boolean;
 }) {
   const [page, setPage] = useState(1);
-  const existingSet = new Set(existingRepos.map((r) => `${r.owner}/${r.repo}`));
+  const existingSet = new Set(existingRepos.map((r) => `${r.owner}/${r.name}`));
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["available-repos", orgId, page],

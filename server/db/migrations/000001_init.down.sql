@@ -1,0 +1,13 @@
+DROP TABLE IF EXISTS feature_dependencies;
+DROP TABLE IF EXISTS feature_comments;
+DROP TABLE IF EXISTS feature_votes;
+DROP TABLE IF EXISTS features;
+DROP TYPE IF EXISTS feature_status;
+DROP TABLE IF EXISTS repositories;
+DROP TABLE IF EXISTS organization_members;
+DROP TABLE IF EXISTS organizations;
+DROP TYPE IF EXISTS organization_member_role;
+DROP TABLE IF EXISTS github_connections;
+DROP TABLE IF EXISTS refresh_tokens;
+DROP TABLE IF EXISTS authorization_codes;
+DROP TABLE IF EXISTS users;

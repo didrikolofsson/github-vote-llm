@@ -73,7 +73,7 @@ func (h *RepositoryHandlersImpl) Add(c *gin.Context) {
 		return
 	}
 
-	err = h.s.AddRepository(c.Request.Context(), orgID, userID, req.Owner, req.Repo)
+	repo, err := h.s.AddRepository(c.Request.Context(), orgID, userID, req.Owner, req.Repo)
 	if errors.Is(err, services.ErrNotOrgMember) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "not a member of this organization"})
 		return
@@ -87,7 +87,7 @@ func (h *RepositoryHandlersImpl) Add(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
-	c.Status(http.StatusCreated)
+	c.JSON(http.StatusCreated, repo)
 }
 
 func (h *RepositoryHandlersImpl) Remove(c *gin.Context) {
@@ -97,19 +97,13 @@ func (h *RepositoryHandlersImpl) Remove(c *gin.Context) {
 		return
 	}
 
-	orgID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	repoID, err := strconv.ParseInt(c.Param("repoId"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization ID"})
-		return
-	}
-	owner := c.Param("owner")
-	repo := c.Param("repo")
-	if owner == "" || repo == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "owner and repo required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid repository ID"})
 		return
 	}
 
-	err = h.s.RemoveRepository(c.Request.Context(), orgID, userID, owner, repo)
+	err = h.s.RemoveRepository(c.Request.Context(), repoID, userID)
 	if errors.Is(err, services.ErrNotOrgMember) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "not a member of this organization"})
 		return
@@ -119,7 +113,7 @@ func (h *RepositoryHandlersImpl) Remove(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		h.l.Errorw("Failed to remove repository", "error", err, "organization_id", orgID, "request_id", request.GetRequestID(c))
+		h.l.Errorw("Failed to remove repository", "error", err, "repo_id", repoID, "request_id", request.GetRequestID(c))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}

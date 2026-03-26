@@ -12,20 +12,22 @@ import (
 
 var (
 	ErrRepositoryAlreadyAdded = errors.New("repository already added to organization")
-	ErrRepositoryNotFound     = errors.New("repository not found in organization")
+	ErrRepositoryNotFound     = errors.New("repository not found")
 	ErrNotOrgMember           = errors.New("not a member of this organization")
 )
 
 type Repository struct {
+	ID        int64  `json:"id"`
 	Owner     string `json:"owner"`
-	Repo      string `json:"repo"`
+	Name      string `json:"name"`
 	CreatedAt string `json:"created_at,omitempty"`
 }
 
 type RepositoriesService interface {
 	ListForOrganization(ctx context.Context, orgID, userID int64) ([]Repository, error)
-	AddRepository(ctx context.Context, orgID, userID int64, owner, repo string) error
-	RemoveRepository(ctx context.Context, orgID, userID int64, owner, repo string) error
+	GetRepository(ctx context.Context, repoID, userID int64) (*Repository, error)
+	AddRepository(ctx context.Context, orgID, userID int64, owner, name string) (*Repository, error)
+	RemoveRepository(ctx context.Context, repoID, userID int64) error
 }
 
 type RepositoriesServiceImpl struct {
@@ -34,13 +36,10 @@ type RepositoriesServiceImpl struct {
 }
 
 func NewRepositoriesService(db *pgxpool.Pool, q *store.Queries) RepositoriesService {
-	return &RepositoriesServiceImpl{
-		db: db,
-		q:  q,
-	}
+	return &RepositoriesServiceImpl{db: db, q: q}
 }
 
-func (s *RepositoriesServiceImpl) ListForOrganization(ctx context.Context, orgID int64, userID int64) ([]Repository, error) {
+func (s *RepositoriesServiceImpl) ListForOrganization(ctx context.Context, orgID, userID int64) ([]Repository, error) {
 	if err := s.verifyOrgMember(ctx, orgID, userID); err != nil {
 		return nil, err
 	}
@@ -50,55 +49,58 @@ func (s *RepositoriesServiceImpl) ListForOrganization(ctx context.Context, orgID
 	}
 	out := make([]Repository, len(rows))
 	for i, r := range rows {
-		out[i] = Repository{
-			Owner:     r.Owner,
-			Repo:      r.Repo,
-			CreatedAt: r.CreatedAt.Time.Format("2006-01-02"),
-		}
+		out[i] = storeRepoToDTO(r)
 	}
 	return out, nil
 }
 
-func (s *RepositoriesServiceImpl) AddRepository(ctx context.Context, orgID, userID int64, owner, repo string) error {
-	if err := s.verifyOrgMember(ctx, orgID, userID); err != nil {
-		return err
+func (s *RepositoriesServiceImpl) GetRepository(ctx context.Context, repoID, userID int64) (*Repository, error) {
+	r, err := s.q.GetRepository(ctx, repoID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrRepositoryNotFound
 	}
+	if err != nil {
+		return nil, err
+	}
+	if err := s.verifyOrgMember(ctx, r.OrganizationID, userID); err != nil {
+		return nil, err
+	}
+	dto := storeRepoToDTO(r)
+	return &dto, nil
+}
 
-	_, err := s.q.AddOrganizationRepository(ctx, store.AddOrganizationRepositoryParams{
+func (s *RepositoriesServiceImpl) AddRepository(ctx context.Context, orgID, userID int64, owner, name string) (*Repository, error) {
+	if err := s.verifyOrgMember(ctx, orgID, userID); err != nil {
+		return nil, err
+	}
+	r, err := s.q.AddRepository(ctx, store.AddRepositoryParams{
 		OrganizationID: orgID,
 		Owner:          owner,
-		Repo:           repo,
+		Name:           name,
 	})
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return ErrRepositoryAlreadyAdded
+			return nil, ErrRepositoryAlreadyAdded
 		}
-		return err
+		return nil, err
 	}
-	return nil
+	dto := storeRepoToDTO(r)
+	return &dto, nil
 }
 
-func (s *RepositoriesServiceImpl) RemoveRepository(ctx context.Context, orgID, userID int64, owner, repo string) error {
-	if err := s.verifyOrgMember(ctx, orgID, userID); err != nil {
-		return err
-	}
-	_, err := s.q.GetOrganizationRepository(ctx, store.GetOrganizationRepositoryParams{
-		OrganizationID: orgID,
-		Owner:          owner,
-		Repo:           repo,
-	})
+func (s *RepositoriesServiceImpl) RemoveRepository(ctx context.Context, repoID, userID int64) error {
+	r, err := s.q.GetRepository(ctx, repoID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrRepositoryNotFound
 	}
 	if err != nil {
 		return err
 	}
-	return s.q.RemoveOrganizationRepository(ctx, store.RemoveOrganizationRepositoryParams{
-		OrganizationID: orgID,
-		Owner:          owner,
-		Repo:           repo,
-	})
+	if err := s.verifyOrgMember(ctx, r.OrganizationID, userID); err != nil {
+		return err
+	}
+	return s.q.RemoveRepository(ctx, repoID)
 }
 
 func (s *RepositoriesServiceImpl) verifyOrgMember(ctx context.Context, orgID, userID int64) error {
@@ -112,4 +114,13 @@ func (s *RepositoriesServiceImpl) verifyOrgMember(ctx context.Context, orgID, us
 		}
 	}
 	return ErrNotOrgMember
+}
+
+func storeRepoToDTO(r store.Repository) Repository {
+	return Repository{
+		ID:        r.ID,
+		Owner:     r.Owner,
+		Name:      r.Name,
+		CreatedAt: r.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+	}
 }

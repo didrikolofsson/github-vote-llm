@@ -23,6 +23,7 @@ type RestApiRouterImpl struct {
 	gh     handlers.GithubHandlers
 	rh     handlers.RepositoryHandlers
 	mh     handlers.MembersHandlers
+	fh     handlers.FeatureHandlers
 }
 
 func NewRestApiRouter(
@@ -34,6 +35,7 @@ func NewRestApiRouter(
 	gh handlers.GithubHandlers,
 	rh handlers.RepositoryHandlers,
 	mh handlers.MembersHandlers,
+	fh handlers.FeatureHandlers,
 ) RestApiRouter {
 	return &RestApiRouterImpl{
 		env:    env,
@@ -44,6 +46,7 @@ func NewRestApiRouter(
 		gh:     gh,
 		rh:     rh,
 		mh:     mh,
+		fh:     fh,
 	}
 }
 
@@ -66,10 +69,7 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	auth.POST("/revoke", r.ah.Revoke)
 
 	github := api.Group("/github")
-	// Public
-	// GitHub OAuth: callback is hit by the browser (no JWT); authorize/status need the logged-in user.
 	github.GET("/callback", r.gh.Callback)
-	// Private
 	github.Use(middleware.RequireAuth(r.env.JWT_SECRET))
 	github.GET("/authorize", r.gh.Authorize)
 	github.GET("/status", r.gh.Status)
@@ -77,9 +77,7 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	github.DELETE("/connection", r.gh.Disconnect)
 
 	users := api.Group("/users")
-	// Public user endpoints
 	users.POST("/signup", r.uh.SignupUser)
-	// Protected user endpoints
 	users.Use(middleware.RequireAuth(r.env.JWT_SECRET))
 	users.GET("/me", r.uh.GetMe)
 	users.PATCH("/me/username", r.uh.UpdateUsername)
@@ -97,13 +95,29 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	// Organization repositories
 	organizations.GET("/:id/repositories", r.rh.List)
 	organizations.POST("/:id/repositories", r.rh.Add)
-	organizations.DELETE("/:id/repositories/:owner/:repo", r.rh.Remove)
+	organizations.DELETE("/:id/repositories/:repoId", r.rh.Remove)
 
 	// Organization members
 	organizations.GET("/:id/members", r.mh.List)
 	organizations.POST("/:id/members", r.mh.Invite)
 	organizations.DELETE("/:id/members/:user_id", r.mh.Remove)
 	organizations.PATCH("/:id/members/:user_id", r.mh.UpdateRole)
+
+	// Repository features (all private for now)
+	repos := api.Group("/repositories/:repoId")
+	repos.Use(middleware.RequireAuth(r.env.JWT_SECRET))
+	repos.GET("/roadmap", r.fh.GetRoadmap)
+	repos.GET("/features", r.fh.ListFeatures)
+	repos.GET("/features/:featureId", r.fh.GetFeature)
+	repos.POST("/features", r.fh.CreateFeature)
+	repos.GET("/features/:featureId/comments", r.fh.ListComments)
+	repos.POST("/features/:featureId/comments", r.fh.CreateComment)
+	repos.POST("/features/:featureId/vote", r.fh.ToggleVote)
+	repos.PATCH("/features/:featureId/status", r.fh.UpdateStatus)
+	repos.PATCH("/features/:featureId/area", r.fh.UpdateArea)
+	repos.PATCH("/features/:featureId/position", r.fh.UpdatePosition)
+	repos.POST("/features/:featureId/dependencies", r.fh.AddDependency)
+	repos.DELETE("/features/:featureId/dependencies/:dependsOn", r.fh.RemoveDependency)
 
 	return router
 }
