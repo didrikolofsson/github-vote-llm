@@ -245,20 +245,25 @@ export default function OrganizationDashboardPage() {
               </Button>
             </div>
           ) : (
-            <ul className="flex flex-col gap-2">
+            <ul className="flex flex-col gap-1">
               {recentRepos.map((r) => (
-                <li
-                  key={`${r.owner}/${r.repo}`}
-                  className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/30"
-                >
-                  <span className="text-sm font-mono">
-                    {r.owner}/{r.repo}
-                  </span>
-                  {r.created_at && (
-                    <span className="text-xs text-muted-foreground shrink-0 ml-4">
-                      {formatDate(r.created_at)}
+                <li key={`${r.owner}/${r.repo}`}>
+                  <Link
+                    to={`/repositories/${r.owner}/${r.repo}`}
+                    className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/30 hover:bg-muted/60 transition-colors group"
+                  >
+                    <span className="text-sm font-mono">
+                      {r.owner}/{r.repo}
                     </span>
-                  )}
+                    <div className="flex items-center gap-3 shrink-0 ml-4">
+                      {r.created_at && (
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(r.created_at)}
+                        </span>
+                      )}
+                      <ArrowRight className="size-3.5 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+                    </div>
+                  </Link>
                 </li>
               ))}
             </ul>

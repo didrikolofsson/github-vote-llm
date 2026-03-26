@@ -1,6 +1,7 @@
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -16,13 +17,41 @@ import {
   listAvailableRepositories,
   listMyOrganizations,
   listOrgRepositories,
-  removeRepository,
   type OrgRepository,
 } from "@/lib/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, GitFork, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, GitFork, Plus } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+
+// Mock meta until proposals/implementations come from the API
+type RepoMeta = {
+  description: string;
+  proposals: number;
+  implementations: number;
+  status: "active" | "idle";
+};
+
+const DEFAULT_META: RepoMeta = {
+  description: "No description provided.",
+  proposals: 0,
+  implementations: 0,
+  status: "idle",
+};
+
+const MOCK_REPO_META: Record<string, RepoMeta> = {};
+
+function getRepoMeta(key: string): RepoMeta {
+  return MOCK_REPO_META[key] ?? DEFAULT_META;
+}
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 export default function RepositoriesPage() {
   const queryClient = useQueryClient();
@@ -58,121 +87,88 @@ export default function RepositoriesPage() {
     },
   });
 
-  const removeRepo = useMutation({
-    mutationFn: ({ owner, repo }: { owner: string; repo: string }) =>
-      removeRepository(orgId!, owner, repo),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["organizations", orgId, "repositories"],
-      });
-    },
-  });
-
   if (orgsLoading) {
     return (
       <div className="flex flex-col gap-6">
         <Skeleton className="h-9 w-48" />
-        <Skeleton className="h-[300px] w-full" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Skeleton className="h-[140px] w-full" />
+          <Skeleton className="h-[140px] w-full" />
+          <Skeleton className="h-[140px] w-full" />
+          <Skeleton className="h-[140px] w-full" />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="animate-slide-up flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Repositories</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage repositories connected to your organization
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Repositories</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Manage repositories connected to your organization
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setAddRepoOpen(true)}
+          disabled={!ghStatus?.connected}
+          className="shrink-0 mt-1"
+        >
+          <Plus data-icon="inline-start" />
+          Add
+        </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-[15px]">Connected repositories</CardTitle>
-              <CardDescription className="mt-1">
-                Repositories connected to this organization.
-              </CardDescription>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setAddRepoOpen(true)}
-              disabled={!ghStatus?.connected}
-            >
-              <Plus data-icon="inline-start" />
-              Add
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {reposLoading ? (
-            <div className="flex flex-col gap-2">
-              <Skeleton className="h-9 w-full" />
-              <Skeleton className="h-9 w-full" />
-            </div>
-          ) : repos.length === 0 ? (
-            <div className="py-12 text-center rounded-lg bg-muted/50">
-              <GitFork className="size-8 mx-auto text-muted-foreground/40 mb-3" />
-              <p className="text-sm font-medium text-muted-foreground">
-                No repositories yet
-              </p>
-              <p className="text-xs text-muted-foreground/70 mt-1">
-                {ghStatus?.connected ? (
-                  "Click Add to connect your first repository."
-                ) : (
-                  <>
-                    Connect GitHub in{" "}
-                    <Link to="/settings" className="underline underline-offset-2">
-                      Settings
-                    </Link>{" "}
-                    to add repositories.
-                  </>
-                )}
-              </p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {!ghStatus?.connected && !ghStatusLoading && (
-                <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-400">
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                  <span>
-                    GitHub account disconnected. Repositories are preserved but you can't add new ones until you{" "}
-                    <Link to="/settings" className="font-medium underline underline-offset-2">
-                      reconnect
-                    </Link>
-                    .
-                  </span>
-                </div>
-              )}
-              <ul className="flex flex-col gap-2">
-                {repos.map((r) => (
-                  <li
-                    key={`${r.owner}/${r.repo}`}
-                    className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/30"
-                  >
-                    <span className="text-sm font-mono">
-                      {r.owner}/{r.repo}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-8 text-muted-foreground hover:text-destructive"
-                      onClick={() =>
-                        removeRepo.mutate({ owner: r.owner, repo: r.repo })
-                      }
-                      disabled={removeRepo.isPending}
-                    >
-                      <Trash2 />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {!ghStatus?.connected && !ghStatusLoading && repos.length > 0 && (
+        <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-400">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <span>
+            GitHub account disconnected. Repositories are preserved but you can't add new ones
+            until you{" "}
+            <Link to="/settings" className="font-medium underline underline-offset-2">
+              reconnect
+            </Link>
+            .
+          </span>
+        </div>
+      )}
+
+      {reposLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Skeleton className="h-[140px] w-full" />
+          <Skeleton className="h-[140px] w-full" />
+          <Skeleton className="h-[140px] w-full" />
+          <Skeleton className="h-[140px] w-full" />
+        </div>
+      ) : repos.length === 0 ? (
+        <div className="py-16 text-center rounded-lg bg-muted/50">
+          <GitFork className="size-8 mx-auto text-muted-foreground/40 mb-3" />
+          <p className="text-sm font-medium text-muted-foreground">No repositories yet</p>
+          <p className="text-xs text-muted-foreground/70 mt-1">
+            {ghStatus?.connected ? (
+              "Click Add to connect your first repository."
+            ) : (
+              <>
+                Connect GitHub in{" "}
+                <Link to="/settings" className="underline underline-offset-2">
+                  Settings
+                </Link>{" "}
+                to add repositories.
+              </>
+            )}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {repos.map((r) => {
+            const key = `${r.owner}/${r.repo}`;
+            return <RepoCard key={key} repo={r} meta={getRepoMeta(key)} />;
+          })}
+        </div>
+      )}
 
       <AddRepoDialog
         open={addRepoOpen}
@@ -183,6 +179,48 @@ export default function RepositoriesPage() {
         adding={addRepo.isPending}
       />
     </div>
+  );
+}
+
+function RepoCard({ repo, meta }: { repo: OrgRepository; meta: RepoMeta }) {
+  return (
+    <Link
+      to={`/repositories/${repo.owner}/${repo.repo}`}
+      className="group block"
+    >
+      <Card className="h-full transition-all duration-150 group-hover:shadow">
+        <CardContent className="p-5 flex flex-col gap-3 h-full">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground font-mono">{repo.owner}/</p>
+              <p className="text-[15px] font-semibold font-mono leading-tight truncate">
+                {repo.repo}
+              </p>
+            </div>
+            <Badge
+              color={meta.status === "active" ? "lime" : "zinc"}
+              className="shrink-0 mt-0.5"
+            >
+              {meta.status}
+            </Badge>
+          </div>
+
+          <p className="text-sm text-muted-foreground line-clamp-2 flex-1">
+            {meta.description}
+          </p>
+
+          <div className="flex items-center justify-between pt-2 border-t border-border/50 text-xs text-muted-foreground">
+            <div className="flex items-center gap-3">
+              <span>{meta.proposals} proposals</span>
+              <span>{meta.implementations} implementations</span>
+            </div>
+            {repo.created_at && (
+              <span className="shrink-0">Added {formatDate(repo.created_at)}</span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }
 
@@ -219,8 +257,7 @@ function AddRepoDialog({
         <DialogHeader>
           <DialogTitle>Add repository</DialogTitle>
           <DialogDescription>
-            Select a repository from your GitHub account to add to this
-            organization.
+            Select a repository from your GitHub account to add to this organization.
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[320px] overflow-y-auto mt-4">
@@ -258,9 +295,7 @@ function AddRepoDialog({
                     >
                       <span className="font-mono">{key}</span>
                       {alreadyAdded ? (
-                        <span className="text-xs text-muted-foreground">
-                          Added
-                        </span>
+                        <span className="text-xs text-muted-foreground">Added</span>
                       ) : (
                         <Plus data-icon="inline-end" />
                       )}

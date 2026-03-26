@@ -1,6 +1,7 @@
 import {
   Breadcrumb,
   BreadcrumbItem,
+  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
@@ -41,6 +42,7 @@ export default function Layout() {
   const { logout, user } = useAuth();
   const isDashboard = useMatch("/dashboard");
   const isRepositories = useMatch("/repositories");
+  const isRepositoryDetail = useMatch("/repositories/:owner/:repo");
   const isSettings = useMatch("/settings");
   const { data: orgs = [] } = useQuery({
     queryKey: ["organizations"],
@@ -56,11 +58,16 @@ export default function Layout() {
 
   const breadcrumb = isDashboard
     ? [{ label: "Dashboard" }]
-    : isRepositories
-      ? [{ label: "Repositories" }]
-      : isSettings
-        ? [{ label: "Settings" }]
-        : [];
+    : isRepositoryDetail
+      ? [
+          { label: "Repositories", href: "/repositories" },
+          { label: `${isRepositoryDetail.params.owner}/${isRepositoryDetail.params.repo}` },
+        ]
+      : isRepositories
+        ? [{ label: "Repositories" }]
+        : isSettings
+          ? [{ label: "Settings" }]
+          : [];
 
   return (
     <SidebarProvider>
@@ -98,7 +105,7 @@ export default function Layout() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={!!isRepositories}>
+                  <SidebarMenuButton asChild isActive={!!isRepositories || !!isRepositoryDetail}>
                     <Link to="/repositories">
                       Repositories
                     </Link>
@@ -168,7 +175,13 @@ export default function Layout() {
               {breadcrumb.map((crumb, i) => (
                 <BreadcrumbItem key={crumb.label}>
                   {i > 0 && <BreadcrumbSeparator />}
-                  <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                  {crumb.href ? (
+                    <BreadcrumbLink asChild>
+                      <Link to={crumb.href}>{crumb.label}</Link>
+                    </BreadcrumbLink>
+                  ) : (
+                    <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                  )}
                 </BreadcrumbItem>
               ))}
             </BreadcrumbList>
