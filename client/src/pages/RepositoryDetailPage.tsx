@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RoadmapCanvas } from "@/components/roadmap/RoadmapCanvas";
 import { listMyOrganizations, listOrgRepositories, removeRepository } from "@/lib/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowUpRight, CalendarDays, GitFork, Trash2 } from "lucide-react";
@@ -113,12 +114,9 @@ export default function RepositoryDetailPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="roadmap" className="mt-6">
-          <div className="py-16 text-center rounded-lg bg-muted/50">
-            <p className="text-sm font-medium text-muted-foreground">Roadmap coming soon</p>
-            <p className="text-xs text-muted-foreground/70 mt-1">
-              The interactive feature roadmap will appear here.
-            </p>
+        <TabsContent value="roadmap" className="mt-4 -mx-8 -mb-8">
+          <div style={{ height: "calc(100vh - 240px)" }}>
+            {repoIdNum && <RoadmapCanvas repoId={repoIdNum} />}
           </div>
         </TabsContent>
 
