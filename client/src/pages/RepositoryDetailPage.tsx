@@ -64,9 +64,7 @@ export default function RepositoryDetailPage() {
       <Tabs defaultValue="details">
         <TabsList>
           <TabsTrigger value="details">Details</TabsTrigger>
-          <TabsTrigger value="roadmap" asChild>
-            <Link to={`/repositories/${repoId}/roadmap`}>Roadmap</Link>
-          </TabsTrigger>
+          <TabsTrigger value="roadmap">Roadmap</TabsTrigger>
           <TabsTrigger value="runs">Runs</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
@@ -113,6 +111,15 @@ export default function RepositoryDetailPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="roadmap" className="mt-6">
+          <div className="py-16 text-center rounded-lg bg-muted/50">
+            <p className="text-sm font-medium text-muted-foreground">Roadmap coming soon</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">
+              The interactive feature roadmap will appear here.
+            </p>
+          </div>
         </TabsContent>
 
         <TabsContent value="runs" className="mt-6">

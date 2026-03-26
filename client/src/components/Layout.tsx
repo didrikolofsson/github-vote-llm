@@ -34,17 +34,52 @@ import {
 import { getMe, listMyOrganizations, listOrgRepositories } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { Building2, ChevronsUpDown } from "lucide-react";
-import { Link, Outlet, useMatch } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { cn } from "@/lib/utils";
 
+/** Static path segment → display label (unknown segments get title-cased). */
+const SEGMENT_LABELS: Record<string, string> = {
+  dashboard: "Dashboard",
+  repositories: "Repositories",
+  settings: "Settings",
+  roadmap: "Roadmap",
+};
+
+function labelForSegment(segment: string): string {
+  if (SEGMENT_LABELS[segment]) return SEGMENT_LABELS[segment];
+  return segment
+    .split("-")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function breadcrumbsFromPath(pathname: string, repoDisplayLabel: string) {
+  const segments = pathname.split("/").filter(Boolean);
+  return segments.map((segment, i) => {
+    const isLast = i === segments.length - 1;
+    const prefixPath = `/${segments.slice(0, i + 1).join("/")}`;
+    const isRepoIdSegment =
+      segments[0] === "repositories" && i === 1 && /^\d+$/.test(segment);
+    const label = isRepoIdSegment ? repoDisplayLabel : labelForSegment(segment);
+    return {
+      label,
+      href: isLast ? undefined : prefixPath,
+      key: prefixPath,
+    };
+  });
+}
+
 export default function Layout() {
   const { logout, user } = useAuth();
-  const isDashboard = useMatch("/dashboard");
-  const isRepositories = useMatch("/repositories");
-  const isRepositoryDetail = useMatch("/repositories/:repoId");
-  const isRepositoryRoadmap = useMatch("/repositories/:repoId/roadmap");
-  const isSettings = useMatch("/settings");
+  const { pathname } = useLocation();
+  const isDashboard = pathname === "/dashboard";
+  const isRepositorySection = pathname.startsWith("/repositories");
+  const isSettings = pathname === "/settings";
+
+  const repoRouteMatch = pathname.match(/^\/repositories\/(\d+)/);
+  const activeRepoId = repoRouteMatch ? parseInt(repoRouteMatch[1], 10) : NaN;
 
   const { data: orgs = [] } = useQuery({
     queryKey: ["organizations"],
@@ -59,36 +94,20 @@ export default function Layout() {
   const orgId = org?.id;
   const displayName = profile?.username ?? user?.email ?? "";
 
-  const activeRepoMatch = isRepositoryDetail ?? isRepositoryRoadmap;
-  const activeRepoId = activeRepoMatch ? parseInt(activeRepoMatch.params.repoId ?? "", 10) : null;
-
   const { data: repos = [] } = useQuery({
     queryKey: ["organizations", orgId, "repositories"],
     queryFn: () => listOrgRepositories(orgId!),
-    enabled: !!orgId && activeRepoId !== null,
+    enabled: !!orgId && Number.isFinite(activeRepoId),
   });
 
-  const activeRepo = activeRepoId ? repos.find((r) => r.id === activeRepoId) : null;
-  const repoLabel = activeRepo ? `${activeRepo.owner}/${activeRepo.name}` : "Repository";
+  const activeRepo = Number.isFinite(activeRepoId)
+    ? repos.find((r) => r.id === activeRepoId)
+    : undefined;
+  const repoDisplayLabel = activeRepo
+    ? `${activeRepo.owner}/${activeRepo.name}`
+    : "Repository";
 
-  const breadcrumb = isDashboard
-    ? [{ label: "Dashboard" }]
-    : isRepositoryRoadmap
-      ? [
-          { label: "Repositories", href: "/repositories" },
-          { label: repoLabel, href: `/repositories/${activeRepoId}` },
-          { label: "Roadmap" },
-        ]
-      : isRepositoryDetail
-        ? [
-            { label: "Repositories", href: "/repositories" },
-            { label: repoLabel },
-          ]
-        : isRepositories
-          ? [{ label: "Repositories" }]
-          : isSettings
-            ? [{ label: "Settings" }]
-            : [];
+  const breadcrumb = breadcrumbsFromPath(pathname, repoDisplayLabel);
 
   return (
     <SidebarProvider>
@@ -126,7 +145,7 @@ export default function Layout() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={!!isRepositories || !!isRepositoryDetail || !!isRepositoryRoadmap}>
+                  <SidebarMenuButton asChild isActive={isRepositorySection}>
                     <Link to="/repositories">
                       Repositories
                     </Link>
@@ -194,7 +213,7 @@ export default function Layout() {
           <Breadcrumb>
             <BreadcrumbList>
               {breadcrumb.map((crumb, i) => (
-                <BreadcrumbItem key={crumb.label}>
+                <BreadcrumbItem key={crumb.key}>
                   {i > 0 && <BreadcrumbSeparator />}
                   {crumb.href ? (
                     <BreadcrumbLink asChild>
