@@ -56,6 +56,7 @@ type FeaturesService interface {
 	UpdateStatus(ctx context.Context, featureID int64, status store.FeatureStatus) (*FeatureDTO, error)
 	UpdateArea(ctx context.Context, featureID int64, area *string) (*FeatureDTO, error)
 	UpdatePosition(ctx context.Context, featureID int64, x, y *float64, locked bool) (*FeatureDTO, error)
+	DeleteFeature(ctx context.Context, featureID int64) error
 	GetRoadmap(ctx context.Context, repoID int64) (*RoadmapDTO, error)
 	AddDependency(ctx context.Context, featureID, dependsOn int64) error
 	RemoveDependency(ctx context.Context, featureID, dependsOn int64) error
@@ -118,6 +119,10 @@ func (s *FeaturesServiceImpl) CreateFeature(ctx context.Context, repoID int64, t
 		return nil, err
 	}
 	return &dto, nil
+}
+
+func (s *FeaturesServiceImpl) DeleteFeature(ctx context.Context, featureID int64) error {
+	return s.q.DeleteFeature(ctx, featureID)
 }
 
 func (s *FeaturesServiceImpl) UpdateStatus(ctx context.Context, featureID int64, status store.FeatureStatus) (*FeatureDTO, error) {

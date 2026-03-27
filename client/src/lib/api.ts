@@ -453,6 +453,13 @@ export async function getRoadmap(repoId: number) {
   });
 }
 
+export async function deleteFeature(repoId: number, featureId: number): Promise<void> {
+  await requestWithRefresh(`/repositories/${repoId}/features/${featureId}`, {
+    method: "DELETE",
+    schema: z.void(),
+  });
+}
+
 export async function addFeatureDependency(
   repoId: number,
   featureId: number,

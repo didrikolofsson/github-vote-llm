@@ -40,6 +40,15 @@ func (q *Queries) CreateFeature(ctx context.Context, arg CreateFeatureParams) (F
 	return i, err
 }
 
+const deleteFeature = `-- name: DeleteFeature :exec
+DELETE FROM features WHERE id = $1
+`
+
+func (q *Queries) DeleteFeature(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteFeature, id)
+	return err
+}
+
 const getFeature = `-- name: GetFeature :one
 SELECT id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at FROM features WHERE id = $1
 `

@@ -23,3 +23,6 @@ WHERE id = $1 RETURNING *;
 UPDATE features
 SET roadmap_x = $2, roadmap_y = $3, roadmap_locked = $4, updated_at = now()
 WHERE id = $1 RETURNING *;
+
+-- name: DeleteFeature :exec
+DELETE FROM features WHERE id = $1;

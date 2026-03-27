@@ -110,6 +110,7 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	repos.GET("/features", r.fh.ListFeatures)
 	repos.GET("/features/:featureId", r.fh.GetFeature)
 	repos.POST("/features", r.fh.CreateFeature)
+	repos.DELETE("/features/:featureId", r.fh.DeleteFeature)
 	repos.GET("/features/:featureId/comments", r.fh.ListComments)
 	repos.POST("/features/:featureId/comments", r.fh.CreateComment)
 	repos.POST("/features/:featureId/vote", r.fh.ToggleVote)

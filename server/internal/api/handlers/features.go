@@ -17,6 +17,7 @@ type FeatureHandlers interface {
 	ListFeatures(c *gin.Context)
 	GetFeature(c *gin.Context)
 	CreateFeature(c *gin.Context)
+	DeleteFeature(c *gin.Context)
 	UpdateStatus(c *gin.Context)
 	UpdateArea(c *gin.Context)
 	UpdatePosition(c *gin.Context)
@@ -94,6 +95,19 @@ func (h *FeatureHandlersImpl) CreateFeature(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, feature)
+}
+
+func (h *FeatureHandlersImpl) DeleteFeature(c *gin.Context) {
+	featureID, ok := featureIDFromContext(c)
+	if !ok {
+		return
+	}
+	if err := h.s.DeleteFeature(c.Request.Context(), featureID); err != nil {
+		h.l.Errorw("Failed to delete feature", "error", err, "request_id", request.GetRequestID(c))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 type updateStatusRequest struct {
