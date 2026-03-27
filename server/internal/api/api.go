@@ -114,6 +114,7 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	repos.GET("/features/:featureId/comments", r.fh.ListComments)
 	repos.POST("/features/:featureId/comments", r.fh.CreateComment)
 	repos.POST("/features/:featureId/vote", r.fh.ToggleVote)
+	repos.PATCH("/features/:featureId/title", r.fh.UpdateTitle)
 	repos.PATCH("/features/:featureId/status", r.fh.UpdateStatus)
 	repos.PATCH("/features/:featureId/area", r.fh.UpdateArea)
 	repos.PATCH("/features/:featureId/position", r.fh.UpdatePosition)

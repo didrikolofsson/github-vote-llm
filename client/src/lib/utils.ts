@@ -8,7 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export const userRoleColors: Record<OrganizationMemberRole, BadgeColor> = {
-  owner: "lime",
+  owner: "indigo",
   member: "zinc",
 } as const;
 export function userRoleToBadgeColor(role: OrganizationMemberRole): BadgeColor {

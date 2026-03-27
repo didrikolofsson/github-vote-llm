@@ -400,6 +400,21 @@ export async function createFeature(
   });
 }
 
+export async function updateFeatureTitle(
+  repoId: number,
+  featureId: number,
+  title: string,
+) {
+  return requestWithRefresh(
+    `/repositories/${repoId}/features/${featureId}/title`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+      schema: FeatureSchema,
+    },
+  );
+}
+
 export async function updateFeatureStatus(
   repoId: number,
   featureId: number,

@@ -18,6 +18,7 @@ type FeatureHandlers interface {
 	GetFeature(c *gin.Context)
 	CreateFeature(c *gin.Context)
 	DeleteFeature(c *gin.Context)
+	UpdateTitle(c *gin.Context)
 	UpdateStatus(c *gin.Context)
 	UpdateArea(c *gin.Context)
 	UpdatePosition(c *gin.Context)
@@ -108,6 +109,34 @@ func (h *FeatureHandlersImpl) DeleteFeature(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+type updateTitleRequest struct {
+	Title string `json:"title" binding:"required"`
+}
+
+func (h *FeatureHandlersImpl) UpdateTitle(c *gin.Context) {
+	featureID, err := strconv.ParseInt(c.Param("featureId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid feature ID"})
+		return
+	}
+	var req updateTitleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	feature, err := h.s.UpdateTitle(c.Request.Context(), featureID, req.Title)
+	if errors.Is(err, services.ErrFeatureNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "feature not found"})
+		return
+	}
+	if err != nil {
+		h.l.Errorw("Failed to update feature title", "error", err, "request_id", request.GetRequestID(c))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	c.JSON(http.StatusOK, feature)
 }
 
 type updateStatusRequest struct {

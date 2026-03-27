@@ -1,77 +1,245 @@
-import { deleteFeature } from "@/lib/api";
-import type { Feature } from "@/lib/api-schemas";
+import {
+  addFeatureDependency,
+  deleteFeature,
+  removeFeatureDependency,
+  updateFeatureStatus,
+  updateFeatureTitle,
+} from "@/lib/api";
+import type { Feature, FeatureDependency, FeatureStatus } from "@/lib/api-schemas";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Drawer,
   DrawerContent,
   DrawerHeader,
-  DrawerTitle,
-  DrawerDescription,
   DrawerFooter,
 } from "@/components/ui/drawer";
+import {
+  Combobox,
+  ComboboxChip,
+  ComboboxChips,
+  ComboboxChipsInput,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxValue,
+  useComboboxAnchor,
+} from "@/components/ui/combobox";
 
-const STATUS_LABEL: Record<string, string> = {
-  open: "Open",
-  planned: "Planned",
-  in_progress: "In progress",
-  done: "Done",
-  rejected: "Rejected",
-};
+const STATUS_OPTIONS: { value: FeatureStatus; label: string }[] = [
+  { value: "open", label: "Open" },
+  { value: "planned", label: "Planned" },
+  { value: "in_progress", label: "In progress" },
+  { value: "done", label: "Done" },
+  { value: "rejected", label: "Rejected" },
+];
+
+function DepsCombobox({
+  features,
+  value,
+  onValueChange,
+  container,
+}: {
+  features: Feature[];
+  value: string[];
+  onValueChange: (v: string[]) => void;
+  container?: HTMLElement | null;
+}) {
+  const anchor = useComboboxAnchor();
+  const items = features.map((f) => String(f.id));
+  const labelOf = (id: string) => features.find((f) => String(f.id) === id)?.title ?? id;
+
+  return (
+    <Combobox multiple items={items} value={value} onValueChange={onValueChange}>
+      <ComboboxChips ref={anchor} className="min-h-9">
+        <ComboboxValue>
+          {(values: string[]) => (
+            <>
+              {values.map((v) => (
+                <ComboboxChip key={v}>{labelOf(v)}</ComboboxChip>
+              ))}
+              <ComboboxChipsInput placeholder={value.length === 0 ? "Search features…" : ""} />
+            </>
+          )}
+        </ComboboxValue>
+      </ComboboxChips>
+      <ComboboxContent anchor={anchor} container={container}>
+        <ComboboxEmpty>No features found.</ComboboxEmpty>
+        <ComboboxList>
+          {items.map((id) => (
+            <ComboboxItem key={id} value={id}>
+              {labelOf(id)}
+            </ComboboxItem>
+          ))}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
+  );
+}
 
 interface FeatureDrawerProps {
   repoId: number;
   feature: Feature | null;
+  allFeatures: Feature[];
+  dependencies: FeatureDependency[];
   onClose: () => void;
 }
 
-export function FeatureDrawer({ repoId, feature, onClose }: FeatureDrawerProps) {
+export function FeatureDrawer({
+  repoId,
+  feature,
+  allFeatures,
+  dependencies,
+  onClose,
+}: FeatureDrawerProps) {
   const queryClient = useQueryClient();
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [container, setContainer] = useState<HTMLDivElement | null>(null);
+
+  // Local edit state
+  const [title, setTitle] = useState("");
+  const [titleDraft, setTitleDraft] = useState("");
+
+  useEffect(() => {
+    if (feature) {
+      setTitle(feature.title);
+      setTitleDraft(feature.title);
+    }
+  }, [feature?.id, feature?.title]);
+
+  // Current dependency IDs for this feature (features it depends on)
+  const currentDepIds = dependencies
+    .filter((d) => d.feature_id === feature?.id)
+    .map((d) => String(d.depends_on));
+
+  // Features available as dependency options (all except the current feature)
+  const depOptions = allFeatures.filter((f) => f.id !== feature?.id);
+
+  function invalidate() {
+    queryClient.invalidateQueries({ queryKey: ["repositories", repoId, "roadmap"] });
+  }
+
+  const updateTitle = useMutation({
+    mutationFn: (newTitle: string) => updateFeatureTitle(repoId, feature!.id, newTitle),
+    onSuccess: invalidate,
+  });
+
+  const updateStatus = useMutation({
+    mutationFn: (status: string) => updateFeatureStatus(repoId, feature!.id, status),
+    onSuccess: invalidate,
+  });
+
+  const addDep = useMutation({
+    mutationFn: (dependsOn: number) => addFeatureDependency(repoId, feature!.id, dependsOn),
+    onSuccess: invalidate,
+  });
+
+  const removeDep = useMutation({
+    mutationFn: (dependsOn: number) => removeFeatureDependency(repoId, feature!.id, dependsOn),
+    onSuccess: invalidate,
+  });
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteFeature(repoId, feature!.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["repositories", repoId, "roadmap"] });
+      invalidate();
       onClose();
     },
   });
 
+  function handleTitleBlur() {
+    const trimmed = titleDraft.trim();
+    if (trimmed && trimmed !== title) {
+      updateTitle.mutate(trimmed);
+    } else {
+      setTitleDraft(title);
+    }
+  }
+
+  function handleTitleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+    if (e.key === "Escape") {
+      setTitleDraft(title);
+      (e.target as HTMLInputElement).blur();
+    }
+  }
+
+  function handleDepsChange(newIds: string[]) {
+    const prev = new Set(currentDepIds);
+    const next = new Set(newIds);
+
+    for (const id of next) {
+      if (!prev.has(id)) addDep.mutate(Number(id));
+    }
+    for (const id of prev) {
+      if (!next.has(id)) removeDep.mutate(Number(id));
+    }
+  }
+
   return (
-    <Drawer
-      open={!!feature}
-      onOpenChange={(open) => !open && onClose()}
-      direction="right"
-    >
-      <DrawerContent className="sm:max-w-sm">
+    <Drawer open={!!feature} onOpenChange={(open) => !open && onClose()} direction="right">
+      <DrawerContent className="w-[420px] sm:max-w-[420px]">
         {feature && (
           <>
-            <DrawerHeader>
-              <DrawerTitle>{feature.title}</DrawerTitle>
-              {feature.description && (
-                <DrawerDescription>{feature.description}</DrawerDescription>
-              )}
+            <div ref={(el) => { containerRef.current = el; setContainer(el); }} />
+            <DrawerHeader className="pb-2">
+              <Input
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={handleTitleBlur}
+                onKeyDown={handleTitleKeyDown}
+                className="text-base font-semibold border-transparent shadow-none px-0 focus-visible:border-input focus-visible:shadow-sm focus-visible:px-3 transition-all"
+              />
             </DrawerHeader>
 
-            <div className="flex flex-col gap-3 px-4 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Status</span>
-                <span className="font-medium">
-                  {STATUS_LABEL[feature.status] ?? feature.status}
-                </span>
+            <div className="flex flex-col gap-5 px-4 py-2">
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-muted-foreground text-xs">Status</Label>
+                <Select
+                  value={feature.status}
+                  onValueChange={(v) => updateStatus.mutate(v)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              {feature.area && (
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Area</span>
-                  <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
-                    {feature.area}
-                  </span>
+
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-muted-foreground text-xs">Votes</Label>
+                <p className="text-sm font-medium">{feature.vote_count ?? 0}</p>
+              </div>
+
+              {depOptions.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-muted-foreground text-xs">Depends on</Label>
+                  <DepsCombobox
+                    features={depOptions}
+                    value={currentDepIds}
+                    onValueChange={handleDepsChange}
+                    container={container}
+                  />
                 </div>
               )}
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Votes</span>
-                <span className="font-medium">{feature.vote_count ?? 0}</span>
-              </div>
             </div>
 
             <DrawerFooter>

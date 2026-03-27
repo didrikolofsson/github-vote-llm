@@ -204,3 +204,32 @@ func (q *Queries) UpdateFeatureStatus(ctx context.Context, arg UpdateFeatureStat
 	)
 	return i, err
 }
+
+const updateFeatureTitle = `-- name: UpdateFeatureTitle :one
+UPDATE features SET title = $2, updated_at = now()
+WHERE id = $1 RETURNING id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at
+`
+
+type UpdateFeatureTitleParams struct {
+	ID    int64
+	Title string
+}
+
+func (q *Queries) UpdateFeatureTitle(ctx context.Context, arg UpdateFeatureTitleParams) (Feature, error) {
+	row := q.db.QueryRow(ctx, updateFeatureTitle, arg.ID, arg.Title)
+	var i Feature
+	err := row.Scan(
+		&i.ID,
+		&i.RepositoryID,
+		&i.Title,
+		&i.Description,
+		&i.Status,
+		&i.Area,
+		&i.RoadmapX,
+		&i.RoadmapY,
+		&i.RoadmapLocked,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

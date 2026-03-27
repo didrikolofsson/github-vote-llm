@@ -53,6 +53,7 @@ type FeaturesService interface {
 	ListFeatures(ctx context.Context, repoID int64) ([]FeatureDTO, error)
 	GetFeature(ctx context.Context, featureID int64) (*FeatureDTO, error)
 	CreateFeature(ctx context.Context, repoID int64, title, description string) (*FeatureDTO, error)
+	UpdateTitle(ctx context.Context, featureID int64, title string) (*FeatureDTO, error)
 	UpdateStatus(ctx context.Context, featureID int64, status store.FeatureStatus) (*FeatureDTO, error)
 	UpdateArea(ctx context.Context, featureID int64, area *string) (*FeatureDTO, error)
 	UpdatePosition(ctx context.Context, featureID int64, x, y *float64, locked bool) (*FeatureDTO, error)
@@ -123,6 +124,21 @@ func (s *FeaturesServiceImpl) CreateFeature(ctx context.Context, repoID int64, t
 
 func (s *FeaturesServiceImpl) DeleteFeature(ctx context.Context, featureID int64) error {
 	return s.q.DeleteFeature(ctx, featureID)
+}
+
+func (s *FeaturesServiceImpl) UpdateTitle(ctx context.Context, featureID int64, title string) (*FeatureDTO, error) {
+	f, err := s.q.UpdateFeatureTitle(ctx, store.UpdateFeatureTitleParams{ID: featureID, Title: title})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrFeatureNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	dto, err := s.toDTO(ctx, f)
+	if err != nil {
+		return nil, err
+	}
+	return &dto, nil
 }
 
 func (s *FeaturesServiceImpl) UpdateStatus(ctx context.Context, featureID int64, status store.FeatureStatus) (*FeatureDTO, error) {

@@ -201,6 +201,7 @@ function depsToEdges(deps: FeatureDependency[]): Edge[] {
     source: String(d.depends_on),
     target: String(d.feature_id),
     style: EDGE_STYLE,
+    animated: true
   }));
 }
 
@@ -359,7 +360,7 @@ interface RoadmapCanvasProps {
 export function RoadmapCanvas({ repoId }: RoadmapCanvasProps) {
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
-  const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null);
+  const [selectedFeatureId, setSelectedFeatureId] = useState<number | null>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
 
@@ -425,10 +426,9 @@ export function RoadmapCanvas({ repoId }: RoadmapCanvasProps) {
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      const feature = data?.features.find((f) => f.id === parseInt(node.id, 10));
-      if (feature) setSelectedFeature(feature);
+      setSelectedFeatureId(parseInt(node.id, 10));
     },
-    [data],
+    [],
   );
 
   const onNodeDragStop = useCallback(
@@ -517,7 +517,7 @@ export function RoadmapCanvas({ repoId }: RoadmapCanvasProps) {
         deleteKeyCode="Delete"
         className="bg-muted/20"
       >
-        <Background variant={BackgroundVariant.Dots} gap={24} size={1} className="opacity-40" />
+        <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
         <Controls showInteractive={false} className="[&>button]:border-border" />
         <Panel position="top-right" className="flex gap-2">
           <Button
@@ -544,8 +544,10 @@ export function RoadmapCanvas({ repoId }: RoadmapCanvasProps) {
 
       <FeatureDrawer
         repoId={repoId}
-        feature={selectedFeature}
-        onClose={() => setSelectedFeature(null)}
+        feature={data?.features.find((f) => f.id === selectedFeatureId) ?? null}
+        allFeatures={data?.features ?? []}
+        dependencies={data?.dependencies ?? []}
+        onClose={() => setSelectedFeatureId(null)}
       />
 
       <AddFeatureDialog
