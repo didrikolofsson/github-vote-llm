@@ -3,7 +3,6 @@ import {
   Background,
   BackgroundVariant,
   Controls,
-  MiniMap,
   Panel,
   addEdge,
   applyEdgeChanges,
@@ -23,6 +22,7 @@ import {
   updateFeaturePosition,
 } from "@/lib/api";
 import type { Feature, FeatureDependency } from "@/lib/api-schemas";
+import ELK from "elkjs/lib/elk.bundled.js";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -59,75 +59,122 @@ const NODE_TYPES = { feature: FeatureNode };
 
 const EDGE_STYLE = { stroke: "var(--border)", strokeWidth: 1.5, strokeDasharray: "5 5" };
 
-// ── Layout algorithm ───────────────────────────────────────────────────────────
-//
-// Assigns each unpositioned feature a column based on its longest dependency
-// chain (topological depth), then stacks features within the same column
-// vertically, centered around the tallest column.
-//
-// Tweak these to adjust spacing:
-const LAYOUT = {
-  nodeWidth: 220,   // px — should match the node's rendered width
-  nodeHeight: 80,   // px — approximate rendered height
-  columnGap: 80,    // px — horizontal gap between columns
-  rowGap: 40,       // px — vertical gap between nodes in the same column
-} as const;
+// ── Layout ─────────────────────────────────────────────────────────────────────
 
-function computeLayout(
+const NODE_WIDTH = 220;
+const NODE_HEIGHT = 80;
+
+const elk = new ELK();
+
+// Uses ELK's layered algorithm to place unpositioned features.
+// Already-positioned features have their x/y passed as hints so ELK uses them
+// for layer assignment (INTERACTIVE strategy), keeping new nodes contextually
+// placed relative to the existing layout.
+// Only positions for previously-unpositioned nodes are returned; existing
+// positions are never overwritten here.
+async function computeLayout(
   features: Feature[],
   dependencies: FeatureDependency[],
-): Map<number, { x: number; y: number }> {
-  const toLayout = features.filter((f) => f.roadmap_x == null || f.roadmap_y == null);
-  if (toLayout.length === 0) return new Map();
+): Promise<Map<number, { x: number; y: number }>> {
+  const unpositioned = features.filter((f) => f.roadmap_x == null || f.roadmap_y == null);
+  if (unpositioned.length === 0) return new Map();
 
-  // Build prerequisite map over ALL features so that dependencies on already-positioned
-  // features are still taken into account when assigning columns to new ones.
-  const allIds = new Set(features.map((f) => f.id));
-  const prereqs = new Map<number, number[]>(features.map((f) => [f.id, []]));
-  for (const dep of dependencies) {
-    if (allIds.has(dep.feature_id) && allIds.has(dep.depends_on)) {
-      prereqs.get(dep.feature_id)!.push(dep.depends_on);
+  const graph = {
+    id: "root",
+    layoutOptions: {
+      "elk.algorithm": "layered",
+      "elk.direction": "RIGHT",
+      // INTERACTIVE strategies read the provided x/y of already-placed nodes
+      // to infer their layer + ordering, so new nodes land in the right column.
+      "elk.layered.layering.strategy": "INTERACTIVE",
+      "elk.layered.crossingMinimization.semiInteractive": "true",
+      "elk.spacing.nodeNode": "40",
+      "elk.layered.spacing.nodeNodeBetweenLayers": "80",
+    },
+    children: features.map((f) => ({
+      id: String(f.id),
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
+      ...(f.roadmap_x != null && f.roadmap_y != null
+        ? { x: f.roadmap_x, y: f.roadmap_y }
+        : {}),
+    })),
+    edges: dependencies.map((d) => ({
+      id: `dep-${d.depends_on}-${d.feature_id}`,
+      sources: [String(d.depends_on)],
+      targets: [String(d.feature_id)],
+    })),
+  };
+
+  const result = await elk.layout(graph);
+
+  const unpositionedIds = new Set(unpositioned.map((f) => f.id));
+
+  // Build a map of direct prerequisites per feature.
+  const prereqMap = new Map<number, number[]>();
+  for (const d of dependencies) {
+    if (!prereqMap.has(d.feature_id)) prereqMap.set(d.feature_id, []);
+    prereqMap.get(d.feature_id)!.push(d.depends_on);
+  }
+
+  // Index positioned features by id for quick lookup.
+  const positionedById = new Map<number, { x: number; y: number }>();
+  for (const f of features) {
+    if (f.roadmap_x != null && f.roadmap_y != null) {
+      positionedById.set(f.id, { x: f.roadmap_x, y: f.roadmap_y });
     }
   }
 
-  // Column = longest dependency chain to reach this node (memoised DFS).
-  // Guard against cycles by tracking the current call stack.
-  const colCache = new Map<number, number>();
-  function getColumn(id: number, stack = new Set<number>()): number {
-    if (colCache.has(id)) return colCache.get(id)!;
-    if (stack.has(id)) return 0; // cycle — treat as root
-    stack.add(id);
-    const pres = prereqs.get(id) ?? [];
-    const col =
-      pres.length === 0
-        ? 0
-        : Math.max(...pres.map((p) => getColumn(p, new Set(stack)) + 1));
-    colCache.set(id, col);
-    return col;
-  }
-  // Run getColumn on every feature so positioned nodes contribute correct depths.
-  for (const f of features) getColumn(f.id);
+  // ELK gives us the correct x (layer/column) for each new node. But its y is
+  // computed in its own clean layout space, divorced from where the user has
+  // actually placed dependencies. Override y with the average y of the node's
+  // direct prerequisites that have saved positions — this aligns new nodes with
+  // their actual parents on the canvas. Fall back to ELK's y when no positioned
+  // prerequisites exist (e.g. initial full layout).
+  const elkPositions = new Map<number, { x: number; y: number }>();
+  for (const node of result.children ?? []) {
+    const id = parseInt(node.id, 10);
+    if (!unpositionedIds.has(id) || node.x == null || node.y == null) continue;
 
-  // Group by column, sorted by id (creation order) within each column.
-  const byColumn = new Map<number, number[]>();
-  for (const f of toLayout) {
-    const col = colCache.get(f.id)!;
-    if (!byColumn.has(col)) byColumn.set(col, []);
-    byColumn.get(col)!.push(f.id);
-  }
-  for (const ids of byColumn.values()) ids.sort((a, b) => a - b);
+    const prereqs = prereqMap.get(id) ?? [];
+    const depYs = prereqs
+      .map((depId) => positionedById.get(depId)?.y)
+      .filter((y): y is number => y != null);
 
-  // Center shorter columns against the tallest one.
-  const colStride = LAYOUT.nodeWidth + LAYOUT.columnGap;
-  const rowStride = LAYOUT.nodeHeight + LAYOUT.rowGap;
-  const maxRows = Math.max(...[...byColumn.values()].map((ids) => ids.length));
+    const idealY = depYs.length > 0
+      ? depYs.reduce((sum, y) => sum + y, 0) / depYs.length
+      : node.y;
+
+    elkPositions.set(id, { x: node.x, y: idealY });
+  }
+
+  // Resolve overlaps: for each new node, try y offsets (±stride) until the
+  // bounding box doesn't collide with any existing or already-resolved node.
+  const ROW_STRIDE = NODE_HEIGHT + 40;
+  function overlaps(a: { x: number; y: number }, b: { x: number; y: number }) {
+    return (
+      Math.abs(a.x - b.x) < NODE_WIDTH + 10 &&
+      Math.abs(a.y - b.y) < NODE_HEIGHT + 10
+    );
+  }
+
+  const occupied: { x: number; y: number }[] = [...positionedById.values()];
 
   const positions = new Map<number, { x: number; y: number }>();
-  for (const [col, ids] of byColumn) {
-    const yOffset = ((maxRows - ids.length) / 2) * rowStride;
-    ids.forEach((id, row) => {
-      positions.set(id, { x: col * colStride, y: yOffset + row * rowStride });
-    });
+  for (const [id, pos] of elkPositions) {
+    const allOccupied = [...occupied, ...positions.values()];
+    let finalPos = pos;
+    for (let i = 0; i < 50; i++) {
+      // Sequence: 0, +stride, -stride, +2*stride, -2*stride, …
+      const offset = i === 0 ? 0 : Math.ceil(i / 2) * ROW_STRIDE * (i % 2 === 1 ? 1 : -1);
+      const candidate = { x: pos.x, y: pos.y + offset };
+      if (!allOccupied.some((o) => overlaps(o, candidate))) {
+        finalPos = candidate;
+        break;
+      }
+    }
+    occupied.push(finalPos);
+    positions.set(id, finalPos);
   }
 
   return positions;
@@ -145,7 +192,6 @@ function featuresToNodes(
         ? { x: f.roadmap_x, y: f.roadmap_y }
         : (autoPositions.get(f.id) ?? { x: 0, y: 0 }),
     data: f as FeatureNodeData,
-    draggable: !f.roadmap_locked,
   }));
 }
 
@@ -172,10 +218,12 @@ function DepsCombobox({
   features,
   value,
   onValueChange,
+  container,
 }: {
   features: Feature[];
   value: string[];
   onValueChange: (v: string[]) => void;
+  container?: HTMLElement | null;
 }) {
   const anchor = useComboboxAnchor();
   const items = features.map((f) => String(f.id));
@@ -195,7 +243,7 @@ function DepsCombobox({
           )}
         </ComboboxValue>
       </ComboboxChips>
-      <ComboboxContent anchor={anchor}>
+      <ComboboxContent anchor={anchor} container={container}>
         <ComboboxEmpty>No features found.</ComboboxEmpty>
         <ComboboxList>
           {items.map((id) => (
@@ -219,6 +267,7 @@ function AddFeatureDialog({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [selectedDeps, setSelectedDeps] = useState<string[]>([]);
+  const [container, setContainer] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -235,8 +284,9 @@ function AddFeatureDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} modal={false}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
+        <div ref={setContainer} />
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>New feature</DialogTitle>
@@ -276,6 +326,7 @@ function AddFeatureDialog({
                   features={availableFeatures}
                   value={selectedDeps}
                   onValueChange={setSelectedDeps}
+                  container={container}
                 />
                 {selectedDeps.length === 0 && (
                   <p className="text-[11px] text-muted-foreground">
@@ -319,12 +370,18 @@ export function RoadmapCanvas({ repoId }: RoadmapCanvasProps) {
   });
 
   // Sync nodes + edges whenever server data changes.
+  // computeLayout is async (ELK), so we use .then() inside the effect.
+  // After layout, persist ELK-computed positions so they survive navigation.
   useEffect(() => {
     if (!data) return;
-    const positions = computeLayout(data.features, data.dependencies);
-    setNodes(featuresToNodes(data.features, positions));
-    setEdges(depsToEdges(data.dependencies));
-  // setNodes/setEdges are stable React state setters — omitting them is safe.
+    computeLayout(data.features, data.dependencies).then((positions) => {
+      setNodes(featuresToNodes(data.features, positions));
+      setEdges(depsToEdges(data.dependencies));
+      for (const [featureId, { x, y }] of positions) {
+        savePosition.mutate({ featureId, x, y });
+      }
+    });
+  // setNodes/setEdges/savePosition are stable references — omitting them is safe.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
@@ -462,12 +519,6 @@ export function RoadmapCanvas({ repoId }: RoadmapCanvasProps) {
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1} className="opacity-40" />
         <Controls showInteractive={false} className="[&>button]:border-border" />
-        <MiniMap
-          nodeStrokeWidth={2}
-          nodeColor="hsl(var(--muted-foreground) / 0.3)"
-          maskColor="hsl(var(--background) / 0.7)"
-          className="border border-border rounded-lg overflow-hidden"
-        />
         <Panel position="top-right" className="flex gap-2">
           <Button
             size="sm"
