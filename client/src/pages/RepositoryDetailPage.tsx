@@ -17,7 +17,16 @@ import {
   updateRepositoryPortalPublic,
 } from "@/lib/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowUpRight, CalendarDays, Check, Copy, GitFork, Globe, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  CalendarDays,
+  Check,
+  Copy,
+  GitFork,
+  Globe,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -45,7 +54,9 @@ export default function RepositoryDetailPage() {
   const removeRepo = useMutation({
     mutationFn: () => removeRepository(orgId!, repoIdNum!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organizations", orgId, "repositories"] });
+      queryClient.invalidateQueries({
+        queryKey: ["organizations", orgId, "repositories"],
+      });
       navigate("/repositories");
     },
   });
@@ -54,13 +65,16 @@ export default function RepositoryDetailPage() {
     mutationFn: (portalPublic: boolean) =>
       updateRepositoryPortalPublic(repoIdNum!, portalPublic),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organizations", orgId, "repositories"] });
+      queryClient.invalidateQueries({
+        queryKey: ["organizations", orgId, "repositories"],
+      });
     },
   });
 
-  const portalUrl = org?.slug && repoData
-    ? `${window.location.origin}/portal.html/${org.slug}/${repoData.name}`
-    : null;
+  const portalUrl =
+    org?.slug && repoData
+      ? `${window.location.origin}/portal/${org.slug}/${repoData.name}`
+      : null;
 
   return (
     <div className="animate-slide-up flex flex-col">
@@ -75,7 +89,9 @@ export default function RepositoryDetailPage() {
         <h1 className="text-2xl font-semibold tracking-tight font-mono">
           {repoData ? (
             <>
-              <span className="text-muted-foreground font-normal">{repoData.owner}/</span>
+              <span className="text-muted-foreground font-normal">
+                {repoData.owner}/
+              </span>
               {repoData.name}
             </>
           ) : (
@@ -94,11 +110,16 @@ export default function RepositoryDetailPage() {
           </TabsList>
         </div>
 
-        <TabsContent value="details" className="px-8 pb-8 mt-6 w-full max-w-[1280px] mx-auto flex flex-col gap-4">
+        <TabsContent
+          value="details"
+          className="px-8 pb-8 mt-6 w-full max-w-[1280px] mx-auto flex flex-col gap-4"
+        >
           <Card>
             <CardHeader>
               <CardTitle className="text-[15px]">Repository</CardTitle>
-              <CardDescription>Overview and quick links for this repository.</CardDescription>
+              <CardDescription>
+                Overview and quick links for this repository.
+              </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               {repoData && (
@@ -144,16 +165,25 @@ export default function RepositoryDetailPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="runs" className="px-8 pb-8 mt-6 w-full max-w-[1280px] mx-auto">
+        <TabsContent
+          value="runs"
+          className="px-8 pb-8 mt-6 w-full max-w-[1280px] mx-auto"
+        >
           <div className="py-16 text-center rounded-lg bg-muted/50">
-            <p className="text-sm font-medium text-muted-foreground">No implementations yet</p>
+            <p className="text-sm font-medium text-muted-foreground">
+              No implementations yet
+            </p>
             <p className="text-xs text-muted-foreground/70 mt-1">
-              AI-driven implementations and their pull requests will appear here.
+              AI-driven implementations and their pull requests will appear
+              here.
             </p>
           </div>
         </TabsContent>
 
-        <TabsContent value="settings" className="px-8 pb-8 mt-6 w-full max-w-[1280px] mx-auto flex flex-col gap-4">
+        <TabsContent
+          value="settings"
+          className="px-8 pb-8 mt-6 w-full max-w-[1280px] mx-auto flex flex-col gap-4"
+        >
           <PortalCard
             portalPublic={repoData?.portal_public ?? false}
             portalUrl={portalUrl}
@@ -164,8 +194,9 @@ export default function RepositoryDetailPage() {
             <CardHeader>
               <CardTitle className="text-[15px]">Danger zone</CardTitle>
               <CardDescription>
-                Remove this repository from your organization. Features and data will be
-                preserved but the repository will no longer be managed here.
+                Remove this repository from your organization. Features and data
+                will be preserved but the repository will no longer be managed
+                here.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -211,12 +242,16 @@ function PortalCard({
       <CardHeader>
         <CardTitle className="text-[15px]">Community portal</CardTitle>
         <CardDescription>
-          Publish a public page where users can vote on features and view the roadmap.
+          Publish a public page where users can vote on features and view the
+          roadmap.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <Label htmlFor="portal-toggle" className="flex items-center gap-2 cursor-pointer">
+          <Label
+            htmlFor="portal-toggle"
+            className="flex items-center gap-2 cursor-pointer"
+          >
             <Globe className="size-4 text-muted-foreground" />
             <span className="text-sm">Public portal</span>
           </Label>
@@ -232,10 +267,24 @@ function PortalCard({
             <span className="text-xs text-muted-foreground font-mono flex-1 truncate">
               {portalUrl}
             </span>
-            <Button variant="ghost" size="icon" className="size-6 shrink-0" onClick={copyUrl}>
-              {copied ? <Check className="size-3.5 text-lime-400" /> : <Copy className="size-3.5" />}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6 shrink-0"
+              onClick={copyUrl}
+            >
+              {copied ? (
+                <Check className="size-3.5 text-lime-400" />
+              ) : (
+                <Copy className="size-3.5" />
+              )}
             </Button>
-            <Button variant="ghost" size="icon" className="size-6 shrink-0" asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6 shrink-0"
+              asChild
+            >
               <a href={portalUrl} target="_blank" rel="noopener noreferrer">
                 <ArrowUpRight className="size-3.5" />
               </a>

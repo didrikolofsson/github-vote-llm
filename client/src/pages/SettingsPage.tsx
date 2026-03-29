@@ -1,7 +1,13 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -153,15 +159,24 @@ function OrganizationTab() {
   const removeMemberMutation = useMutation({
     mutationFn: (userId: number) => removeMember(orgId!, userId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organizations", orgId, "members"] });
+      queryClient.invalidateQueries({
+        queryKey: ["organizations", orgId, "members"],
+      });
     },
   });
 
   const updateRoleMutation = useMutation({
-    mutationFn: ({ userId, role }: { userId: number; role: "owner" | "member" }) =>
-      updateMemberRole(orgId!, userId, role),
+    mutationFn: ({
+      userId,
+      role,
+    }: {
+      userId: number;
+      role: "owner" | "member";
+    }) => updateMemberRole(orgId!, userId, role),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organizations", orgId, "members"] });
+      queryClient.invalidateQueries({
+        queryKey: ["organizations", orgId, "members"],
+      });
     },
   });
 
@@ -197,9 +212,7 @@ function OrganizationTab() {
               placeholder="Organization name"
             />
           </div>
-          {saveError && (
-            <p className="text-sm text-destructive">{saveError}</p>
-          )}
+          {saveError && <p className="text-sm text-destructive">{saveError}</p>}
           <div>
             <Button
               onClick={() => updateOrgMutation.mutate()}
@@ -232,13 +245,14 @@ function OrganizationTab() {
             />
             {org?.slug && (
               <p className="text-xs text-muted-foreground">
-                Portal URL: <span className="font-mono">{window.location.origin}/portal.html/{orgSlug}/…</span>
+                Portal URL:{" "}
+                <span className="font-mono">
+                  {window.location.origin}/portal/{orgSlug}/…
+                </span>
               </p>
             )}
           </div>
-          {slugError && (
-            <p className="text-sm text-destructive">{slugError}</p>
-          )}
+          {slugError && <p className="text-sm text-destructive">{slugError}</p>}
           <div>
             <Button
               onClick={() => updateSlugMutation.mutate()}
@@ -288,14 +302,18 @@ function OrganizationTab() {
                   onClick={() => disconnectGitHubMutation.mutate()}
                   disabled={disconnectGitHubMutation.isPending}
                 >
-                  {disconnectGitHubMutation.isPending ? "Disconnecting..." : "Disconnect"}
+                  {disconnectGitHubMutation.isPending
+                    ? "Disconnecting..."
+                    : "Disconnect"}
                 </Button>
               </div>
             ) : (
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="size-2 rounded-full bg-muted-foreground/40 shrink-0" />
-                  <span className="text-sm text-muted-foreground">No account connected</span>
+                  <span className="text-sm text-muted-foreground">
+                    No account connected
+                  </span>
                 </div>
                 <Button
                   size="xs"
@@ -343,7 +361,9 @@ function OrganizationTab() {
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col">
-                          <span className="text-sm text-foreground">{m.email}</span>
+                          <span className="text-sm text-foreground">
+                            {m.email}
+                          </span>
                           <Badge color={userRoleToBadgeColor(m.role)} small>
                             {m.role}
                           </Badge>
@@ -351,7 +371,11 @@ function OrganizationTab() {
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="size-8 text-muted-foreground">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 text-muted-foreground"
+                          >
                             <MoreHorizontal />
                           </Button>
                         </DropdownMenuTrigger>
@@ -369,7 +393,9 @@ function OrganizationTab() {
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"
-                            onClick={() => removeMemberMutation.mutate(m.user_id)}
+                            onClick={() =>
+                              removeMemberMutation.mutate(m.user_id)
+                            }
                             disabled={removeMemberMutation.isPending}
                           >
                             Remove
@@ -433,7 +459,8 @@ function AccountTab() {
 
   const displayName = profile?.username ?? user?.email ?? "";
   const emailMatchesConfirm =
-    !!user?.email && deleteConfirmEmail.trim().toLowerCase() === user.email.toLowerCase();
+    !!user?.email &&
+    deleteConfirmEmail.trim().toLowerCase() === user.email.toLowerCase();
 
   return (
     <>
@@ -450,7 +477,9 @@ function AccountTab() {
               </AvatarFallback>
             </Avatar>
             <div>
-              <p className="text-sm font-medium">{profile?.username ?? user?.email}</p>
+              <p className="text-sm font-medium">
+                {profile?.username ?? user?.email}
+              </p>
               {profile?.username && (
                 <p className="text-xs text-muted-foreground">{user?.email}</p>
               )}
@@ -504,9 +533,10 @@ function AccountTab() {
             <div>
               <p className="text-sm font-medium">Delete account</p>
               <p className="text-xs text-muted-foreground mt-0.5 max-w-md">
-                Permanently remove your user, sessions, and GitHub connection. If you are the only
-                member of an organization, that organization and its linked repositories are
-                removed. If others remain, ownership transfers to another member.
+                Permanently remove your user, sessions, and GitHub connection.
+                If you are the only member of an organization, that organization
+                and its linked repositories are removed. If others remain,
+                ownership transfers to another member.
               </p>
             </div>
             <Button
@@ -539,7 +569,8 @@ function AccountTab() {
           <DialogHeader>
             <DialogTitle>Delete your account?</DialogTitle>
             <DialogDescription>
-              This cannot be undone. Type <span className="font-medium text-foreground">{user?.email}</span>{" "}
+              This cannot be undone. Type{" "}
+              <span className="font-medium text-foreground">{user?.email}</span>{" "}
               to confirm.
             </DialogDescription>
           </DialogHeader>
@@ -553,10 +584,15 @@ function AccountTab() {
               onChange={(e) => setDeleteConfirmEmail(e.target.value)}
               placeholder="your@email.com"
             />
-            {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
+            {deleteError && (
+              <p className="text-sm text-destructive">{deleteError}</p>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+            >
               Cancel
             </Button>
             <Button

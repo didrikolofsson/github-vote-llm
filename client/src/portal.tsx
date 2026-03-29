@@ -14,7 +14,7 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter basename="/portal.html">
+      <BrowserRouter basename="/portal">
         <Routes>
           <Route path="/:orgSlug/:repoName" element={<PortalPage />} />
           <Route
