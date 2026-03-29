@@ -17,16 +17,18 @@ var (
 )
 
 type Repository struct {
-	ID        int64  `json:"id"`
-	Owner     string `json:"owner"`
-	Name      string `json:"name"`
-	CreatedAt string `json:"created_at,omitempty"`
+	ID           int64  `json:"id"`
+	Owner        string `json:"owner"`
+	Name         string `json:"name"`
+	PortalPublic bool   `json:"portal_public"`
+	CreatedAt    string `json:"created_at,omitempty"`
 }
 
 type RepositoriesService interface {
 	ListForOrganization(ctx context.Context, orgID, userID int64) ([]Repository, error)
 	GetRepository(ctx context.Context, repoID, userID int64) (*Repository, error)
 	AddRepository(ctx context.Context, orgID, userID int64, owner, name string) (*Repository, error)
+	UpdatePortalPublic(ctx context.Context, repoID, userID int64, public bool) (*Repository, error)
 	RemoveRepository(ctx context.Context, repoID, userID int64) error
 }
 
@@ -89,6 +91,28 @@ func (s *RepositoriesServiceImpl) AddRepository(ctx context.Context, orgID, user
 	return &dto, nil
 }
 
+func (s *RepositoriesServiceImpl) UpdatePortalPublic(ctx context.Context, repoID, userID int64, public bool) (*Repository, error) {
+	r, err := s.q.GetRepository(ctx, repoID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrRepositoryNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := s.verifyOrgMember(ctx, r.OrganizationID, userID); err != nil {
+		return nil, err
+	}
+	updated, err := s.q.SetRepositoryPortalPublic(ctx, store.SetRepositoryPortalPublicParams{
+		ID:           repoID,
+		PortalPublic: public,
+	})
+	if err != nil {
+		return nil, err
+	}
+	dto := storeRepoToDTO(updated)
+	return &dto, nil
+}
+
 func (s *RepositoriesServiceImpl) RemoveRepository(ctx context.Context, repoID, userID int64) error {
 	r, err := s.q.GetRepository(ctx, repoID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -118,9 +142,10 @@ func (s *RepositoriesServiceImpl) verifyOrgMember(ctx context.Context, orgID, us
 
 func storeRepoToDTO(r store.Repository) Repository {
 	return Repository{
-		ID:        r.ID,
-		Owner:     r.Owner,
-		Name:      r.Name,
-		CreatedAt: r.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		ID:           r.ID,
+		Owner:        r.Owner,
+		Name:         r.Name,
+		PortalPublic: r.PortalPublic,
+		CreatedAt:    r.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }

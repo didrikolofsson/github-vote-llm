@@ -62,6 +62,8 @@ func main() {
 	membersHandlers := handlers.NewMembersHandlers(membersService, apiLogger)
 	featuresService := services.NewFeaturesService(conn, q)
 	featuresHandlers := handlers.NewFeatureHandlers(featuresService, apiLogger)
+	portalService := services.NewPortalService(conn, q)
+	portalHandlers := handlers.NewPortalHandlers(portalService, apiLogger)
 
 	router := api.NewRestApiRouter(
 		env,
@@ -73,6 +75,7 @@ func main() {
 		reposHandlers,
 		membersHandlers,
 		featuresHandlers,
+		portalHandlers,
 	).Create()
 
 	router.Run(":" + env.PORT)

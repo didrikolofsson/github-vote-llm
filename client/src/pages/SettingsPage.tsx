@@ -33,6 +33,7 @@ import {
   removeMember,
   updateMemberRole,
   updateOrganization,
+  updateOrganizationSlug,
   updateUsername,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -96,11 +97,14 @@ function OrganizationTab() {
   const orgId = org?.id;
 
   const [orgName, setOrgName] = useState(org?.name ?? "");
+  const [orgSlug, setOrgSlug] = useState(org?.slug ?? "");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [slugError, setSlugError] = useState<string | null>(null);
 
   useEffect(() => {
     if (org?.name) setOrgName(org.name);
-  }, [org?.name]);
+    if (org?.slug) setOrgSlug(org.slug);
+  }, [org?.name, org?.slug]);
 
   const { data: ghStatus, isLoading: ghLoading } = useQuery({
     queryKey: ["github-status"],
@@ -135,6 +139,15 @@ function OrganizationTab() {
       queryClient.invalidateQueries({ queryKey: ["organizations"] });
     },
     onError: (err) => setSaveError(formatApiError(err)),
+  });
+
+  const updateSlugMutation = useMutation({
+    mutationFn: () => updateOrganizationSlug(orgId!, orgSlug.trim()),
+    onSuccess: () => {
+      setSlugError(null);
+      queryClient.invalidateQueries({ queryKey: ["organizations"] });
+    },
+    onError: (err) => setSlugError(formatApiError(err)),
   });
 
   const removeMemberMutation = useMutation({
@@ -198,6 +211,46 @@ function OrganizationTab() {
               size="sm"
             >
               {updateOrgMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </div>
+
+          <Separator />
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="org-slug">
+              Portal URL slug
+              <span className="ml-1.5 text-xs text-muted-foreground font-normal">
+                Used in your community portal URL
+              </span>
+            </Label>
+            <Input
+              id="org-slug"
+              value={orgSlug}
+              onChange={(e) => setOrgSlug(e.target.value)}
+              placeholder="my-organization"
+              className="font-mono text-sm"
+            />
+            {org?.slug && (
+              <p className="text-xs text-muted-foreground">
+                Portal URL: <span className="font-mono">{window.location.origin}/portal.html/{orgSlug}/…</span>
+              </p>
+            )}
+          </div>
+          {slugError && (
+            <p className="text-sm text-destructive">{slugError}</p>
+          )}
+          <div>
+            <Button
+              onClick={() => updateSlugMutation.mutate()}
+              disabled={
+                updateSlugMutation.isPending ||
+                !orgSlug.trim() ||
+                orgSlug.trim() === org?.slug
+              }
+              size="sm"
+              variant="outline"
+            >
+              {updateSlugMutation.isPending ? "Saving..." : "Update slug"}
             </Button>
           </div>
         </CardContent>

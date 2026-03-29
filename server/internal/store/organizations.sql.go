@@ -7,23 +7,40 @@ package store
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createOrganization = `-- name: CreateOrganization :one
-INSERT INTO organizations (name)
-VALUES ($1)
+INSERT INTO organizations (name, slug)
+VALUES ($1, $2)
 RETURNING id,
     name,
+    slug,
     created_at,
     updated_at
 `
 
-func (q *Queries) CreateOrganization(ctx context.Context, name string) (Organization, error) {
-	row := q.db.QueryRow(ctx, createOrganization, name)
-	var i Organization
+type CreateOrganizationParams struct {
+	Name string
+	Slug string
+}
+
+type CreateOrganizationRow struct {
+	ID        int64
+	Name      string
+	Slug      string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (CreateOrganizationRow, error) {
+	row := q.db.QueryRow(ctx, createOrganization, arg.Name, arg.Slug)
+	var i CreateOrganizationRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.Slug,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -53,18 +70,59 @@ func (q *Queries) DeleteOrganizationByID(ctx context.Context, id int64) error {
 const getOrganizationByID = `-- name: GetOrganizationByID :one
 SELECT id,
     name,
+    slug,
     created_at,
     updated_at
 FROM organizations
 WHERE id = $1
 `
 
-func (q *Queries) GetOrganizationByID(ctx context.Context, id int64) (Organization, error) {
+type GetOrganizationByIDRow struct {
+	ID        int64
+	Name      string
+	Slug      string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) GetOrganizationByID(ctx context.Context, id int64) (GetOrganizationByIDRow, error) {
 	row := q.db.QueryRow(ctx, getOrganizationByID, id)
-	var i Organization
+	var i GetOrganizationByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.Slug,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getOrganizationBySlug = `-- name: GetOrganizationBySlug :one
+SELECT id,
+    name,
+    slug,
+    created_at,
+    updated_at
+FROM organizations
+WHERE slug = $1
+`
+
+type GetOrganizationBySlugRow struct {
+	ID        int64
+	Name      string
+	Slug      string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) GetOrganizationBySlug(ctx context.Context, slug string) (GetOrganizationBySlugRow, error) {
+	row := q.db.QueryRow(ctx, getOrganizationBySlug, slug)
+	var i GetOrganizationBySlugRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -74,6 +132,7 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id int64) (Organizati
 const listOrganizationsForUser = `-- name: ListOrganizationsForUser :many
 SELECT o.id,
     o.name,
+    o.slug,
     o.created_at,
     o.updated_at
 FROM organizations o
@@ -82,18 +141,27 @@ WHERE om.user_id = $1
 ORDER BY o.name
 `
 
-func (q *Queries) ListOrganizationsForUser(ctx context.Context, userID int64) ([]Organization, error) {
+type ListOrganizationsForUserRow struct {
+	ID        int64
+	Name      string
+	Slug      string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) ListOrganizationsForUser(ctx context.Context, userID int64) ([]ListOrganizationsForUserRow, error) {
 	rows, err := q.db.Query(ctx, listOrganizationsForUser, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Organization
+	var items []ListOrganizationsForUserRow
 	for rows.Next() {
-		var i Organization
+		var i ListOrganizationsForUserRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
+			&i.Slug,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -113,6 +181,7 @@ SET name = $2
 WHERE id = $1
 RETURNING id,
     name,
+    slug,
     created_at,
     updated_at
 `
@@ -122,12 +191,59 @@ type UpdateOrganizationByIDParams struct {
 	Name string
 }
 
-func (q *Queries) UpdateOrganizationByID(ctx context.Context, arg UpdateOrganizationByIDParams) (Organization, error) {
+type UpdateOrganizationByIDRow struct {
+	ID        int64
+	Name      string
+	Slug      string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) UpdateOrganizationByID(ctx context.Context, arg UpdateOrganizationByIDParams) (UpdateOrganizationByIDRow, error) {
 	row := q.db.QueryRow(ctx, updateOrganizationByID, arg.ID, arg.Name)
-	var i Organization
+	var i UpdateOrganizationByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.Slug,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateOrganizationSlug = `-- name: UpdateOrganizationSlug :one
+UPDATE organizations
+SET slug = $2,
+    updated_at = now()
+WHERE id = $1
+RETURNING id,
+    name,
+    slug,
+    created_at,
+    updated_at
+`
+
+type UpdateOrganizationSlugParams struct {
+	ID   int64
+	Slug string
+}
+
+type UpdateOrganizationSlugRow struct {
+	ID        int64
+	Name      string
+	Slug      string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) UpdateOrganizationSlug(ctx context.Context, arg UpdateOrganizationSlugParams) (UpdateOrganizationSlugRow, error) {
+	row := q.db.QueryRow(ctx, updateOrganizationSlug, arg.ID, arg.Slug)
+	var i UpdateOrganizationSlugRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

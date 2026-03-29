@@ -7,6 +7,7 @@ export const OrganizationMemberRoleSchema = z.enum(["owner", "member"]);
 export const OrganizationSchema = z.object({
   id: z.number(),
   name: z.string(),
+  slug: z.string(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -31,6 +32,7 @@ export const RepositorySchema = z.object({
   id: z.number(),
   owner: z.string(),
   name: z.string(),
+  portal_public: z.boolean(),
   created_at: z.string(),
 });
 

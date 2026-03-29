@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createOrganization, ApiError } from '../lib/api';
+import { slugify } from '../lib/utils';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -20,8 +21,18 @@ interface CreateOrganizationPageProps {
 export default function CreateOrganizationPage({ onCreated }: CreateOrganizationPageProps) {
   const navigate = useNavigate();
   const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  function handleNameChange(value: string) {
+    setName(value);
+    if (!slugManuallyEdited) {
+      setSlug(slugify(value));
+    }
+    setError(null);
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -31,7 +42,7 @@ export default function CreateOrganizationPage({ onCreated }: CreateOrganization
     setError(null);
     setIsSubmitting(true);
     try {
-      await createOrganization(trimmed);
+      await createOrganization(trimmed, slug.trim() || undefined);
       onCreated?.();
       navigate('/', { replace: true });
     } catch (err) {
@@ -72,12 +83,28 @@ export default function CreateOrganizationPage({ onCreated }: CreateOrganization
                     id="org-name"
                     type="text"
                     value={name}
-                    onChange={(e) => {
-                      setName(e.target.value);
-                      setError(null);
-                    }}
+                    onChange={(e) => handleNameChange(e.target.value)}
                     placeholder="Organization name"
                     autoComplete="organization"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="org-slug">
+                    URL slug
+                    <span className="ml-1.5 text-xs text-muted-foreground font-normal">
+                      Used in your portal URL
+                    </span>
+                  </FieldLabel>
+                  <Input
+                    id="org-slug"
+                    type="text"
+                    value={slug}
+                    onChange={(e) => {
+                      setSlug(e.target.value);
+                      setSlugManuallyEdited(true);
+                      setError(null);
+                    }}
+                    placeholder="my-organization"
                   />
                 </Field>
                 {error && (

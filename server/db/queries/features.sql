@@ -3,6 +3,15 @@ SELECT * FROM features
 WHERE repository_id = $1
 ORDER BY created_at DESC;
 
+-- name: ListFeaturesForPortal :many
+SELECT f.*,
+    COUNT(fv.id) AS vote_count
+FROM features f
+LEFT JOIN feature_votes fv ON fv.feature_id = f.id
+WHERE f.repository_id = $1
+GROUP BY f.id
+ORDER BY vote_count DESC, f.created_at DESC;
+
 -- name: GetFeature :one
 SELECT * FROM features WHERE id = $1;
 

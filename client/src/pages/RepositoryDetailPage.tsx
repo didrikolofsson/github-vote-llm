@@ -6,11 +6,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RoadmapCanvas } from "@/components/roadmap/RoadmapCanvas";
-import { listMyOrganizations, listOrgRepositories, removeRepository } from "@/lib/api";
+import {
+  listMyOrganizations,
+  listOrgRepositories,
+  removeRepository,
+  updateRepositoryPortalPublic,
+} from "@/lib/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowUpRight, CalendarDays, GitFork, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, CalendarDays, Check, Copy, GitFork, Globe, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 export default function RepositoryDetailPage() {
@@ -22,7 +30,8 @@ export default function RepositoryDetailPage() {
     queryKey: ["organizations"],
     queryFn: () => listMyOrganizations(),
   });
-  const orgId = orgs[0]?.id;
+  const org = orgs[0];
+  const orgId = org?.id;
 
   const { data: repos = [] } = useQuery({
     queryKey: ["organizations", orgId, "repositories"],
@@ -32,6 +41,7 @@ export default function RepositoryDetailPage() {
   const repoData = repos.find((r) => r.id === repoIdNum);
 
   const queryClient = useQueryClient();
+
   const removeRepo = useMutation({
     mutationFn: () => removeRepository(orgId!, repoIdNum!),
     onSuccess: () => {
@@ -39,6 +49,18 @@ export default function RepositoryDetailPage() {
       navigate("/repositories");
     },
   });
+
+  const togglePortal = useMutation({
+    mutationFn: (portalPublic: boolean) =>
+      updateRepositoryPortalPublic(repoIdNum!, portalPublic),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["organizations", orgId, "repositories"] });
+    },
+  });
+
+  const portalUrl = org?.slug && repoData
+    ? `${window.location.origin}/portal.html/${org.slug}/${repoData.name}`
+    : null;
 
   return (
     <div className="animate-slide-up flex flex-col">
@@ -132,6 +154,12 @@ export default function RepositoryDetailPage() {
         </TabsContent>
 
         <TabsContent value="settings" className="px-8 pb-8 mt-6 w-full max-w-[1280px] mx-auto flex flex-col gap-4">
+          <PortalCard
+            portalPublic={repoData?.portal_public ?? false}
+            portalUrl={portalUrl}
+            isPending={togglePortal.isPending || !repoIdNum}
+            onToggle={(v) => togglePortal.mutate(v)}
+          />
           <Card>
             <CardHeader>
               <CardTitle className="text-[15px]">Danger zone</CardTitle>
@@ -155,5 +183,66 @@ export default function RepositoryDetailPage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function PortalCard({
+  portalPublic,
+  portalUrl,
+  isPending,
+  onToggle,
+}: {
+  portalPublic: boolean;
+  portalUrl: string | null;
+  isPending: boolean;
+  onToggle: (v: boolean) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  function copyUrl() {
+    if (!portalUrl) return;
+    navigator.clipboard.writeText(portalUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-[15px]">Community portal</CardTitle>
+        <CardDescription>
+          Publish a public page where users can vote on features and view the roadmap.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="portal-toggle" className="flex items-center gap-2 cursor-pointer">
+            <Globe className="size-4 text-muted-foreground" />
+            <span className="text-sm">Public portal</span>
+          </Label>
+          <Switch
+            id="portal-toggle"
+            checked={portalPublic}
+            onCheckedChange={onToggle}
+            disabled={isPending}
+          />
+        </div>
+        {portalPublic && portalUrl && (
+          <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
+            <span className="text-xs text-muted-foreground font-mono flex-1 truncate">
+              {portalUrl}
+            </span>
+            <Button variant="ghost" size="icon" className="size-6 shrink-0" onClick={copyUrl}>
+              {copied ? <Check className="size-3.5 text-lime-400" /> : <Copy className="size-3.5" />}
+            </Button>
+            <Button variant="ghost" size="icon" className="size-6 shrink-0" asChild>
+              <a href={portalUrl} target="_blank" rel="noopener noreferrer">
+                <ArrowUpRight className="size-3.5" />
+              </a>
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

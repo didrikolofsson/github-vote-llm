@@ -255,10 +255,10 @@ export async function listMyOrganizations() {
   return data.organizations;
 }
 
-export async function createOrganization(name: string) {
+export async function createOrganization(name: string, slug?: string) {
   return requestWithRefresh("/organizations", {
     method: "POST",
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, ...(slug ? { slug } : {}) }),
     schema: OrganizationWithMembersSchema,
   });
 }
@@ -267,6 +267,14 @@ export async function updateOrganization(orgId: number, name: string) {
   return requestWithRefresh(`/organizations/${orgId}`, {
     method: "PUT",
     body: JSON.stringify({ name }),
+    schema: OrganizationSchema,
+  });
+}
+
+export async function updateOrganizationSlug(orgId: number, slug: string) {
+  return requestWithRefresh(`/organizations/${orgId}/slug`, {
+    method: "PATCH",
+    body: JSON.stringify({ slug }),
     schema: OrganizationSchema,
   });
 }
@@ -328,6 +336,14 @@ export async function removeRepository(orgId: number, repoId: number): Promise<v
   await requestWithRefresh(`/organizations/${orgId}/repositories/${repoId}`, {
     method: "DELETE",
     schema: z.void(),
+  });
+}
+
+export async function updateRepositoryPortalPublic(repoId: number, portalPublic: boolean) {
+  return requestWithRefresh(`/repositories/${repoId}/portal`, {
+    method: "PATCH",
+    body: JSON.stringify({ portal_public: portalPublic }),
+    schema: RepositorySchema,
   });
 }
 

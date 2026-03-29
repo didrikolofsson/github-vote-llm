@@ -7,6 +7,8 @@ package store
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createFeature = `-- name: CreateFeature :one
@@ -99,6 +101,64 @@ func (q *Queries) ListFeatures(ctx context.Context, repositoryID int64) ([]Featu
 			&i.RoadmapLocked,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFeaturesForPortal = `-- name: ListFeaturesForPortal :many
+SELECT f.id, f.repository_id, f.title, f.description, f.status, f.area, f.roadmap_x, f.roadmap_y, f.roadmap_locked, f.created_at, f.updated_at,
+    COUNT(fv.id) AS vote_count
+FROM features f
+LEFT JOIN feature_votes fv ON fv.feature_id = f.id
+WHERE f.repository_id = $1
+GROUP BY f.id
+ORDER BY vote_count DESC, f.created_at DESC
+`
+
+type ListFeaturesForPortalRow struct {
+	ID            int64
+	RepositoryID  int64
+	Title         string
+	Description   string
+	Status        FeatureStatus
+	Area          *string
+	RoadmapX      *float64
+	RoadmapY      *float64
+	RoadmapLocked bool
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	VoteCount     int64
+}
+
+func (q *Queries) ListFeaturesForPortal(ctx context.Context, repositoryID int64) ([]ListFeaturesForPortalRow, error) {
+	rows, err := q.db.Query(ctx, listFeaturesForPortal, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFeaturesForPortalRow
+	for rows.Next() {
+		var i ListFeaturesForPortalRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RepositoryID,
+			&i.Title,
+			&i.Description,
+			&i.Status,
+			&i.Area,
+			&i.RoadmapX,
+			&i.RoadmapY,
+			&i.RoadmapLocked,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.VoteCount,
 		); err != nil {
 			return nil, err
 		}

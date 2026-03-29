@@ -15,6 +15,7 @@ import (
 type RepositoryHandlers interface {
 	List(c *gin.Context)
 	Add(c *gin.Context)
+	UpdatePortalVisibility(c *gin.Context)
 	Remove(c *gin.Context)
 }
 
@@ -88,6 +89,46 @@ func (h *RepositoryHandlersImpl) Add(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, repo)
+}
+
+type updatePortalVisibilityRequest struct {
+	PortalPublic bool `json:"portal_public"`
+}
+
+func (h *RepositoryHandlersImpl) UpdatePortalVisibility(c *gin.Context) {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	repoID, err := strconv.ParseInt(c.Param("repoId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid repository ID"})
+		return
+	}
+
+	var req updatePortalVisibilityRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	repo, err := h.s.UpdatePortalPublic(c.Request.Context(), repoID, userID, req.PortalPublic)
+	if errors.Is(err, services.ErrNotOrgMember) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "not a member of this organization"})
+		return
+	}
+	if errors.Is(err, services.ErrRepositoryNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "repository not found"})
+		return
+	}
+	if err != nil {
+		h.l.Errorw("Failed to update portal visibility", "error", err, "repo_id", repoID, "request_id", request.GetRequestID(c))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	c.JSON(http.StatusOK, repo)
 }
 
 func (h *RepositoryHandlersImpl) Remove(c *gin.Context) {

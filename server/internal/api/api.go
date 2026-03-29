@@ -24,6 +24,7 @@ type RestApiRouterImpl struct {
 	rh     handlers.RepositoryHandlers
 	mh     handlers.MembersHandlers
 	fh     handlers.FeatureHandlers
+	ph     handlers.PortalHandlers
 }
 
 func NewRestApiRouter(
@@ -36,6 +37,7 @@ func NewRestApiRouter(
 	rh handlers.RepositoryHandlers,
 	mh handlers.MembersHandlers,
 	fh handlers.FeatureHandlers,
+	ph handlers.PortalHandlers,
 ) RestApiRouter {
 	return &RestApiRouterImpl{
 		env:    env,
@@ -47,6 +49,7 @@ func NewRestApiRouter(
 		rh:     rh,
 		mh:     mh,
 		fh:     fh,
+		ph:     ph,
 	}
 }
 
@@ -83,6 +86,13 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	users.PATCH("/me/username", r.uh.UpdateUsername)
 	users.DELETE("/:id", r.uh.DeleteUser)
 
+	// Public portal routes (no auth)
+	portal := api.Group("/portal/:orgSlug/:repoName")
+	portal.GET("", r.ph.GetPortalPage)
+	portal.POST("/features/:featureId/vote", r.ph.ToggleVote)
+	portal.GET("/features/:featureId/comments", r.ph.ListComments)
+	portal.POST("/features/:featureId/comments", r.ph.CreateComment)
+
 	// Organization endpoints
 	organizations := api.Group("/organizations")
 	organizations.Use(middleware.RequireAuth(r.env.JWT_SECRET))
@@ -90,6 +100,7 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	organizations.POST("", r.oh.CreateOrganization)
 	organizations.GET("/:id", r.oh.GetOrganization)
 	organizations.PUT("/:id", r.oh.UpdateOrganization)
+	organizations.PATCH("/:id/slug", r.oh.UpdateSlug)
 	organizations.DELETE("/:id", r.oh.DeleteOrganization)
 
 	// Organization repositories
@@ -118,6 +129,7 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	repos.PATCH("/features/:featureId/position", r.fh.UpdatePosition)
 	repos.POST("/features/:featureId/dependencies", r.fh.AddDependency)
 	repos.DELETE("/features/:featureId/dependencies/:dependsOn", r.fh.RemoveDependency)
+	repos.PATCH("/portal", r.rh.UpdatePortalVisibility)
 
 	return router
 }

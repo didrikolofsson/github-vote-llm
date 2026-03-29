@@ -17,6 +17,7 @@ type OrganizationHandlers interface {
 	GetOrganization(c *gin.Context)
 	ListMyOrganizations(c *gin.Context)
 	UpdateOrganization(c *gin.Context)
+	UpdateSlug(c *gin.Context)
 	DeleteOrganization(c *gin.Context)
 }
 
@@ -31,6 +32,11 @@ func NewOrganizationHandlers(s services.OrganizationService, l *logger.Logger) O
 
 type createOrganizationRequest struct {
 	Name string `json:"name" binding:"required"`
+	Slug string `json:"slug"` // optional; auto-generated from Name when empty
+}
+
+type updateOrganizationSlugRequest struct {
+	Slug string `json:"slug" binding:"required"`
 }
 
 type updateOrganizationRequest struct {
@@ -58,6 +64,7 @@ func (h *OrganizationHandlersImpl) CreateOrganization(c *gin.Context) {
 
 	org, err := h.s.CreateOrganization(c.Request.Context(), services.CreateOrganizationParams{
 		Name:    req.Name,
+		Slug:    req.Slug,
 		OwnerID: uid,
 	})
 	if errors.Is(err, services.ErrUserAlreadyInOrganization) {
@@ -150,6 +157,37 @@ func (h *OrganizationHandlersImpl) UpdateOrganization(c *gin.Context) {
 	}
 	if err != nil {
 		h.l.Errorw("Failed to update organization", "error", err, "organization_id", id, "request_id", request.GetRequestID(c))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, org)
+}
+
+func (h *OrganizationHandlersImpl) UpdateSlug(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization ID"})
+		return
+	}
+
+	var req updateOrganizationSlugRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	org, err := h.s.UpdateOrganizationSlug(c.Request.Context(), id, req.Slug)
+	if errors.Is(err, services.ErrOrganizationNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "organization not found"})
+		return
+	}
+	if errors.Is(err, services.ErrOrganizationSlugExists) {
+		c.JSON(http.StatusConflict, gin.H{"error": "organization slug already exists"})
+		return
+	}
+	if err != nil {
+		h.l.Errorw("Failed to update organization slug", "error", err, "organization_id", id, "request_id", request.GetRequestID(c))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}

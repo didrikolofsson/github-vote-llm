@@ -159,6 +159,7 @@ type Organization struct {
 	Name      string
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
+	Slug      string
 }
 
 type OrganizationMember struct {
@@ -183,6 +184,7 @@ type Repository struct {
 	Name           string
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
+	PortalPublic   bool
 }
 
 type User struct {

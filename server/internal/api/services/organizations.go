@@ -3,22 +3,36 @@ package services
 import (
 	"context"
 	"errors"
-
+	"regexp"
+	"strings"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var (
 	ErrOrganizationNotFound      = errors.New("organization not found")
 	ErrOrganizationNameExists    = errors.New("organization name already exists")
+	ErrOrganizationSlugExists    = errors.New("organization slug already exists")
 	ErrUserAlreadyInOrganization = errors.New("you already belong to an organization")
+
+	nonAlphanumRe = regexp.MustCompile(`[^a-z0-9]+`)
 )
+
+// slugify converts a human-readable name into a URL-safe slug.
+func slugify(s string) string {
+	s = strings.ToLower(s)
+	s = nonAlphanumRe.ReplaceAllString(s, "-")
+	s = strings.Trim(s, "-")
+	return s
+}
 
 type CreateOrganizationParams struct {
 	Name    string
+	Slug    string // optional; derived from Name when empty
 	OwnerID int64
 }
 
@@ -27,6 +41,7 @@ type OrganizationService interface {
 	GetOrganizationByID(ctx context.Context, organizationID int64) (*dtos.OrganizationWithMembers, error)
 	ListOrganizationsForUser(ctx context.Context, userID int64) ([]dtos.Organization, error)
 	UpdateOrganizationByID(ctx context.Context, organizationID int64, params *store.UpdateOrganizationByIDParams) (*dtos.Organization, error)
+	UpdateOrganizationSlug(ctx context.Context, organizationID int64, slug string) (*dtos.Organization, error)
 	DeleteOrganization(ctx context.Context, organizationID int64) error
 }
 
@@ -46,7 +61,7 @@ func (s *OrganizationServiceImpl) ListOrganizationsForUser(ctx context.Context, 
 	}
 	out := make([]dtos.Organization, len(orgs))
 	for i, o := range orgs {
-		out[i] = storeOrgToDTO(o)
+		out[i] = makeOrgDTO(o.ID, o.Name, o.Slug, o.CreatedAt, o.UpdatedAt)
 	}
 	return out, nil
 }
@@ -57,6 +72,11 @@ func (s *OrganizationServiceImpl) CreateOrganization(ctx context.Context, params
 		return nil, ErrUserAlreadyInOrganization
 	}
 
+	slug := params.Slug
+	if slug == "" {
+		slug = slugify(params.Name)
+	}
+
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, err
@@ -65,7 +85,10 @@ func (s *OrganizationServiceImpl) CreateOrganization(ctx context.Context, params
 
 	qtx := s.q.WithTx(tx)
 
-	org, err := qtx.CreateOrganization(ctx, params.Name)
+	org, err := qtx.CreateOrganization(ctx, store.CreateOrganizationParams{
+		Name: params.Name,
+		Slug: slug,
+	})
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -89,7 +112,7 @@ func (s *OrganizationServiceImpl) CreateOrganization(ctx context.Context, params
 
 	members, _ := s.q.GetOrganizationMembersWithUser(ctx, org.ID)
 	return &dtos.OrganizationWithMembers{
-		Organization: storeOrgToDTO(org),
+		Organization: makeOrgDTO(org.ID, org.Name, org.Slug, org.CreatedAt, org.UpdatedAt),
 		Members:      storeMembersWithEmailToDTOs(members),
 	}, nil
 }
@@ -121,7 +144,7 @@ func (s *OrganizationServiceImpl) GetOrganizationByID(ctx context.Context, organ
 	}
 
 	return &dtos.OrganizationWithMembers{
-		Organization: storeOrgToDTO(org),
+		Organization: makeOrgDTO(org.ID, org.Name, org.Slug, org.CreatedAt, org.UpdatedAt),
 		Members:      storeMembersWithEmailToDTOs(members),
 	}, nil
 }
@@ -143,36 +166,42 @@ func (s *OrganizationServiceImpl) UpdateOrganizationByID(
 		}
 		return nil, err
 	}
-	return storeOrgToDTOPtr(org), nil
+	dto := makeOrgDTO(org.ID, org.Name, org.Slug, org.CreatedAt, org.UpdatedAt)
+	return &dto, nil
+}
+
+func (s *OrganizationServiceImpl) UpdateOrganizationSlug(ctx context.Context, organizationID int64, slug string) (*dtos.Organization, error) {
+	org, err := s.q.UpdateOrganizationSlug(ctx, store.UpdateOrganizationSlugParams{
+		ID:   organizationID,
+		Slug: slug,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrOrganizationNotFound
+	}
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, ErrOrganizationSlugExists
+		}
+		return nil, err
+	}
+	dto := makeOrgDTO(org.ID, org.Name, org.Slug, org.CreatedAt, org.UpdatedAt)
+	return &dto, nil
 }
 
 func (s *OrganizationServiceImpl) DeleteOrganization(ctx context.Context, organizationID int64) error {
 	return s.q.DeleteOrganization(ctx, organizationID)
 }
 
-func storeOrgToDTO(o store.Organization) dtos.Organization {
+// makeOrgDTO converts raw organization fields to the API DTO.
+func makeOrgDTO(id int64, name, slug string, createdAt, updatedAt pgtype.Timestamptz) dtos.Organization {
 	return dtos.Organization{
-		ID:        o.ID,
-		Name:      o.Name,
-		CreatedAt: o.CreatedAt.Time,
-		UpdatedAt: o.UpdatedAt.Time,
+		ID:        id,
+		Name:      name,
+		Slug:      slug,
+		CreatedAt: createdAt.Time,
+		UpdatedAt: updatedAt.Time,
 	}
-}
-
-func storeOrgToDTOPtr(o store.Organization) *dtos.Organization {
-	d := storeOrgToDTO(o)
-	return &d
-}
-
-func storeMembersToDTOs(members []store.OrganizationMember) []dtos.OrganizationMember {
-	out := make([]dtos.OrganizationMember, len(members))
-	for i, m := range members {
-		out[i] = dtos.OrganizationMember{
-			UserID: m.UserID,
-			Role:   string(m.Role),
-		}
-	}
-	return out
 }
 
 func storeMembersWithEmailToDTOs(members []store.GetOrganizationMembersWithUserRow) []dtos.OrganizationMember {
