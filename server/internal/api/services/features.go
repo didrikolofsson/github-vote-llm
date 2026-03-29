@@ -49,13 +49,18 @@ type FeatureDependency struct {
 	DependsOn int64 `json:"depends_on"`
 }
 
+type PatchFeatureParams struct {
+	Title       *string
+	Description *string
+	Status      *store.FeatureStatus
+	Area        *string
+}
+
 type FeaturesService interface {
 	ListFeatures(ctx context.Context, repoID int64) ([]FeatureDTO, error)
 	GetFeature(ctx context.Context, featureID int64) (*FeatureDTO, error)
 	CreateFeature(ctx context.Context, repoID int64, title, description string) (*FeatureDTO, error)
-	UpdateTitle(ctx context.Context, featureID int64, title string) (*FeatureDTO, error)
-	UpdateStatus(ctx context.Context, featureID int64, status store.FeatureStatus) (*FeatureDTO, error)
-	UpdateArea(ctx context.Context, featureID int64, area *string) (*FeatureDTO, error)
+	PatchFeature(ctx context.Context, featureID int64, p PatchFeatureParams) (*FeatureDTO, error)
 	UpdatePosition(ctx context.Context, featureID int64, x, y *float64, locked bool) (*FeatureDTO, error)
 	DeleteFeature(ctx context.Context, featureID int64) error
 	GetRoadmap(ctx context.Context, repoID int64) (*RoadmapDTO, error)
@@ -126,38 +131,18 @@ func (s *FeaturesServiceImpl) DeleteFeature(ctx context.Context, featureID int64
 	return s.q.DeleteFeature(ctx, featureID)
 }
 
-func (s *FeaturesServiceImpl) UpdateTitle(ctx context.Context, featureID int64, title string) (*FeatureDTO, error) {
-	f, err := s.q.UpdateFeatureTitle(ctx, store.UpdateFeatureTitleParams{ID: featureID, Title: title})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrFeatureNotFound
+func (s *FeaturesServiceImpl) PatchFeature(ctx context.Context, featureID int64, p PatchFeatureParams) (*FeatureDTO, error) {
+	nullStatus := store.NullFeatureStatus{}
+	if p.Status != nil {
+		nullStatus = store.NullFeatureStatus{FeatureStatus: *p.Status, Valid: true}
 	}
-	if err != nil {
-		return nil, err
-	}
-	dto, err := s.toDTO(ctx, f)
-	if err != nil {
-		return nil, err
-	}
-	return &dto, nil
-}
-
-func (s *FeaturesServiceImpl) UpdateStatus(ctx context.Context, featureID int64, status store.FeatureStatus) (*FeatureDTO, error) {
-	f, err := s.q.UpdateFeatureStatus(ctx, store.UpdateFeatureStatusParams{ID: featureID, Status: status})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrFeatureNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	dto, err := s.toDTO(ctx, f)
-	if err != nil {
-		return nil, err
-	}
-	return &dto, nil
-}
-
-func (s *FeaturesServiceImpl) UpdateArea(ctx context.Context, featureID int64, area *string) (*FeatureDTO, error) {
-	f, err := s.q.UpdateFeatureArea(ctx, store.UpdateFeatureAreaParams{ID: featureID, Area: area})
+	f, err := s.q.PatchFeature(ctx, store.PatchFeatureParams{
+		ID:          featureID,
+		Title:       p.Title,
+		Description: p.Description,
+		Status:      nullStatus,
+		Area:        p.Area,
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrFeatureNotFound
 	}

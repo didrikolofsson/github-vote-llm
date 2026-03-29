@@ -2,8 +2,7 @@ import {
   addFeatureDependency,
   deleteFeature,
   removeFeatureDependency,
-  updateFeatureStatus,
-  updateFeatureTitle,
+  updateFeature,
 } from "@/lib/api";
 import type { Feature, FeatureDependency, FeatureStatus } from "@/lib/api-schemas";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -12,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -24,6 +24,7 @@ import {
   DrawerContent,
   DrawerHeader,
   DrawerFooter,
+  DrawerTitle,
 } from "@/components/ui/drawer";
 import {
   Combobox,
@@ -111,13 +112,17 @@ export function FeatureDrawer({
   // Local edit state
   const [title, setTitle] = useState("");
   const [titleDraft, setTitleDraft] = useState("");
+  const [description, setDescription] = useState("");
+  const [descriptionDraft, setDescriptionDraft] = useState("");
 
   useEffect(() => {
     if (feature) {
       setTitle(feature.title);
       setTitleDraft(feature.title);
+      setDescription(feature.description ?? "");
+      setDescriptionDraft(feature.description ?? "");
     }
-  }, [feature?.id, feature?.title]);
+  }, [feature?.id, feature?.title, feature?.description]);
 
   // Current dependency IDs for this feature (features it depends on)
   const currentDepIds = dependencies
@@ -131,13 +136,9 @@ export function FeatureDrawer({
     queryClient.invalidateQueries({ queryKey: ["repositories", repoId, "roadmap"] });
   }
 
-  const updateTitle = useMutation({
-    mutationFn: (newTitle: string) => updateFeatureTitle(repoId, feature!.id, newTitle),
-    onSuccess: invalidate,
-  });
-
-  const updateStatus = useMutation({
-    mutationFn: (status: string) => updateFeatureStatus(repoId, feature!.id, status),
+  const patch = useMutation({
+    mutationFn: (p: { title?: string; description?: string; status?: string }) =>
+      updateFeature(repoId, feature!.id, p),
     onSuccess: invalidate,
   });
 
@@ -159,10 +160,16 @@ export function FeatureDrawer({
     },
   });
 
+  function handleDescriptionBlur() {
+    if (descriptionDraft !== description) {
+      patch.mutate({ description: descriptionDraft });
+    }
+  }
+
   function handleTitleBlur() {
     const trimmed = titleDraft.trim();
     if (trimmed && trimmed !== title) {
-      updateTitle.mutate(trimmed);
+      patch.mutate({ title: trimmed });
     } else {
       setTitleDraft(title);
     }
@@ -190,11 +197,12 @@ export function FeatureDrawer({
 
   return (
     <Drawer open={!!feature} onOpenChange={(open) => !open && onClose()} direction="right">
-      <DrawerContent className="w-[420px] sm:max-w-[420px]">
+      <DrawerContent aria-describedby={undefined} className="w-[420px] sm:max-w-[420px]">
         {feature && (
           <>
             <div ref={(el) => { containerRef.current = el; setContainer(el); }} />
             <DrawerHeader className="pb-2">
+              <DrawerTitle className="sr-only">{title}</DrawerTitle>
               <Input
                 value={titleDraft}
                 onChange={(e) => setTitleDraft(e.target.value)}
@@ -206,10 +214,22 @@ export function FeatureDrawer({
 
             <div className="flex flex-col gap-5 px-4 py-2">
               <div className="flex flex-col gap-1.5">
+                <Label className="text-muted-foreground text-xs">Description</Label>
+                <Textarea
+                  value={descriptionDraft}
+                  onChange={(e) => setDescriptionDraft(e.target.value)}
+                  onBlur={handleDescriptionBlur}
+                  placeholder="Add a description…"
+                  rows={4}
+                  className="resize-none text-sm"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
                 <Label className="text-muted-foreground text-xs">Status</Label>
                 <Select
                   value={feature.status}
-                  onValueChange={(v) => updateStatus.mutate(v)}
+                  onValueChange={(v) => patch.mutate({ status: v })}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue />
@@ -222,11 +242,6 @@ export function FeatureDrawer({
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-muted-foreground text-xs">Votes</Label>
-                <p className="text-sm font-medium">{feature.vote_count ?? 0}</p>
               </div>
 
               {depOptions.length > 0 && (

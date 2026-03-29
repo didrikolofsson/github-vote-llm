@@ -58,7 +58,7 @@ export default function SettingsPage() {
   }, [queryClient]);
 
   return (
-    <div className="animate-slide-up flex flex-col gap-6">
+    <div className="animate-slide-up flex flex-col gap-6 p-8 max-w-[1280px] mx-auto w-full">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground mt-1">

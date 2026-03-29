@@ -11,21 +11,19 @@ INSERT INTO features (repository_id, title, description)
 VALUES ($1, $2, $3)
 RETURNING *;
 
--- name: UpdateFeatureStatus :one
-UPDATE features SET status = $2, updated_at = now()
-WHERE id = $1 RETURNING *;
-
--- name: UpdateFeatureArea :one
-UPDATE features SET area = $2, updated_at = now()
-WHERE id = $1 RETURNING *;
+-- name: PatchFeature :one
+UPDATE features
+SET
+  title       = COALESCE(sqlc.narg('title')::text, title),
+  description = COALESCE(sqlc.narg('description')::text, description),
+  status      = COALESCE(sqlc.narg('status')::feature_status, status),
+  area        = COALESCE(sqlc.narg('area')::text, area),
+  updated_at  = now()
+WHERE id = sqlc.arg('id') RETURNING *;
 
 -- name: UpdateFeaturePosition :one
 UPDATE features
 SET roadmap_x = $2, roadmap_y = $3, roadmap_locked = $4, updated_at = now()
-WHERE id = $1 RETURNING *;
-
--- name: UpdateFeatureTitle :one
-UPDATE features SET title = $2, updated_at = now()
 WHERE id = $1 RETURNING *;
 
 -- name: DeleteFeature :exec

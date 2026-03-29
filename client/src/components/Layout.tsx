@@ -227,7 +227,7 @@ export default function Layout() {
             </BreadcrumbList>
           </Breadcrumb>
         </header>
-        <div className="flex-1 p-8 max-w-[1280px] w-full mx-auto">
+        <div className="flex-1 overflow-auto">
           <Outlet />
         </div>
       </SidebarInset>

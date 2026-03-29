@@ -60,6 +60,13 @@ export function FeatureNode({ data, selected }: NodeProps) {
           {feature.title}
         </p>
 
+        {/* Description preview */}
+        {feature.description && (
+          <p className="text-[11px] text-muted-foreground leading-snug line-clamp-2 -mt-1">
+            {feature.description}
+          </p>
+        )}
+
         {/* Footer: votes */}
         <div className="flex items-center gap-1 text-xs text-muted-foreground pt-0.5 border-t border-border/50">
           <ThumbsUp className="size-3" />

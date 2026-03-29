@@ -400,49 +400,16 @@ export async function createFeature(
   });
 }
 
-export async function updateFeatureTitle(
+export async function updateFeature(
   repoId: number,
   featureId: number,
-  title: string,
+  patch: { title?: string; description?: string; status?: string; area?: string },
 ) {
-  return requestWithRefresh(
-    `/repositories/${repoId}/features/${featureId}/title`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({ title }),
-      schema: FeatureSchema,
-    },
-  );
-}
-
-export async function updateFeatureStatus(
-  repoId: number,
-  featureId: number,
-  status: string,
-) {
-  return requestWithRefresh(
-    `/repositories/${repoId}/features/${featureId}/status`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({ status }),
-      schema: FeatureSchema,
-    },
-  );
-}
-
-export async function updateFeatureArea(
-  repoId: number,
-  featureId: number,
-  area: string | null,
-) {
-  return requestWithRefresh(
-    `/repositories/${repoId}/features/${featureId}/area`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({ area }),
-      schema: FeatureSchema,
-    },
-  );
+  return requestWithRefresh(`/repositories/${repoId}/features/${featureId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+    schema: FeatureSchema,
+  });
 }
 
 export async function updateFeaturePosition(

@@ -83,7 +83,7 @@ export default function OrganizationDashboardPage() {
   }
 
   return (
-    <div className="animate-slide-up flex flex-col gap-8">
+    <div className="animate-slide-up flex flex-col gap-8 p-8 max-w-[1280px] mx-auto w-full">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-1">

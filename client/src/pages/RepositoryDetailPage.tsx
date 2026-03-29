@@ -41,8 +41,8 @@ export default function RepositoryDetailPage() {
   });
 
   return (
-    <div className="animate-slide-up flex flex-col gap-6">
-      <div>
+    <div className="animate-slide-up flex flex-col">
+      <div className="px-8 pt-8 w-full max-w-[1280px] mx-auto">
         <Link
           to="/repositories"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
@@ -63,14 +63,16 @@ export default function RepositoryDetailPage() {
       </div>
 
       <Tabs defaultValue="details">
-        <TabsList>
-          <TabsTrigger value="details">Details</TabsTrigger>
-          <TabsTrigger value="roadmap">Roadmap</TabsTrigger>
-          <TabsTrigger value="runs">Runs</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
-        </TabsList>
+        <div className="px-8 mt-6 w-full max-w-[1280px] mx-auto">
+          <TabsList>
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="roadmap">Roadmap</TabsTrigger>
+            <TabsTrigger value="runs">Runs</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
+          </TabsList>
+        </div>
 
-        <TabsContent value="details" className="mt-6 flex flex-col gap-4">
+        <TabsContent value="details" className="px-8 pb-8 mt-6 w-full max-w-[1280px] mx-auto flex flex-col gap-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-[15px]">Repository</CardTitle>
@@ -114,13 +116,13 @@ export default function RepositoryDetailPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="roadmap" className="mt-4 -mx-8 -mb-8">
+        <TabsContent value="roadmap" className="mt-4">
           <div style={{ height: "calc(100vh - 240px)" }}>
             {repoIdNum && <RoadmapCanvas repoId={repoIdNum} />}
           </div>
         </TabsContent>
 
-        <TabsContent value="runs" className="mt-6">
+        <TabsContent value="runs" className="px-8 pb-8 mt-6 w-full max-w-[1280px] mx-auto">
           <div className="py-16 text-center rounded-lg bg-muted/50">
             <p className="text-sm font-medium text-muted-foreground">No implementations yet</p>
             <p className="text-xs text-muted-foreground/70 mt-1">
@@ -129,7 +131,7 @@ export default function RepositoryDetailPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="settings" className="mt-6 flex flex-col gap-4">
+        <TabsContent value="settings" className="px-8 pb-8 mt-6 w-full max-w-[1280px] mx-auto flex flex-col gap-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-[15px]">Danger zone</CardTitle>

@@ -78,7 +78,7 @@ func LogRequests(logger *logger.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 		c.Next()
-		logger.Infow(
+		logger.Debugw(
 			"request",
 			"method", c.Request.Method,
 			"path", c.Request.URL.Path,

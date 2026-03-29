@@ -18,9 +18,7 @@ type FeatureHandlers interface {
 	GetFeature(c *gin.Context)
 	CreateFeature(c *gin.Context)
 	DeleteFeature(c *gin.Context)
-	UpdateTitle(c *gin.Context)
-	UpdateStatus(c *gin.Context)
-	UpdateArea(c *gin.Context)
+	PatchFeature(c *gin.Context)
 	UpdatePosition(c *gin.Context)
 	GetRoadmap(c *gin.Context)
 	AddDependency(c *gin.Context)
@@ -111,92 +109,47 @@ func (h *FeatureHandlersImpl) DeleteFeature(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-type updateTitleRequest struct {
-	Title string `json:"title" binding:"required"`
+type patchFeatureRequest struct {
+	Title       *string `json:"title"`
+	Description *string `json:"description"`
+	Status      *string `json:"status"`
+	Area        *string `json:"area"`
 }
 
-func (h *FeatureHandlersImpl) UpdateTitle(c *gin.Context) {
+func (h *FeatureHandlersImpl) PatchFeature(c *gin.Context) {
 	featureID, err := strconv.ParseInt(c.Param("featureId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid feature ID"})
 		return
 	}
-	var req updateTitleRequest
+	var req patchFeatureRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
-	feature, err := h.s.UpdateTitle(c.Request.Context(), featureID, req.Title)
+	params := services.PatchFeatureParams{
+		Title:       req.Title,
+		Description: req.Description,
+		Area:        req.Area,
+	}
+	if req.Status != nil {
+		status := store.FeatureStatus(*req.Status)
+		switch status {
+		case store.FeatureStatusOpen, store.FeatureStatusPlanned, store.FeatureStatusInProgress,
+			store.FeatureStatusDone, store.FeatureStatusRejected:
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status value"})
+			return
+		}
+		params.Status = &status
+	}
+	feature, err := h.s.PatchFeature(c.Request.Context(), featureID, params)
 	if errors.Is(err, services.ErrFeatureNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "feature not found"})
 		return
 	}
 	if err != nil {
-		h.l.Errorw("Failed to update feature title", "error", err, "request_id", request.GetRequestID(c))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
-		return
-	}
-	c.JSON(http.StatusOK, feature)
-}
-
-type updateStatusRequest struct {
-	Status string `json:"status" binding:"required"`
-}
-
-func (h *FeatureHandlersImpl) UpdateStatus(c *gin.Context) {
-	featureID, err := strconv.ParseInt(c.Param("featureId"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid feature ID"})
-		return
-	}
-	var req updateStatusRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
-		return
-	}
-	status := store.FeatureStatus(req.Status)
-	switch status {
-	case store.FeatureStatusOpen, store.FeatureStatusPlanned, store.FeatureStatusInProgress,
-		store.FeatureStatusDone, store.FeatureStatusRejected:
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status value"})
-		return
-	}
-	feature, err := h.s.UpdateStatus(c.Request.Context(), featureID, status)
-	if errors.Is(err, services.ErrFeatureNotFound) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "feature not found"})
-		return
-	}
-	if err != nil {
-		h.l.Errorw("Failed to update feature status", "error", err, "request_id", request.GetRequestID(c))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
-		return
-	}
-	c.JSON(http.StatusOK, feature)
-}
-
-type updateAreaRequest struct {
-	Area *string `json:"area"`
-}
-
-func (h *FeatureHandlersImpl) UpdateArea(c *gin.Context) {
-	featureID, err := strconv.ParseInt(c.Param("featureId"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid feature ID"})
-		return
-	}
-	var req updateAreaRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
-		return
-	}
-	feature, err := h.s.UpdateArea(c.Request.Context(), featureID, req.Area)
-	if errors.Is(err, services.ErrFeatureNotFound) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "feature not found"})
-		return
-	}
-	if err != nil {
-		h.l.Errorw("Failed to update feature area", "error", err, "request_id", request.GetRequestID(c))
+		h.l.Errorw("Failed to patch feature", "error", err, "request_id", request.GetRequestID(c))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}

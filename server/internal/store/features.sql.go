@@ -110,18 +110,33 @@ func (q *Queries) ListFeatures(ctx context.Context, repositoryID int64) ([]Featu
 	return items, nil
 }
 
-const updateFeatureArea = `-- name: UpdateFeatureArea :one
-UPDATE features SET area = $2, updated_at = now()
-WHERE id = $1 RETURNING id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at
+const patchFeature = `-- name: PatchFeature :one
+UPDATE features
+SET
+  title       = COALESCE($1::text, title),
+  description = COALESCE($2::text, description),
+  status      = COALESCE($3::feature_status, status),
+  area        = COALESCE($4::text, area),
+  updated_at  = now()
+WHERE id = $5 RETURNING id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at
 `
 
-type UpdateFeatureAreaParams struct {
-	ID   int64
-	Area *string
+type PatchFeatureParams struct {
+	Title       *string
+	Description *string
+	Status      NullFeatureStatus
+	Area        *string
+	ID          int64
 }
 
-func (q *Queries) UpdateFeatureArea(ctx context.Context, arg UpdateFeatureAreaParams) (Feature, error) {
-	row := q.db.QueryRow(ctx, updateFeatureArea, arg.ID, arg.Area)
+func (q *Queries) PatchFeature(ctx context.Context, arg PatchFeatureParams) (Feature, error) {
+	row := q.db.QueryRow(ctx, patchFeature,
+		arg.Title,
+		arg.Description,
+		arg.Status,
+		arg.Area,
+		arg.ID,
+	)
 	var i Feature
 	err := row.Scan(
 		&i.ID,
@@ -159,64 +174,6 @@ func (q *Queries) UpdateFeaturePosition(ctx context.Context, arg UpdateFeaturePo
 		arg.RoadmapY,
 		arg.RoadmapLocked,
 	)
-	var i Feature
-	err := row.Scan(
-		&i.ID,
-		&i.RepositoryID,
-		&i.Title,
-		&i.Description,
-		&i.Status,
-		&i.Area,
-		&i.RoadmapX,
-		&i.RoadmapY,
-		&i.RoadmapLocked,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const updateFeatureStatus = `-- name: UpdateFeatureStatus :one
-UPDATE features SET status = $2, updated_at = now()
-WHERE id = $1 RETURNING id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at
-`
-
-type UpdateFeatureStatusParams struct {
-	ID     int64
-	Status FeatureStatus
-}
-
-func (q *Queries) UpdateFeatureStatus(ctx context.Context, arg UpdateFeatureStatusParams) (Feature, error) {
-	row := q.db.QueryRow(ctx, updateFeatureStatus, arg.ID, arg.Status)
-	var i Feature
-	err := row.Scan(
-		&i.ID,
-		&i.RepositoryID,
-		&i.Title,
-		&i.Description,
-		&i.Status,
-		&i.Area,
-		&i.RoadmapX,
-		&i.RoadmapY,
-		&i.RoadmapLocked,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const updateFeatureTitle = `-- name: UpdateFeatureTitle :one
-UPDATE features SET title = $2, updated_at = now()
-WHERE id = $1 RETURNING id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at
-`
-
-type UpdateFeatureTitleParams struct {
-	ID    int64
-	Title string
-}
-
-func (q *Queries) UpdateFeatureTitle(ctx context.Context, arg UpdateFeatureTitleParams) (Feature, error) {
-	row := q.db.QueryRow(ctx, updateFeatureTitle, arg.ID, arg.Title)
 	var i Feature
 	err := row.Scan(
 		&i.ID,

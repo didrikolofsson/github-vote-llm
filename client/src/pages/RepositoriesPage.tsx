@@ -100,7 +100,7 @@ export default function RepositoriesPage() {
   }
 
   return (
-    <div className="animate-slide-up flex flex-col gap-6">
+    <div className="animate-slide-up flex flex-col gap-6 p-8 max-w-[1280px] mx-auto w-full">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Repositories</h1>
