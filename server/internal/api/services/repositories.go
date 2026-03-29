@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -16,19 +17,12 @@ var (
 	ErrNotOrgMember           = errors.New("not a member of this organization")
 )
 
-type Repository struct {
-	ID           int64  `json:"id"`
-	Owner        string `json:"owner"`
-	Name         string `json:"name"`
-	PortalPublic bool   `json:"portal_public"`
-	CreatedAt    string `json:"created_at,omitempty"`
-}
-
 type RepositoriesService interface {
-	ListForOrganization(ctx context.Context, orgID, userID int64) ([]Repository, error)
-	GetRepository(ctx context.Context, repoID, userID int64) (*Repository, error)
-	AddRepository(ctx context.Context, orgID, userID int64, owner, name string) (*Repository, error)
-	UpdatePortalPublic(ctx context.Context, repoID, userID int64, public bool) (*Repository, error)
+	ListForOrganization(ctx context.Context, orgID, userID int64) ([]dtos.Repository, error)
+	GetRepository(ctx context.Context, repoID, userID int64) (*dtos.Repository, error)
+	GetRepositoryMeta(ctx context.Context, repoId int64) (*dtos.RepoMeta, error)
+	AddRepository(ctx context.Context, orgID, userID int64, owner, name string) (*dtos.Repository, error)
+	UpdatePortalPublic(ctx context.Context, repoID, userID int64, public bool) (*dtos.Repository, error)
 	RemoveRepository(ctx context.Context, repoID, userID int64) error
 }
 
@@ -41,7 +35,7 @@ func NewRepositoriesService(db *pgxpool.Pool, q *store.Queries) RepositoriesServ
 	return &RepositoriesServiceImpl{db: db, q: q}
 }
 
-func (s *RepositoriesServiceImpl) ListForOrganization(ctx context.Context, orgID, userID int64) ([]Repository, error) {
+func (s *RepositoriesServiceImpl) ListForOrganization(ctx context.Context, orgID, userID int64) ([]dtos.Repository, error) {
 	if err := s.verifyOrgMember(ctx, orgID, userID); err != nil {
 		return nil, err
 	}
@@ -49,14 +43,14 @@ func (s *RepositoriesServiceImpl) ListForOrganization(ctx context.Context, orgID
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Repository, len(rows))
+	out := make([]dtos.Repository, len(rows))
 	for i, r := range rows {
 		out[i] = storeRepoToDTO(r)
 	}
 	return out, nil
 }
 
-func (s *RepositoriesServiceImpl) GetRepository(ctx context.Context, repoID, userID int64) (*Repository, error) {
+func (s *RepositoriesServiceImpl) GetRepository(ctx context.Context, repoID, userID int64) (*dtos.Repository, error) {
 	r, err := s.q.GetRepository(ctx, repoID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrRepositoryNotFound
@@ -71,7 +65,39 @@ func (s *RepositoriesServiceImpl) GetRepository(ctx context.Context, repoID, use
 	return &dto, nil
 }
 
-func (s *RepositoriesServiceImpl) AddRepository(ctx context.Context, orgID, userID int64, owner, name string) (*Repository, error) {
+func (s *RepositoriesServiceImpl) GetRepositoryMeta(ctx context.Context, repoID int64) (*dtos.RepoMeta, error) {
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := s.q.WithTx(tx)
+
+	var description string = ""
+	repo, err := qtx.GetRepository(ctx, repoID)
+	if err != nil {
+		return nil, err
+	}
+	if repo.Description != nil {
+		description = *repo.Description
+	}
+
+	featureCount, err := qtx.GetRepositoryFeatureCount(ctx, repoID)
+	if err != nil {
+		return nil, err
+	}
+	return &dtos.RepoMeta{
+		ID:              repoID,
+		Description:     description,
+		Features:        featureCount,
+		Implementations: 0,
+		Status:          dtos.RepoStatus("idle"),
+	}, nil
+
+}
+
+func (s *RepositoriesServiceImpl) AddRepository(ctx context.Context, orgID, userID int64, owner, name string) (*dtos.Repository, error) {
 	if err := s.verifyOrgMember(ctx, orgID, userID); err != nil {
 		return nil, err
 	}
@@ -91,7 +117,7 @@ func (s *RepositoriesServiceImpl) AddRepository(ctx context.Context, orgID, user
 	return &dto, nil
 }
 
-func (s *RepositoriesServiceImpl) UpdatePortalPublic(ctx context.Context, repoID, userID int64, public bool) (*Repository, error) {
+func (s *RepositoriesServiceImpl) UpdatePortalPublic(ctx context.Context, repoID, userID int64, public bool) (*dtos.Repository, error) {
 	r, err := s.q.GetRepository(ctx, repoID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrRepositoryNotFound
@@ -140,8 +166,8 @@ func (s *RepositoriesServiceImpl) verifyOrgMember(ctx context.Context, orgID, us
 	return ErrNotOrgMember
 }
 
-func storeRepoToDTO(r store.Repository) Repository {
-	return Repository{
+func storeRepoToDTO(r store.Repository) dtos.Repository {
+	return dtos.Repository{
 		ID:           r.ID,
 		Owner:        r.Owner,
 		Name:         r.Name,

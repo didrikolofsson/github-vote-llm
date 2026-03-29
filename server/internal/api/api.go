@@ -118,6 +118,7 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	repos := api.Group("/repositories/:repoId")
 	repos.Use(middleware.RequireAuth(r.env.JWT_SECRET))
 	repos.GET("/roadmap", r.fh.GetRoadmap)
+	repos.GET("/meta", r.rh.GetRepoMeta)
 	repos.GET("/features", r.fh.ListFeatures)
 	repos.GET("/features/:featureId", r.fh.GetFeature)
 	repos.POST("/features", r.fh.CreateFeature)

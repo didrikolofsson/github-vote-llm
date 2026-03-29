@@ -40,6 +40,14 @@ export const RepositoryListResponseSchema = z.object({
   repositories: z.array(RepositorySchema),
 });
 
+export const RepoMetaSchema = z.object({
+  id: z.number(),
+  description: z.string(),
+  features: z.number(),
+  implementations: z.number(),
+  status: z.enum(["active", "idle"]),
+});
+
 // ─── Feature ──────────────────────────────────────────────────────────────────
 
 export const FeatureStatusSchema = z.enum([
@@ -94,8 +102,12 @@ export const RoadmapSchema = z.object({
 // ─── Exported types ───────────────────────────────────────────────────────────
 
 export type Organization = z.infer<typeof OrganizationSchema>;
-export type OrganizationWithMembers = z.infer<typeof OrganizationWithMembersSchema>;
-export type OrganizationMemberRole = z.infer<typeof OrganizationMemberRoleSchema>;
+export type OrganizationWithMembers = z.infer<
+  typeof OrganizationWithMembersSchema
+>;
+export type OrganizationMemberRole = z.infer<
+  typeof OrganizationMemberRoleSchema
+>;
 export type Repository = z.infer<typeof RepositorySchema>;
 export type Feature = z.infer<typeof FeatureSchema>;
 export type FeatureStatus = z.infer<typeof FeatureStatusSchema>;

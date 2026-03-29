@@ -4,7 +4,11 @@ import {
   removeFeatureDependency,
   updateFeature,
 } from "@/lib/api";
-import type { Feature, FeatureDependency, FeatureStatus } from "@/lib/api-schemas";
+import type {
+  Feature,
+  FeatureDependency,
+  FeatureStatus,
+} from "@/lib/api-schemas";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -60,10 +64,16 @@ function DepsCombobox({
 }) {
   const anchor = useComboboxAnchor();
   const items = features.map((f) => String(f.id));
-  const labelOf = (id: string) => features.find((f) => String(f.id) === id)?.title ?? id;
+  const labelOf = (id: string) =>
+    features.find((f) => String(f.id) === id)?.title ?? id;
 
   return (
-    <Combobox multiple items={items} value={value} onValueChange={onValueChange}>
+    <Combobox
+      multiple
+      items={items}
+      value={value}
+      onValueChange={onValueChange}
+    >
       <ComboboxChips ref={anchor} className="min-h-9">
         <ComboboxValue>
           {(values: string[]) => (
@@ -71,7 +81,9 @@ function DepsCombobox({
               {values.map((v) => (
                 <ComboboxChip key={v}>{labelOf(v)}</ComboboxChip>
               ))}
-              <ComboboxChipsInput placeholder={value.length === 0 ? "Search features…" : ""} />
+              <ComboboxChipsInput
+                placeholder={value.length === 0 ? "Search features…" : ""}
+              />
             </>
           )}
         </ComboboxValue>
@@ -133,22 +145,32 @@ export function FeatureDrawer({
   const depOptions = allFeatures.filter((f) => f.id !== feature?.id);
 
   function invalidate() {
-    queryClient.invalidateQueries({ queryKey: ["repositories", repoId, "roadmap"] });
+    queryClient.invalidateQueries({
+      queryKey: ["repositories", repoId, "roadmap"],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["repository", repoId, "meta"],
+    });
   }
 
   const patch = useMutation({
-    mutationFn: (p: { title?: string; description?: string; status?: string }) =>
-      updateFeature(repoId, feature!.id, p),
+    mutationFn: (p: {
+      title?: string;
+      description?: string;
+      status?: string;
+    }) => updateFeature(repoId, feature!.id, p),
     onSuccess: invalidate,
   });
 
   const addDep = useMutation({
-    mutationFn: (dependsOn: number) => addFeatureDependency(repoId, feature!.id, dependsOn),
+    mutationFn: (dependsOn: number) =>
+      addFeatureDependency(repoId, feature!.id, dependsOn),
     onSuccess: invalidate,
   });
 
   const removeDep = useMutation({
-    mutationFn: (dependsOn: number) => removeFeatureDependency(repoId, feature!.id, dependsOn),
+    mutationFn: (dependsOn: number) =>
+      removeFeatureDependency(repoId, feature!.id, dependsOn),
     onSuccess: invalidate,
   });
 
@@ -196,11 +218,23 @@ export function FeatureDrawer({
   }
 
   return (
-    <Drawer open={!!feature} onOpenChange={(open) => !open && onClose()} direction="right">
-      <DrawerContent aria-describedby={undefined} className="w-[420px] sm:max-w-[420px]">
+    <Drawer
+      open={!!feature}
+      onOpenChange={(open) => !open && onClose()}
+      direction="right"
+    >
+      <DrawerContent
+        aria-describedby={undefined}
+        className="w-[420px] sm:max-w-[420px]"
+      >
         {feature && (
           <>
-            <div ref={(el) => { containerRef.current = el; setContainer(el); }} />
+            <div
+              ref={(el) => {
+                containerRef.current = el;
+                setContainer(el);
+              }}
+            />
             <DrawerHeader className="pb-2">
               <DrawerTitle className="sr-only">{title}</DrawerTitle>
               <Input
@@ -214,7 +248,9 @@ export function FeatureDrawer({
 
             <div className="flex flex-col gap-5 px-4 py-2">
               <div className="flex flex-col gap-1.5">
-                <Label className="text-muted-foreground text-xs">Description</Label>
+                <Label className="text-muted-foreground text-xs">
+                  Description
+                </Label>
                 <Textarea
                   value={descriptionDraft}
                   onChange={(e) => setDescriptionDraft(e.target.value)}
@@ -246,7 +282,9 @@ export function FeatureDrawer({
 
               {depOptions.length > 0 && (
                 <div className="flex flex-col gap-1.5">
-                  <Label className="text-muted-foreground text-xs">Depends on</Label>
+                  <Label className="text-muted-foreground text-xs">
+                    Depends on
+                  </Label>
                   <DepsCombobox
                     features={depOptions}
                     value={currentDepIds}

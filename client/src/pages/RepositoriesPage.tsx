@@ -14,6 +14,7 @@ import {
   addRepository,
   formatApiError,
   getGitHubStatus,
+  getRepoMeta,
   listAvailableRepositories,
   listMyOrganizations,
   listOrgRepositories,
@@ -23,25 +24,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, GitFork, Plus } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-
-// Mock meta until features/implementations come from the API
-type RepoMeta = {
-  description: string;
-  features: number;
-  implementations: number;
-  status: "active" | "idle";
-};
-
-const DEFAULT_META: RepoMeta = {
-  description: "No description provided.",
-  features: 0,
-  implementations: 0,
-  status: "idle",
-};
-
-function getRepoMeta(_key: string): RepoMeta {
-  return DEFAULT_META;
-}
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -103,7 +85,9 @@ export default function RepositoriesPage() {
     <div className="animate-slide-up flex flex-col gap-6 p-8 max-w-[1280px] mx-auto w-full">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Repositories</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Repositories
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Manage repositories connected to your organization
           </p>
@@ -124,9 +108,12 @@ export default function RepositoriesPage() {
         <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-400">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <span>
-            GitHub account disconnected. Repositories are preserved but you can't add new ones
-            until you{" "}
-            <Link to="/settings" className="font-medium underline underline-offset-2">
+            GitHub account disconnected. Repositories are preserved but you
+            can't add new ones until you{" "}
+            <Link
+              to="/settings"
+              className="font-medium underline underline-offset-2"
+            >
               reconnect
             </Link>
             .
@@ -144,7 +131,9 @@ export default function RepositoriesPage() {
       ) : repos.length === 0 ? (
         <div className="py-16 text-center rounded-lg bg-muted/50">
           <GitFork className="size-8 mx-auto text-muted-foreground/40 mb-3" />
-          <p className="text-sm font-medium text-muted-foreground">No repositories yet</p>
+          <p className="text-sm font-medium text-muted-foreground">
+            No repositories yet
+          </p>
           <p className="text-xs text-muted-foreground/70 mt-1">
             {ghStatus?.connected ? (
               "Click Add to connect your first repository."
@@ -162,7 +151,7 @@ export default function RepositoriesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {repos.map((r) => (
-            <RepoCard key={r.id} repo={r} meta={getRepoMeta(`${r.owner}/${r.name}`)} />
+            <RepoCard key={r.id} repo={r} />
           ))}
         </div>
       )}
@@ -179,37 +168,63 @@ export default function RepositoriesPage() {
   );
 }
 
-function RepoCard({ repo, meta }: { repo: Repository; meta: RepoMeta }) {
+function RepoCard({ repo }: { repo: Repository }) {
+  const { data: meta, isLoading: metaLoading } = useQuery({
+    queryKey: ["repository", repo.id, "meta"],
+    queryFn: () => getRepoMeta(repo.id),
+  });
   return (
     <Link to={`/repositories/${repo.id}`} className="group block">
       <Card className="h-full transition-all duration-150 group-hover:shadow">
         <CardContent className="p-5 flex flex-col gap-3 h-full">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-xs text-muted-foreground font-mono">{repo.owner}/</p>
+              <p className="text-xs text-muted-foreground font-mono">
+                {repo.owner}/
+              </p>
               <p className="text-[15px] font-semibold font-mono leading-tight truncate">
                 {repo.name}
               </p>
             </div>
-            <Badge
-              color={meta.status === "active" ? "lime" : "zinc"}
-              className="shrink-0 mt-0.5"
-            >
-              {meta.status}
-            </Badge>
+            {metaLoading ? (
+              <Skeleton className="h-5 w-[72px] shrink-0 mt-0.5 rounded-full" />
+            ) : (
+              <Badge
+                color={meta?.status === "active" ? "lime" : "zinc"}
+                className="shrink-0 mt-0.5"
+              >
+                {meta?.status ?? "—"}
+              </Badge>
+            )}
           </div>
 
-          <p className="text-sm text-muted-foreground line-clamp-2 flex-1">
-            {meta.description}
-          </p>
+          {metaLoading ? (
+            <div className="flex flex-col gap-2 flex-1">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-[88%]" />
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground line-clamp-2 flex-1">
+              {meta?.description ?? "—"}
+            </p>
+          )}
 
           <div className="flex items-center justify-between pt-2 border-t border-border/50 text-xs text-muted-foreground">
-            <div className="flex items-center gap-3">
-              <span>{meta.features} features</span>
-              <span>{meta.implementations} implementations</span>
-            </div>
+            {metaLoading ? (
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-3 w-28" />
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <span>{meta?.features ?? "—"} features</span>
+                <span>{meta?.implementations ?? "—"} implementations</span>
+              </div>
+            )}
             {repo.created_at && (
-              <span className="shrink-0">Added {formatDate(repo.created_at)}</span>
+              <span className="shrink-0">
+                Added {formatDate(repo.created_at)}
+              </span>
             )}
           </div>
         </CardContent>
@@ -251,7 +266,8 @@ function AddRepoDialog({
         <DialogHeader>
           <DialogTitle>Add repository</DialogTitle>
           <DialogDescription>
-            Select a repository from your GitHub account to add to this organization.
+            Select a repository from your GitHub account to add to this
+            organization.
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[320px] overflow-y-auto mt-4">
@@ -289,7 +305,9 @@ function AddRepoDialog({
                     >
                       <span className="font-mono">{key}</span>
                       {alreadyAdded ? (
-                        <span className="text-xs text-muted-foreground">Added</span>
+                        <span className="text-xs text-muted-foreground">
+                          Added
+                        </span>
                       ) : (
                         <Plus data-icon="inline-end" />
                       )}

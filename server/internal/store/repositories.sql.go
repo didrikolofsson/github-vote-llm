@@ -12,7 +12,7 @@ import (
 const addRepository = `-- name: AddRepository :one
 INSERT INTO repositories (organization_id, owner, name)
 VALUES ($1, $2, $3)
-RETURNING id, organization_id, owner, name, created_at, updated_at, portal_public
+RETURNING id, organization_id, owner, name, created_at, updated_at, portal_public, description
 `
 
 type AddRepositoryParams struct {
@@ -32,14 +32,18 @@ func (q *Queries) AddRepository(ctx context.Context, arg AddRepositoryParams) (R
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PortalPublic,
+		&i.Description,
 	)
 	return i, err
 }
 
 const getPublicRepositoryByOrgAndName = `-- name: GetPublicRepositoryByOrgAndName :one
-SELECT r.id, r.organization_id, r.owner, r.name, r.created_at, r.updated_at, r.portal_public FROM repositories r
-JOIN organizations o ON o.id = r.organization_id
-WHERE o.slug = $1 AND r.name = $2 AND r.portal_public = true
+SELECT r.id, r.organization_id, r.owner, r.name, r.created_at, r.updated_at, r.portal_public, r.description
+FROM repositories r
+    JOIN organizations o ON o.id = r.organization_id
+WHERE o.slug = $1
+    AND r.name = $2
+    AND r.portal_public = true
 `
 
 type GetPublicRepositoryByOrgAndNameParams struct {
@@ -58,12 +62,15 @@ func (q *Queries) GetPublicRepositoryByOrgAndName(ctx context.Context, arg GetPu
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PortalPublic,
+		&i.Description,
 	)
 	return i, err
 }
 
 const getRepository = `-- name: GetRepository :one
-SELECT id, organization_id, owner, name, created_at, updated_at, portal_public FROM repositories WHERE id = $1
+SELECT id, organization_id, owner, name, created_at, updated_at, portal_public, description
+FROM repositories
+WHERE id = $1
 `
 
 func (q *Queries) GetRepository(ctx context.Context, id int64) (Repository, error) {
@@ -77,13 +84,17 @@ func (q *Queries) GetRepository(ctx context.Context, id int64) (Repository, erro
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PortalPublic,
+		&i.Description,
 	)
 	return i, err
 }
 
 const getRepositoryByOwnerAndName = `-- name: GetRepositoryByOwnerAndName :one
-SELECT id, organization_id, owner, name, created_at, updated_at, portal_public FROM repositories
-WHERE organization_id = $1 AND owner = $2 AND name = $3
+SELECT id, organization_id, owner, name, created_at, updated_at, portal_public, description
+FROM repositories
+WHERE organization_id = $1
+    AND owner = $2
+    AND name = $3
 `
 
 type GetRepositoryByOwnerAndNameParams struct {
@@ -103,12 +114,27 @@ func (q *Queries) GetRepositoryByOwnerAndName(ctx context.Context, arg GetReposi
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PortalPublic,
+		&i.Description,
 	)
 	return i, err
 }
 
+const getRepositoryFeatureCount = `-- name: GetRepositoryFeatureCount :one
+SELECT COUNT(*) AS count
+FROM features
+WHERE repository_id = $1
+`
+
+func (q *Queries) GetRepositoryFeatureCount(ctx context.Context, repositoryID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, getRepositoryFeatureCount, repositoryID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const listRepositoriesForOrganization = `-- name: ListRepositoriesForOrganization :many
-SELECT id, organization_id, owner, name, created_at, updated_at, portal_public FROM repositories
+SELECT id, organization_id, owner, name, created_at, updated_at, portal_public, description
+FROM repositories
 WHERE organization_id = $1
 ORDER BY created_at DESC
 `
@@ -130,6 +156,7 @@ func (q *Queries) ListRepositoriesForOrganization(ctx context.Context, organizat
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.PortalPublic,
+			&i.Description,
 		); err != nil {
 			return nil, err
 		}
@@ -142,7 +169,8 @@ func (q *Queries) ListRepositoriesForOrganization(ctx context.Context, organizat
 }
 
 const removeRepository = `-- name: RemoveRepository :exec
-DELETE FROM repositories WHERE id = $1
+DELETE FROM repositories
+WHERE id = $1
 `
 
 func (q *Queries) RemoveRepository(ctx context.Context, id int64) error {
@@ -155,7 +183,7 @@ UPDATE repositories
 SET portal_public = $2,
     updated_at = now()
 WHERE id = $1
-RETURNING id, organization_id, owner, name, created_at, updated_at, portal_public
+RETURNING id, organization_id, owner, name, created_at, updated_at, portal_public, description
 `
 
 type SetRepositoryPortalPublicParams struct {
@@ -174,6 +202,7 @@ func (q *Queries) SetRepositoryPortalPublic(ctx context.Context, arg SetReposito
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PortalPublic,
+		&i.Description,
 	)
 	return i, err
 }

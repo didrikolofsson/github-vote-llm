@@ -185,6 +185,7 @@ type Repository struct {
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
 	PortalPublic   bool
+	Description    *string
 }
 
 type User struct {

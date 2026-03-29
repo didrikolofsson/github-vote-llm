@@ -632,6 +632,9 @@ export function RoadmapCanvas({ repoId }: RoadmapCanvasProps) {
       queryClient.invalidateQueries({
         queryKey: ["repositories", repoId, "roadmap"],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["repository", repoId, "meta"],
+      });
       setAddOpen(false);
     },
   });

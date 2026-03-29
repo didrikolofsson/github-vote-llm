@@ -43,7 +43,8 @@ func (q *Queries) CreateFeature(ctx context.Context, arg CreateFeatureParams) (F
 }
 
 const deleteFeature = `-- name: DeleteFeature :exec
-DELETE FROM features WHERE id = $1
+DELETE FROM features
+WHERE id = $1
 `
 
 func (q *Queries) DeleteFeature(ctx context.Context, id int64) error {
@@ -52,7 +53,9 @@ func (q *Queries) DeleteFeature(ctx context.Context, id int64) error {
 }
 
 const getFeature = `-- name: GetFeature :one
-SELECT id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at FROM features WHERE id = $1
+SELECT id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at
+FROM features
+WHERE id = $1
 `
 
 func (q *Queries) GetFeature(ctx context.Context, id int64) (Feature, error) {
@@ -75,7 +78,8 @@ func (q *Queries) GetFeature(ctx context.Context, id int64) (Feature, error) {
 }
 
 const listFeatures = `-- name: ListFeatures :many
-SELECT id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at FROM features
+SELECT id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at
+FROM features
 WHERE repository_id = $1
 ORDER BY created_at DESC
 `
@@ -114,12 +118,13 @@ func (q *Queries) ListFeatures(ctx context.Context, repositoryID int64) ([]Featu
 
 const listFeaturesForPortal = `-- name: ListFeaturesForPortal :many
 SELECT f.id, f.repository_id, f.title, f.description, f.status, f.area, f.roadmap_x, f.roadmap_y, f.roadmap_locked, f.created_at, f.updated_at,
-    COUNT(fv.id) AS vote_count
+  COUNT(fv.id) AS vote_count
 FROM features f
-LEFT JOIN feature_votes fv ON fv.feature_id = f.id
+  LEFT JOIN feature_votes fv ON fv.feature_id = f.id
 WHERE f.repository_id = $1
 GROUP BY f.id
-ORDER BY vote_count DESC, f.created_at DESC
+ORDER BY vote_count DESC,
+  f.created_at DESC
 `
 
 type ListFeaturesForPortalRow struct {
@@ -172,13 +177,13 @@ func (q *Queries) ListFeaturesForPortal(ctx context.Context, repositoryID int64)
 
 const patchFeature = `-- name: PatchFeature :one
 UPDATE features
-SET
-  title       = COALESCE($1::text, title),
+SET title = COALESCE($1::text, title),
   description = COALESCE($2::text, description),
-  status      = COALESCE($3::feature_status, status),
-  area        = COALESCE($4::text, area),
-  updated_at  = now()
-WHERE id = $5 RETURNING id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at
+  status = COALESCE($3::feature_status, status),
+  area = COALESCE($4::text, area),
+  updated_at = now()
+WHERE id = $5
+RETURNING id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at
 `
 
 type PatchFeatureParams struct {
@@ -216,8 +221,12 @@ func (q *Queries) PatchFeature(ctx context.Context, arg PatchFeatureParams) (Fea
 
 const updateFeaturePosition = `-- name: UpdateFeaturePosition :one
 UPDATE features
-SET roadmap_x = $2, roadmap_y = $3, roadmap_locked = $4, updated_at = now()
-WHERE id = $1 RETURNING id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at
+SET roadmap_x = $2,
+  roadmap_y = $3,
+  roadmap_locked = $4,
+  updated_at = now()
+WHERE id = $1
+RETURNING id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at
 `
 
 type UpdateFeaturePositionParams struct {

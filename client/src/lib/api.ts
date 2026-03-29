@@ -172,6 +172,7 @@ import {
   OrganizationMemberRoleSchema,
   OrganizationSchema,
   OrganizationWithMembersSchema,
+  RepoMetaSchema,
   RepositoryListResponseSchema,
   RepositorySchema,
   RoadmapSchema,
@@ -318,13 +319,20 @@ export async function listAvailableRepositories(page = 1) {
 // ─── Repositories ─────────────────────────────────────────────────────────────
 
 export async function listOrgRepositories(orgId: number) {
-  const data = await requestWithRefresh(`/organizations/${orgId}/repositories`, {
-    schema: RepositoryListResponseSchema,
-  });
+  const data = await requestWithRefresh(
+    `/organizations/${orgId}/repositories`,
+    {
+      schema: RepositoryListResponseSchema,
+    },
+  );
   return data.repositories;
 }
 
-export async function addRepository(orgId: number, owner: string, repo: string) {
+export async function addRepository(
+  orgId: number,
+  owner: string,
+  repo: string,
+) {
   return requestWithRefresh(`/organizations/${orgId}/repositories`, {
     method: "POST",
     body: JSON.stringify({ owner, repo }),
@@ -332,18 +340,31 @@ export async function addRepository(orgId: number, owner: string, repo: string) 
   });
 }
 
-export async function removeRepository(orgId: number, repoId: number): Promise<void> {
+export async function removeRepository(
+  orgId: number,
+  repoId: number,
+): Promise<void> {
   await requestWithRefresh(`/organizations/${orgId}/repositories/${repoId}`, {
     method: "DELETE",
     schema: z.void(),
   });
 }
 
-export async function updateRepositoryPortalPublic(repoId: number, portalPublic: boolean) {
+export async function updateRepositoryPortalPublic(
+  repoId: number,
+  portalPublic: boolean,
+) {
   return requestWithRefresh(`/repositories/${repoId}/portal`, {
     method: "PATCH",
     body: JSON.stringify({ portal_public: portalPublic }),
     schema: RepositorySchema,
+  });
+}
+
+export async function getRepoMeta(repoId: number) {
+  return requestWithRefresh(`/repositories/${repoId}/meta`, {
+    method: "GET",
+    schema: RepoMetaSchema,
   });
 }
 
@@ -363,7 +384,10 @@ export async function listOrgMembers(orgId: number): Promise<OrgMember[]> {
   return data.members;
 }
 
-export async function inviteMember(orgId: number, email: string): Promise<void> {
+export async function inviteMember(
+  orgId: number,
+  email: string,
+): Promise<void> {
   await requestWithRefresh(`/organizations/${orgId}/members`, {
     method: "POST",
     body: JSON.stringify({ email }),
@@ -371,7 +395,10 @@ export async function inviteMember(orgId: number, email: string): Promise<void> 
   });
 }
 
-export async function removeMember(orgId: number, userId: number): Promise<void> {
+export async function removeMember(
+  orgId: number,
+  userId: number,
+): Promise<void> {
   await requestWithRefresh(`/organizations/${orgId}/members/${userId}`, {
     method: "DELETE",
     schema: z.void(),
@@ -419,7 +446,12 @@ export async function createFeature(
 export async function updateFeature(
   repoId: number,
   featureId: number,
-  patch: { title?: string; description?: string; status?: string; area?: string },
+  patch: {
+    title?: string;
+    description?: string;
+    status?: string;
+    area?: string;
+  },
 ) {
   return requestWithRefresh(`/repositories/${repoId}/features/${featureId}`, {
     method: "PATCH",
@@ -451,7 +483,10 @@ export async function getRoadmap(repoId: number) {
   });
 }
 
-export async function deleteFeature(repoId: number, featureId: number): Promise<void> {
+export async function deleteFeature(
+  repoId: number,
+  featureId: number,
+): Promise<void> {
   await requestWithRefresh(`/repositories/${repoId}/features/${featureId}`, {
     method: "DELETE",
     schema: z.void(),

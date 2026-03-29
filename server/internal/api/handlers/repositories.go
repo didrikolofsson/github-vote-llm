@@ -17,6 +17,7 @@ type RepositoryHandlers interface {
 	Add(c *gin.Context)
 	UpdatePortalVisibility(c *gin.Context)
 	Remove(c *gin.Context)
+	GetRepoMeta(c *gin.Context)
 }
 
 type RepositoryHandlersImpl struct {
@@ -159,4 +160,18 @@ func (h *RepositoryHandlersImpl) Remove(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+func (h *RepositoryHandlersImpl) GetRepoMeta(c *gin.Context) {
+	repoID, err := strconv.ParseInt(c.Param("repoId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid repository ID"})
+		return
+	}
+	meta, err := h.s.GetRepositoryMeta(c.Request.Context(), repoID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	c.JSON(http.StatusOK, meta)
 }
