@@ -180,9 +180,10 @@ import {
 
 export type {
   Feature,
+  FeatureBuildStatus,
   FeatureComment,
   FeatureDependency,
-  FeatureStatus,
+  FeatureReviewStatus,
   Organization,
   OrganizationMemberRole,
   OrganizationWithMembers,

@@ -16,18 +16,20 @@ interface FeatureSheetProps {
   onVote: (featureId: number) => void;
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  open: "Open",
-  planned: "Planned",
+const BUILD_STATUS_LABELS: Record<string, string> = {
+  pending: "Pending",
   in_progress: "In Progress",
+  stuck: "Stuck",
   done: "Done",
+  rejected: "Rejected",
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  open: "bg-indigo-500/15 text-indigo-400",
-  planned: "bg-violet-500/15 text-violet-400",
+const BUILD_STATUS_COLORS: Record<string, string> = {
+  pending: "bg-indigo-500/15 text-indigo-400",
   in_progress: "bg-amber-500/15 text-amber-400",
+  stuck: "bg-red-500/15 text-red-400",
   done: "bg-emerald-500/15 text-emerald-400",
+  rejected: "bg-muted text-muted-foreground",
 };
 
 export function FeatureSheet({
@@ -77,14 +79,16 @@ export function FeatureSheet({
                 <div className="flex-1 min-w-0">
                   <SheetTitle className="text-base leading-snug">{feature.title}</SheetTitle>
                   <div className="mt-2 flex items-center gap-2 flex-wrap">
-                    <span
-                      className={cn(
-                        "inline-flex items-center rounded-full px-2 py-0.5 text-xs",
-                        STATUS_COLORS[feature.status] ?? "bg-muted text-muted-foreground",
-                      )}
-                    >
-                      {STATUS_LABELS[feature.status] ?? feature.status}
-                    </span>
+                    {feature.build_status && (
+                      <span
+                        className={cn(
+                          "inline-flex items-center rounded-full px-2 py-0.5 text-xs",
+                          BUILD_STATUS_COLORS[feature.build_status] ?? "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {BUILD_STATUS_LABELS[feature.build_status] ?? feature.build_status}
+                      </span>
+                    )}
                     {feature.area && (
                       <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-muted text-muted-foreground">
                         {feature.area}

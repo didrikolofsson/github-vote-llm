@@ -50,20 +50,22 @@ export const RepoMetaSchema = z.object({
 
 // ─── Feature ──────────────────────────────────────────────────────────────────
 
-export const FeatureStatusSchema = z.enum([
-  "open",
-  "planned",
-  "in_progress",
-  "done",
+export const FeatureReviewStatusSchema = z.enum([
+  "pending",
+  "approved",
   "rejected",
 ]);
+export const FeatureBuildStatusSchema = z
+  .enum(["pending", "in_progress", "stuck", "done", "rejected"])
+  .nullable();
 
 export const FeatureSchema = z.object({
   id: z.number(),
   repository_id: z.number(),
   title: z.string(),
   description: z.string(),
-  status: FeatureStatusSchema,
+  review_status: FeatureReviewStatusSchema,
+  build_status: FeatureBuildStatusSchema,
   area: z.string().nullable().optional(),
   roadmap_x: z.number().nullable().optional(),
   roadmap_y: z.number().nullable().optional(),
@@ -110,7 +112,8 @@ export type OrganizationMemberRole = z.infer<
 >;
 export type Repository = z.infer<typeof RepositorySchema>;
 export type Feature = z.infer<typeof FeatureSchema>;
-export type FeatureStatus = z.infer<typeof FeatureStatusSchema>;
+export type FeatureReviewStatus = z.infer<typeof FeatureReviewStatusSchema>;
+export type FeatureBuildStatus = z.infer<typeof FeatureBuildStatusSchema>;
 export type FeatureComment = z.infer<typeof FeatureCommentSchema>;
 export type FeatureDependency = z.infer<typeof FeatureDependencySchema>;
 export type Roadmap = z.infer<typeof RoadmapSchema>;

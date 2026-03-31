@@ -33,7 +33,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useCallback, useEffect, useState } from "react";
-import { FeatureNode, type FeatureNodeData } from "./FeatureNode";
+import { FeatureNode } from "./FeatureNode";
 import { FeatureDrawer } from "./FeatureDrawer";
 import { Button } from "@/components/ui/button";
 import {
@@ -198,7 +198,7 @@ async function computeLayout(
 function featuresToNodes(
   features: Feature[],
   autoPositions: Map<number, { x: number; y: number }>,
-): Node<FeatureNodeData>[] {
+): Node<Feature>[] {
   return features.map((f) => ({
     id: String(f.id),
     type: "feature",
@@ -206,7 +206,7 @@ function featuresToNodes(
       f.roadmap_x != null && f.roadmap_y != null
         ? { x: f.roadmap_x, y: f.roadmap_y }
         : (autoPositions.get(f.id) ?? { x: 0, y: 0 }),
-    data: f as FeatureNodeData,
+    data: f,
   }));
 }
 
@@ -721,8 +721,6 @@ export function RoadmapCanvas({ repoId }: RoadmapCanvasProps) {
         onOpenChange={setAddOpen}
         availableFeatures={data?.features ?? []}
         onAdd={(title, description, selectedDeps) => {
-          // If the user didn't pick any deps, fall back to auto-connecting
-          // to the latest existing feature (highest id).
           const dependsOn =
             selectedDeps.length > 0
               ? selectedDeps

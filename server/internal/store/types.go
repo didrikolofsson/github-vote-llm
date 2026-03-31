@@ -11,49 +11,49 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type FeatureStatus string
+type BuildStatusType string
 
 const (
-	FeatureStatusOpen       FeatureStatus = "open"
-	FeatureStatusPlanned    FeatureStatus = "planned"
-	FeatureStatusInProgress FeatureStatus = "in_progress"
-	FeatureStatusDone       FeatureStatus = "done"
-	FeatureStatusRejected   FeatureStatus = "rejected"
+	BuildStatusTypePending    BuildStatusType = "pending"
+	BuildStatusTypeInProgress BuildStatusType = "in_progress"
+	BuildStatusTypeStuck      BuildStatusType = "stuck"
+	BuildStatusTypeDone       BuildStatusType = "done"
+	BuildStatusTypeRejected   BuildStatusType = "rejected"
 )
 
-func (e *FeatureStatus) Scan(src interface{}) error {
+func (e *BuildStatusType) Scan(src interface{}) error {
 	switch s := src.(type) {
 	case []byte:
-		*e = FeatureStatus(s)
+		*e = BuildStatusType(s)
 	case string:
-		*e = FeatureStatus(s)
+		*e = BuildStatusType(s)
 	default:
-		return fmt.Errorf("unsupported scan type for FeatureStatus: %T", src)
+		return fmt.Errorf("unsupported scan type for BuildStatusType: %T", src)
 	}
 	return nil
 }
 
-type NullFeatureStatus struct {
-	FeatureStatus FeatureStatus
-	Valid         bool // Valid is true if FeatureStatus is not NULL
+type NullBuildStatusType struct {
+	BuildStatusType BuildStatusType
+	Valid           bool // Valid is true if BuildStatusType is not NULL
 }
 
 // Scan implements the Scanner interface.
-func (ns *NullFeatureStatus) Scan(value interface{}) error {
+func (ns *NullBuildStatusType) Scan(value interface{}) error {
 	if value == nil {
-		ns.FeatureStatus, ns.Valid = "", false
+		ns.BuildStatusType, ns.Valid = "", false
 		return nil
 	}
 	ns.Valid = true
-	return ns.FeatureStatus.Scan(value)
+	return ns.BuildStatusType.Scan(value)
 }
 
 // Value implements the driver Valuer interface.
-func (ns NullFeatureStatus) Value() (driver.Value, error) {
+func (ns NullBuildStatusType) Value() (driver.Value, error) {
 	if !ns.Valid {
 		return nil, nil
 	}
-	return string(ns.FeatureStatus), nil
+	return string(ns.BuildStatusType), nil
 }
 
 type OrganizationMemberRole string
@@ -98,6 +98,92 @@ func (ns NullOrganizationMemberRole) Value() (driver.Value, error) {
 	return string(ns.OrganizationMemberRole), nil
 }
 
+type ReviewStatusType string
+
+const (
+	ReviewStatusTypePending  ReviewStatusType = "pending"
+	ReviewStatusTypeApproved ReviewStatusType = "approved"
+	ReviewStatusTypeRejected ReviewStatusType = "rejected"
+)
+
+func (e *ReviewStatusType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ReviewStatusType(s)
+	case string:
+		*e = ReviewStatusType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ReviewStatusType: %T", src)
+	}
+	return nil
+}
+
+type NullReviewStatusType struct {
+	ReviewStatusType ReviewStatusType
+	Valid            bool // Valid is true if ReviewStatusType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullReviewStatusType) Scan(value interface{}) error {
+	if value == nil {
+		ns.ReviewStatusType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ReviewStatusType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullReviewStatusType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ReviewStatusType), nil
+}
+
+type VoteUrgencyType string
+
+const (
+	VoteUrgencyTypeBlocking   VoteUrgencyType = "blocking"
+	VoteUrgencyTypeImportant  VoteUrgencyType = "important"
+	VoteUrgencyTypeNiceToHave VoteUrgencyType = "nice_to_have"
+)
+
+func (e *VoteUrgencyType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = VoteUrgencyType(s)
+	case string:
+		*e = VoteUrgencyType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for VoteUrgencyType: %T", src)
+	}
+	return nil
+}
+
+type NullVoteUrgencyType struct {
+	VoteUrgencyType VoteUrgencyType
+	Valid           bool // Valid is true if VoteUrgencyType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullVoteUrgencyType) Scan(value interface{}) error {
+	if value == nil {
+		ns.VoteUrgencyType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.VoteUrgencyType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullVoteUrgencyType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.VoteUrgencyType), nil
+}
+
 type AuthorizationCode struct {
 	ID            int64
 	Code          string
@@ -114,13 +200,14 @@ type Feature struct {
 	RepositoryID  int64
 	Title         string
 	Description   string
-	Status        FeatureStatus
 	Area          *string
 	RoadmapX      *float64
 	RoadmapY      *float64
 	RoadmapLocked bool
 	CreatedAt     pgtype.Timestamptz
 	UpdatedAt     pgtype.Timestamptz
+	ReviewStatus  ReviewStatusType
+	BuildStatus   NullBuildStatusType
 }
 
 type FeatureComment struct {
@@ -141,6 +228,8 @@ type FeatureVote struct {
 	FeatureID  int64
 	VoterToken string
 	CreatedAt  pgtype.Timestamptz
+	Reason     string
+	Urgency    NullVoteUrgencyType
 }
 
 type GithubConnection struct {

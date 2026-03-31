@@ -8,6 +8,7 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api/request"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
+	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
 )
 
@@ -48,6 +49,8 @@ func (h *PortalHandlersImpl) GetPortalPage(c *gin.Context) {
 
 type portalToggleVoteRequest struct {
 	VoterToken string `json:"voter_token" binding:"required"`
+	Reason     string `json:"reason"`
+	Urgency    string `json:"urgency"`
 }
 
 // POST /v1/portal/:orgSlug/:repoName/features/:featureId/vote
@@ -62,11 +65,23 @@ func (h *PortalHandlersImpl) ToggleVote(c *gin.Context) {
 
 	var req portalToggleVoteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "voter_token is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "voter_token and reason are required"})
 		return
 	}
 
-	count, err := h.s.ToggleVote(c.Request.Context(), orgSlug, repoName, featureID, req.VoterToken)
+	urgency := store.NullVoteUrgencyType{}
+	if req.Urgency != "" {
+		u := store.VoteUrgencyType(req.Urgency)
+		switch u {
+		case store.VoteUrgencyTypeBlocking, store.VoteUrgencyTypeImportant, store.VoteUrgencyTypeNiceToHave:
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid urgency value"})
+			return
+		}
+		urgency = store.NullVoteUrgencyType{VoteUrgencyType: u, Valid: true}
+	}
+
+	count, err := h.s.ToggleVote(c.Request.Context(), orgSlug, repoName, featureID, req.VoterToken, req.Reason, urgency)
 	if errors.Is(err, services.ErrPortalNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "portal not found or not public"})
 		return

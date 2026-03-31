@@ -36,7 +36,10 @@ export const PortalFeatureSchema = z.object({
   id: z.number(),
   title: z.string(),
   description: z.string(),
-  status: z.enum(["open", "planned", "in_progress", "done", "rejected"]),
+  review_status: z.enum(["approved", "rejected"]),
+  build_status: z
+    .enum(["pending", "in_progress", "stuck", "done", "rejected"])
+    .nullable(),
   area: z.string().nullable().optional(),
   vote_count: z.number(),
   has_voted: z.boolean(),
@@ -48,11 +51,10 @@ export const PortalPageSchema = z.object({
   org_slug: z.string(),
   repo_owner: z.string(),
   repo_name: z.string(),
-  proposals: z.array(PortalFeatureSchema),
-  planned: z.array(PortalFeatureSchema),
+  requests: z.array(PortalFeatureSchema),
+  pending: z.array(PortalFeatureSchema),
   in_progress: z.array(PortalFeatureSchema),
   done: z.array(PortalFeatureSchema),
-  recently_shipped: z.array(PortalFeatureSchema),
 });
 
 export const PortalCommentSchema = z.object({
@@ -74,7 +76,9 @@ export async function getPortalPage(
   repoName: string,
   voterToken: string,
 ): Promise<PortalPage> {
-  const params = voterToken ? `?voter_token=${encodeURIComponent(voterToken)}` : "";
+  const params = voterToken
+    ? `?voter_token=${encodeURIComponent(voterToken)}`
+    : "";
   const data = await portalRequest<unknown>(`/${orgSlug}/${repoName}${params}`);
   return PortalPageSchema.parse(data);
 }
@@ -84,10 +88,16 @@ export async function togglePortalVote(
   repoName: string,
   featureId: number,
   voterToken: string,
+  reason: string,
+  urgency?: "blocking" | "important" | "nice_to_have",
 ): Promise<{ vote_count: number }> {
   return portalRequest(`/${orgSlug}/${repoName}/features/${featureId}/vote`, {
     method: "POST",
-    body: JSON.stringify({ voter_token: voterToken }),
+    body: JSON.stringify({
+      voter_token: voterToken,
+      reason,
+      urgency: urgency ?? "",
+    }),
   });
 }
 

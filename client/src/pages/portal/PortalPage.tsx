@@ -2,7 +2,12 @@ import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { GitFork } from "lucide-react";
-import { getPortalPage, togglePortalVote, type PortalFeature, type PortalPage } from "@/lib/portal-api";
+import {
+  getPortalPage,
+  togglePortalVote,
+  type PortalFeature,
+  type PortalPage,
+} from "@/lib/portal-api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProposalsBoard } from "./ProposalsBoard";
 import { RoadmapColumns } from "./RoadmapColumns";
@@ -19,34 +24,40 @@ function getOrCreateVoterToken(): string {
 }
 
 export default function PortalPage() {
-  const { orgSlug, repoName } = useParams<{ orgSlug: string; repoName: string }>();
+  const { orgSlug, repoName } = useParams<{
+    orgSlug: string;
+    repoName: string;
+    repoId: string;
+  }>();
   const queryClient = useQueryClient();
 
   const voterToken = useMemo(() => getOrCreateVoterToken(), []);
 
   const queryKey = ["portal", orgSlug, repoName, voterToken];
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey,
     queryFn: () => getPortalPage(orgSlug!, repoName!, voterToken),
     enabled: !!orgSlug && !!repoName,
   });
 
-  const [selectedFeatureId, setSelectedFeatureId] = useState<number | null>(null);
+  const [selectedFeatureId, setSelectedFeatureId] = useState<number | null>(
+    null,
+  );
   const selectedFeature = useMemo(() => {
     if (selectedFeatureId == null || !data) return null;
     const all = [
-      ...data.proposals,
-      ...data.planned,
+      ...data.requests,
+      ...data.pending,
       ...data.in_progress,
       ...data.done,
-    ];
+    ].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
     return all.find((f) => f.id === selectedFeatureId) ?? null;
   }, [selectedFeatureId, data]);
 
   const voteMutation = useMutation({
     mutationFn: ({ featureId }: { featureId: number }) =>
-      togglePortalVote(orgSlug!, repoName!, featureId, voterToken),
+      togglePortalVote(orgSlug!, repoName!, featureId, voterToken, ""),
     onMutate: async ({ featureId }) => {
       await queryClient.cancelQueries({ queryKey });
       const previousData = queryClient.getQueryData<PortalPage>(queryKey);
@@ -63,11 +74,18 @@ export default function PortalPage() {
               };
         return {
           ...old,
-          proposals: old.proposals.map(update).sort((a, b) => b.vote_count - a.vote_count),
-          planned: old.planned.map(update),
-          in_progress: old.in_progress.map(update),
-          done: old.done.map(update),
-          recently_shipped: old.recently_shipped.map(update),
+          requests: old.requests
+            .map(update)
+            .sort((a, b) => b.vote_count - a.vote_count),
+          pending: old.pending
+            .map(update)
+            .sort((a, b) => b.vote_count - a.vote_count),
+          in_progress: old.in_progress
+            .map(update)
+            .sort((a, b) => b.vote_count - a.vote_count),
+          done: old.done
+            .map(update)
+            .sort((a, b) => b.vote_count - a.vote_count),
         };
       });
 
@@ -99,11 +117,27 @@ export default function PortalPage() {
     );
   }
 
-  if (isError || !data) {
+  if (isError) {
+    console.log(error);
+
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <p className="text-sm font-medium text-muted-foreground">Portal not found</p>
+          <p className="text-sm font-medium text-muted-foreground">
+            Error loading portal
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-sm font-medium text-muted-foreground">
+            Portal not found
+          </p>
           <p className="text-xs text-muted-foreground/70 mt-1">
             This portal is not public or does not exist.
           </p>
@@ -114,23 +148,32 @@ export default function PortalPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <PortalHeader orgSlug={orgSlug} repoOwner={data.repo_owner} repoName={data.repo_name} />
+      <PortalHeader
+        orgSlug={orgSlug}
+        repoOwner={data.repo_owner}
+        repoName={data.repo_name}
+      />
 
       <main className="max-w-4xl mx-auto px-4 py-10 flex flex-col gap-12">
         <ProposalsBoard
-          proposals={data.proposals}
+          proposals={data.requests}
           onVote={(id) => voteMutation.mutate({ featureId: id })}
           onSelect={setSelectedFeatureId}
         />
 
         <RoadmapColumns
-          planned={data.planned}
+          pending={data.pending}
           inProgress={data.in_progress}
           done={data.done}
           onSelect={setSelectedFeatureId}
         />
 
-        <RecentlyShipped features={data.recently_shipped} onSelect={setSelectedFeatureId} />
+        <RecentlyShipped
+          features={data.done.sort((a, b) =>
+            b.updated_at.localeCompare(a.updated_at),
+          )}
+          onSelect={setSelectedFeatureId}
+        />
       </main>
 
       <FeatureSheet
@@ -138,7 +181,9 @@ export default function PortalPage() {
         orgSlug={orgSlug!}
         repoName={repoName!}
         open={selectedFeatureId != null}
-        onOpenChange={(open) => { if (!open) setSelectedFeatureId(null); }}
+        onOpenChange={(open) => {
+          if (!open) setSelectedFeatureId(null);
+        }}
         onVote={(id) => voteMutation.mutate({ featureId: id })}
       />
     </div>
@@ -161,15 +206,21 @@ function PortalHeader({
           <GitFork className="size-4 text-muted-foreground" />
           {repoOwner ? (
             <span className="font-mono">
-              <span className="text-muted-foreground font-normal">{repoOwner}/</span>
+              <span className="text-muted-foreground font-normal">
+                {repoOwner}/
+              </span>
               {repoName}
             </span>
           ) : (
-            <span className="font-mono text-muted-foreground">{orgSlug}/{repoName}</span>
+            <span className="font-mono text-muted-foreground">
+              {orgSlug}/{repoName}
+            </span>
           )}
         </div>
         <div className="ml-auto">
-          <span className="text-xs text-muted-foreground">Community portal</span>
+          <span className="text-xs text-muted-foreground">
+            Community portal
+          </span>
         </div>
       </div>
     </header>

@@ -12,32 +12,39 @@ import (
 )
 
 const createFeature = `-- name: CreateFeature :one
-INSERT INTO features (repository_id, title, description)
-VALUES ($1, $2, $3)
-RETURNING id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at
+INSERT INTO features (repository_id, title, description, review_status)
+VALUES ($1, $2, $3, $4)
+RETURNING id, repository_id, title, description, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at, review_status, build_status
 `
 
 type CreateFeatureParams struct {
 	RepositoryID int64
 	Title        string
 	Description  string
+	ReviewStatus ReviewStatusType
 }
 
 func (q *Queries) CreateFeature(ctx context.Context, arg CreateFeatureParams) (Feature, error) {
-	row := q.db.QueryRow(ctx, createFeature, arg.RepositoryID, arg.Title, arg.Description)
+	row := q.db.QueryRow(ctx, createFeature,
+		arg.RepositoryID,
+		arg.Title,
+		arg.Description,
+		arg.ReviewStatus,
+	)
 	var i Feature
 	err := row.Scan(
 		&i.ID,
 		&i.RepositoryID,
 		&i.Title,
 		&i.Description,
-		&i.Status,
 		&i.Area,
 		&i.RoadmapX,
 		&i.RoadmapY,
 		&i.RoadmapLocked,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReviewStatus,
+		&i.BuildStatus,
 	)
 	return i, err
 }
@@ -53,7 +60,7 @@ func (q *Queries) DeleteFeature(ctx context.Context, id int64) error {
 }
 
 const getFeature = `-- name: GetFeature :one
-SELECT id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at
+SELECT id, repository_id, title, description, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at, review_status, build_status
 FROM features
 WHERE id = $1
 `
@@ -66,19 +73,20 @@ func (q *Queries) GetFeature(ctx context.Context, id int64) (Feature, error) {
 		&i.RepositoryID,
 		&i.Title,
 		&i.Description,
-		&i.Status,
 		&i.Area,
 		&i.RoadmapX,
 		&i.RoadmapY,
 		&i.RoadmapLocked,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReviewStatus,
+		&i.BuildStatus,
 	)
 	return i, err
 }
 
 const listFeatures = `-- name: ListFeatures :many
-SELECT id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at
+SELECT id, repository_id, title, description, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at, review_status, build_status
 FROM features
 WHERE repository_id = $1
 ORDER BY created_at DESC
@@ -98,13 +106,14 @@ func (q *Queries) ListFeatures(ctx context.Context, repositoryID int64) ([]Featu
 			&i.RepositoryID,
 			&i.Title,
 			&i.Description,
-			&i.Status,
 			&i.Area,
 			&i.RoadmapX,
 			&i.RoadmapY,
 			&i.RoadmapLocked,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ReviewStatus,
+			&i.BuildStatus,
 		); err != nil {
 			return nil, err
 		}
@@ -117,11 +126,12 @@ func (q *Queries) ListFeatures(ctx context.Context, repositoryID int64) ([]Featu
 }
 
 const listFeaturesForPortal = `-- name: ListFeaturesForPortal :many
-SELECT f.id, f.repository_id, f.title, f.description, f.status, f.area, f.roadmap_x, f.roadmap_y, f.roadmap_locked, f.created_at, f.updated_at,
+SELECT f.id, f.repository_id, f.title, f.description, f.area, f.roadmap_x, f.roadmap_y, f.roadmap_locked, f.created_at, f.updated_at, f.review_status, f.build_status,
   COUNT(fv.id) AS vote_count
 FROM features f
   LEFT JOIN feature_votes fv ON fv.feature_id = f.id
 WHERE f.repository_id = $1
+  AND f.review_status = 'approved'
 GROUP BY f.id
 ORDER BY vote_count DESC,
   f.created_at DESC
@@ -132,13 +142,14 @@ type ListFeaturesForPortalRow struct {
 	RepositoryID  int64
 	Title         string
 	Description   string
-	Status        FeatureStatus
 	Area          *string
 	RoadmapX      *float64
 	RoadmapY      *float64
 	RoadmapLocked bool
 	CreatedAt     pgtype.Timestamptz
 	UpdatedAt     pgtype.Timestamptz
+	ReviewStatus  ReviewStatusType
+	BuildStatus   NullBuildStatusType
 	VoteCount     int64
 }
 
@@ -156,13 +167,14 @@ func (q *Queries) ListFeaturesForPortal(ctx context.Context, repositoryID int64)
 			&i.RepositoryID,
 			&i.Title,
 			&i.Description,
-			&i.Status,
 			&i.Area,
 			&i.RoadmapX,
 			&i.RoadmapY,
 			&i.RoadmapLocked,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ReviewStatus,
+			&i.BuildStatus,
 			&i.VoteCount,
 		); err != nil {
 			return nil, err
@@ -179,26 +191,29 @@ const patchFeature = `-- name: PatchFeature :one
 UPDATE features
 SET title = COALESCE($1::text, title),
   description = COALESCE($2::text, description),
-  status = COALESCE($3::feature_status, status),
-  area = COALESCE($4::text, area),
+  review_status = COALESCE($3::review_status_type, review_status),
+  build_status = COALESCE($4::build_status_type, build_status),
+  area = COALESCE($5::text, area),
   updated_at = now()
-WHERE id = $5
-RETURNING id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at
+WHERE id = $6
+RETURNING id, repository_id, title, description, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at, review_status, build_status
 `
 
 type PatchFeatureParams struct {
-	Title       *string
-	Description *string
-	Status      NullFeatureStatus
-	Area        *string
-	ID          int64
+	Title        *string
+	Description  *string
+	ReviewStatus NullReviewStatusType
+	BuildStatus  NullBuildStatusType
+	Area         *string
+	ID           int64
 }
 
 func (q *Queries) PatchFeature(ctx context.Context, arg PatchFeatureParams) (Feature, error) {
 	row := q.db.QueryRow(ctx, patchFeature,
 		arg.Title,
 		arg.Description,
-		arg.Status,
+		arg.ReviewStatus,
+		arg.BuildStatus,
 		arg.Area,
 		arg.ID,
 	)
@@ -208,13 +223,14 @@ func (q *Queries) PatchFeature(ctx context.Context, arg PatchFeatureParams) (Fea
 		&i.RepositoryID,
 		&i.Title,
 		&i.Description,
-		&i.Status,
 		&i.Area,
 		&i.RoadmapX,
 		&i.RoadmapY,
 		&i.RoadmapLocked,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReviewStatus,
+		&i.BuildStatus,
 	)
 	return i, err
 }
@@ -226,7 +242,7 @@ SET roadmap_x = $2,
   roadmap_locked = $4,
   updated_at = now()
 WHERE id = $1
-RETURNING id, repository_id, title, description, status, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at
+RETURNING id, repository_id, title, description, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at, review_status, build_status
 `
 
 type UpdateFeaturePositionParams struct {
@@ -249,13 +265,14 @@ func (q *Queries) UpdateFeaturePosition(ctx context.Context, arg UpdateFeaturePo
 		&i.RepositoryID,
 		&i.Title,
 		&i.Description,
-		&i.Status,
 		&i.Area,
 		&i.RoadmapX,
 		&i.RoadmapY,
 		&i.RoadmapLocked,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReviewStatus,
+		&i.BuildStatus,
 	)
 	return i, err
 }

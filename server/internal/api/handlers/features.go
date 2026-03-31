@@ -110,10 +110,11 @@ func (h *FeatureHandlersImpl) DeleteFeature(c *gin.Context) {
 }
 
 type patchFeatureRequest struct {
-	Title       *string `json:"title"`
-	Description *string `json:"description"`
-	Status      *string `json:"status"`
-	Area        *string `json:"area"`
+	Title        *string `json:"title"`
+	Description  *string `json:"description"`
+	ReviewStatus *string `json:"review_status"`
+	BuildStatus  *string `json:"build_status"`
+	Area         *string `json:"area"`
 }
 
 func (h *FeatureHandlersImpl) PatchFeature(c *gin.Context) {
@@ -132,16 +133,26 @@ func (h *FeatureHandlersImpl) PatchFeature(c *gin.Context) {
 		Description: req.Description,
 		Area:        req.Area,
 	}
-	if req.Status != nil {
-		status := store.FeatureStatus(*req.Status)
-		switch status {
-		case store.FeatureStatusOpen, store.FeatureStatusPlanned, store.FeatureStatusInProgress,
-			store.FeatureStatusDone, store.FeatureStatusRejected:
+	if req.ReviewStatus != nil {
+		rs := store.ReviewStatusType(*req.ReviewStatus)
+		switch rs {
+		case store.ReviewStatusTypePending, store.ReviewStatusTypeApproved, store.ReviewStatusTypeRejected:
 		default:
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status value"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid review_status value"})
 			return
 		}
-		params.Status = &status
+		params.ReviewStatus = &rs
+	}
+	if req.BuildStatus != nil {
+		bs := store.BuildStatusType(*req.BuildStatus)
+		switch bs {
+		case store.BuildStatusTypePending, store.BuildStatusTypeInProgress,
+			store.BuildStatusTypeStuck, store.BuildStatusTypeDone, store.BuildStatusTypeRejected:
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid build_status value"})
+			return
+		}
+		params.BuildStatus = &bs
 	}
 	feature, err := h.s.PatchFeature(c.Request.Context(), featureID, params)
 	if errors.Is(err, services.ErrFeatureNotFound) {
@@ -245,6 +256,8 @@ func (h *FeatureHandlersImpl) RemoveDependency(c *gin.Context) {
 
 type toggleVoteRequest struct {
 	VoterToken string `json:"voter_token" binding:"required"`
+	Reason     string `json:"reason"`
+	Urgency    string `json:"urgency"`
 }
 
 func (h *FeatureHandlersImpl) ToggleVote(c *gin.Context) {
@@ -255,10 +268,21 @@ func (h *FeatureHandlersImpl) ToggleVote(c *gin.Context) {
 	}
 	var req toggleVoteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "voter_token required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "voter_token and reason are required"})
 		return
 	}
-	count, err := h.s.ToggleVote(c.Request.Context(), featureID, req.VoterToken)
+	urgency := store.NullVoteUrgencyType{}
+	if req.Urgency != "" {
+		u := store.VoteUrgencyType(req.Urgency)
+		switch u {
+		case store.VoteUrgencyTypeBlocking, store.VoteUrgencyTypeImportant, store.VoteUrgencyTypeNiceToHave:
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid urgency value"})
+			return
+		}
+		urgency = store.NullVoteUrgencyType{VoteUrgencyType: u, Valid: true}
+	}
+	count, err := h.s.ToggleVote(c.Request.Context(), featureID, req.VoterToken, req.Reason, urgency)
 	if err != nil {
 		h.l.Errorw("Failed to toggle vote", "error", err, "request_id", request.GetRequestID(c))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})

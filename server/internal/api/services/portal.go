@@ -15,15 +15,16 @@ var ErrPortalNotFound = errors.New("portal not found or not public")
 
 // PortalFeatureDTO is the public-facing shape for a feature card.
 type PortalFeatureDTO struct {
-	ID          int64   `json:"id"`
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Status      string  `json:"status"`
-	Area        *string `json:"area"`
-	VoteCount   int64   `json:"vote_count"`
-	HasVoted    bool    `json:"has_voted"`
-	CreatedAt   string  `json:"created_at"`
-	UpdatedAt   string  `json:"updated_at"`
+	ID           int64                  `json:"id"`
+	Title        string                 `json:"title"`
+	Description  string                 `json:"description"`
+	ReviewStatus store.ReviewStatusType `json:"review_status"`
+	BuildStatus  *store.BuildStatusType `json:"build_status"`
+	Area         *string                `json:"area"`
+	VoteCount    int64                  `json:"vote_count"`
+	HasVoted     bool                   `json:"has_voted"`
+	CreatedAt    string                 `json:"created_at"`
+	UpdatedAt    string                 `json:"updated_at"`
 }
 
 // PortalCommentDTO is the public-facing shape for a comment.
@@ -37,19 +38,18 @@ type PortalCommentDTO struct {
 
 // PortalPageDTO is the full data payload for a public portal page.
 type PortalPageDTO struct {
-	OrgSlug         string             `json:"org_slug"`
-	RepoOwner       string             `json:"repo_owner"`
-	RepoName        string             `json:"repo_name"`
-	Proposals       []PortalFeatureDTO `json:"proposals"`        // status: open
-	Planned         []PortalFeatureDTO `json:"planned"`          // status: planned
-	InProgress      []PortalFeatureDTO `json:"in_progress"`      // status: in_progress
-	Done            []PortalFeatureDTO `json:"done"`             // status: done
-	RecentlyShipped []PortalFeatureDTO `json:"recently_shipped"` // top 10 done by updated_at
+	OrgSlug    string             `json:"org_slug"`
+	RepoOwner  string             `json:"repo_owner"`
+	RepoName   string             `json:"repo_name"`
+	Requests   []PortalFeatureDTO `json:"requests"`    // build_status: NULL (approved, not yet committed)
+	Pending    []PortalFeatureDTO `json:"pending"`     // build_status: pending (committed, not started)
+	InProgress []PortalFeatureDTO `json:"in_progress"` // build_status: in_progress or stuck
+	Done       []PortalFeatureDTO `json:"done"`        // build_status: done
 }
 
 type PortalService interface {
 	GetPortalPage(ctx context.Context, orgSlug, repoName, voterToken string) (*PortalPageDTO, error)
-	ToggleVote(ctx context.Context, orgSlug, repoName string, featureID int64, voterToken string) (int64, error)
+	ToggleVote(ctx context.Context, orgSlug, repoName string, featureID int64, voterToken, reason string, urgency store.NullVoteUrgencyType) (int64, error)
 	ListComments(ctx context.Context, orgSlug, repoName string, featureID int64) ([]PortalCommentDTO, error)
 	CreateComment(ctx context.Context, orgSlug, repoName string, featureID int64, body, authorName string) (*PortalCommentDTO, error)
 }
@@ -88,8 +88,8 @@ func (s *PortalServiceImpl) GetPortalPage(ctx context.Context, orgSlug, repoName
 
 	const recentlyShippedLimit = 10
 
-	proposals := []PortalFeatureDTO{}
-	planned := []PortalFeatureDTO{}
+	requests := []PortalFeatureDTO{}
+	pending := []PortalFeatureDTO{}
 	inProgress := []PortalFeatureDTO{}
 	done := []PortalFeatureDTO{}
 
@@ -105,14 +105,17 @@ func (s *PortalServiceImpl) GetPortalPage(ctx context.Context, orgSlug, repoName
 
 		dto := portalFeatureFromRow(row, hasVoted)
 
-		switch row.Status {
-		case store.FeatureStatusOpen:
-			proposals = append(proposals, dto)
-		case store.FeatureStatusPlanned:
-			planned = append(planned, dto)
-		case store.FeatureStatusInProgress:
+		if row.ReviewStatus == store.ReviewStatusTypePending {
+			requests = append(requests, dto)
+			continue
+		}
+
+		switch row.BuildStatus.BuildStatusType {
+		case store.BuildStatusTypePending:
+			pending = append(pending, dto)
+		case store.BuildStatusTypeInProgress:
 			inProgress = append(inProgress, dto)
-		case store.FeatureStatusDone:
+		case store.BuildStatusTypeDone:
 			done = append(done, dto)
 		}
 	}
@@ -128,18 +131,17 @@ func (s *PortalServiceImpl) GetPortalPage(ctx context.Context, orgSlug, repoName
 	}
 
 	return &PortalPageDTO{
-		OrgSlug:         orgSlug,
-		RepoOwner:       repo.Owner,
-		RepoName:        repo.Name,
-		Proposals:       proposals,
-		Planned:         planned,
-		InProgress:      inProgress,
-		Done:            done,
-		RecentlyShipped: recentlyShipped,
+		OrgSlug:    orgSlug,
+		RepoOwner:  repo.Owner,
+		RepoName:   repo.Name,
+		Requests:   requests,
+		Pending:    pending,
+		InProgress: inProgress,
+		Done:       done,
 	}, nil
 }
 
-func (s *PortalServiceImpl) ToggleVote(ctx context.Context, orgSlug, repoName string, featureID int64, voterToken string) (int64, error) {
+func (s *PortalServiceImpl) ToggleVote(ctx context.Context, orgSlug, repoName string, featureID int64, voterToken, reason string, urgency store.NullVoteUrgencyType) (int64, error) {
 	repo, err := s.resolvePublicRepo(ctx, orgSlug, repoName)
 	if err != nil {
 		return 0, err
@@ -158,6 +160,8 @@ func (s *PortalServiceImpl) ToggleVote(ctx context.Context, orgSlug, repoName st
 	_, err = s.q.AddFeatureVote(ctx, store.AddFeatureVoteParams{
 		FeatureID:  featureID,
 		VoterToken: voterToken,
+		Reason:     reason,
+		Urgency:    urgency,
 	})
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -247,15 +251,20 @@ func (s *PortalServiceImpl) CreateComment(ctx context.Context, orgSlug, repoName
 }
 
 func portalFeatureFromRow(row store.ListFeaturesForPortalRow, hasVoted bool) PortalFeatureDTO {
+	var buildStatus *store.BuildStatusType
+	if row.BuildStatus.Valid {
+		buildStatus = &row.BuildStatus.BuildStatusType
+	}
 	return PortalFeatureDTO{
-		ID:          row.ID,
-		Title:       row.Title,
-		Description: row.Description,
-		Status:      string(row.Status),
-		Area:        row.Area,
-		VoteCount:   row.VoteCount,
-		HasVoted:    hasVoted,
-		CreatedAt:   row.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:   row.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		ID:           row.ID,
+		Title:        row.Title,
+		Description:  row.Description,
+		ReviewStatus: row.ReviewStatus,
+		BuildStatus:  buildStatus,
+		Area:         row.Area,
+		VoteCount:    row.VoteCount,
+		HasVoted:     hasVoted,
+		CreatedAt:    row.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:    row.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }

@@ -1,29 +1,28 @@
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Handle, Node, Position, type NodeProps } from "@xyflow/react";
 import { ThumbsUp } from "lucide-react";
-import type { Feature, FeatureStatus } from "@/lib/api-schemas";
+import { Feature, type FeatureBuildStatus } from "@/lib/api-schemas";
 
-const STATUS_DOT: Record<FeatureStatus, string> = {
-  open: "bg-zinc-400",
-  planned: "bg-blue-400",
+const STATUS_DOT: Record<NonNullable<FeatureBuildStatus>, string> = {
+  pending: "bg-zinc-400",
   in_progress: "bg-amber-400",
   done: "bg-emerald-400",
   rejected: "bg-red-400",
+  stuck: "bg-red-400",
 };
 
-const STATUS_LABEL: Record<FeatureStatus, string> = {
-  open: "Open",
-  planned: "Planned",
+const STATUS_LABEL: Record<NonNullable<FeatureBuildStatus>, string> = {
+  pending: "Pending",
   in_progress: "In progress",
+  stuck: "Stuck",
   done: "Done",
   rejected: "Rejected",
 };
 
-export type FeatureNodeData = Feature & { selected?: boolean };
+type FeatureNodeProps = NodeProps<Node<Feature>>;
 
-export function FeatureNode({ data, selected }: NodeProps) {
-  const feature = data as FeatureNodeData;
-  const dotClass = STATUS_DOT[feature.status as FeatureStatus] ?? "bg-zinc-400";
-  const statusLabel = STATUS_LABEL[feature.status as FeatureStatus] ?? feature.status;
+export function FeatureNode({ data: feature, selected }: FeatureNodeProps) {
+  const dotClass = STATUS_DOT[feature.build_status ?? "pending"];
+  const statusLabel = STATUS_LABEL[feature.build_status ?? "pending"];
 
   return (
     <div

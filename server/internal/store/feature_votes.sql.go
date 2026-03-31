@@ -7,27 +7,38 @@ package store
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const addFeatureVote = `-- name: AddFeatureVote :one
-INSERT INTO feature_votes (feature_id, voter_token)
-VALUES ($1, $2)
-RETURNING id, feature_id, voter_token, created_at
+INSERT INTO feature_votes (feature_id, voter_token, reason, urgency)
+VALUES ($1, $2, $3, $4)
+RETURNING id, feature_id, voter_token, created_at, reason, urgency
 `
 
 type AddFeatureVoteParams struct {
 	FeatureID  int64
 	VoterToken string
+	Reason     string
+	Urgency    NullVoteUrgencyType
 }
 
 func (q *Queries) AddFeatureVote(ctx context.Context, arg AddFeatureVoteParams) (FeatureVote, error) {
-	row := q.db.QueryRow(ctx, addFeatureVote, arg.FeatureID, arg.VoterToken)
+	row := q.db.QueryRow(ctx, addFeatureVote,
+		arg.FeatureID,
+		arg.VoterToken,
+		arg.Reason,
+		arg.Urgency,
+	)
 	var i FeatureVote
 	err := row.Scan(
 		&i.ID,
 		&i.FeatureID,
 		&i.VoterToken,
 		&i.CreatedAt,
+		&i.Reason,
+		&i.Urgency,
 	)
 	return i, err
 }
@@ -44,7 +55,7 @@ func (q *Queries) CountFeatureVotes(ctx context.Context, featureID int64) (int64
 }
 
 const getFeatureVote = `-- name: GetFeatureVote :one
-SELECT id, feature_id, voter_token, created_at FROM feature_votes
+SELECT id, feature_id, voter_token, created_at, reason, urgency FROM feature_votes
 WHERE feature_id = $1 AND voter_token = $2
 `
 
@@ -61,8 +72,53 @@ func (q *Queries) GetFeatureVote(ctx context.Context, arg GetFeatureVoteParams) 
 		&i.FeatureID,
 		&i.VoterToken,
 		&i.CreatedAt,
+		&i.Reason,
+		&i.Urgency,
 	)
 	return i, err
+}
+
+const listFeatureVotesWithSignals = `-- name: ListFeatureVotesWithSignals :many
+SELECT id, feature_id, voter_token, reason, urgency, created_at
+FROM feature_votes
+WHERE feature_id = $1
+ORDER BY created_at DESC
+`
+
+type ListFeatureVotesWithSignalsRow struct {
+	ID         int64
+	FeatureID  int64
+	VoterToken string
+	Reason     string
+	Urgency    NullVoteUrgencyType
+	CreatedAt  pgtype.Timestamptz
+}
+
+func (q *Queries) ListFeatureVotesWithSignals(ctx context.Context, featureID int64) ([]ListFeatureVotesWithSignalsRow, error) {
+	rows, err := q.db.Query(ctx, listFeatureVotesWithSignals, featureID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFeatureVotesWithSignalsRow
+	for rows.Next() {
+		var i ListFeatureVotesWithSignalsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FeatureID,
+			&i.VoterToken,
+			&i.Reason,
+			&i.Urgency,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const removeFeatureVote = `-- name: RemoveFeatureVote :exec

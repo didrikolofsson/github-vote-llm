@@ -10,19 +10,20 @@ import (
 )
 
 var (
-	ErrFeatureNotFound      = errors.New("feature not found")
-	ErrVoteAlreadyExists    = errors.New("already voted for this feature")
-	ErrDependencyNotFound   = errors.New("dependency not found")
-	ErrDependencyExists     = errors.New("dependency already exists")
+	ErrFeatureNotFound    = errors.New("feature not found")
+	ErrVoteAlreadyExists  = errors.New("already voted for this feature")
+	ErrDependencyNotFound = errors.New("dependency not found")
+	ErrDependencyExists   = errors.New("dependency already exists")
 )
 
 type FeatureDTO struct {
-	ID            int64    `json:"id"`
-	RepositoryID  int64    `json:"repository_id"`
-	Title         string   `json:"title"`
-	Description   string   `json:"description"`
-	Status        string   `json:"status"`
-	Area          *string  `json:"area"`
+	ID            int64   `json:"id"`
+	RepositoryID  int64   `json:"repository_id"`
+	Title         string  `json:"title"`
+	Description   string  `json:"description"`
+	ReviewStatus  string  `json:"review_status"`
+	BuildStatus   *string `json:"build_status"`
+	Area          *string `json:"area"`
 	RoadmapX      *float64 `json:"roadmap_x"`
 	RoadmapY      *float64 `json:"roadmap_y"`
 	RoadmapLocked bool     `json:"roadmap_locked"`
@@ -39,9 +40,18 @@ type FeatureCommentDTO struct {
 	CreatedAt  string `json:"created_at"`
 }
 
+type VoteSignalDTO struct {
+	ID         int64   `json:"id"`
+	FeatureID  int64   `json:"feature_id"`
+	VoterToken string  `json:"voter_token"`
+	Reason     string  `json:"reason"`
+	Urgency    *string `json:"urgency"`
+	CreatedAt  string  `json:"created_at"`
+}
+
 type RoadmapDTO struct {
-	Features     []FeatureDTO         `json:"features"`
-	Dependencies []FeatureDependency  `json:"dependencies"`
+	Features     []FeatureDTO        `json:"features"`
+	Dependencies []FeatureDependency `json:"dependencies"`
 }
 
 type FeatureDependency struct {
@@ -50,10 +60,11 @@ type FeatureDependency struct {
 }
 
 type PatchFeatureParams struct {
-	Title       *string
-	Description *string
-	Status      *store.FeatureStatus
-	Area        *string
+	Title        *string
+	Description  *string
+	ReviewStatus *store.ReviewStatusType
+	BuildStatus  *store.BuildStatusType
+	Area         *string
 }
 
 type FeaturesService interface {
@@ -66,7 +77,8 @@ type FeaturesService interface {
 	GetRoadmap(ctx context.Context, repoID int64) (*RoadmapDTO, error)
 	AddDependency(ctx context.Context, featureID, dependsOn int64) error
 	RemoveDependency(ctx context.Context, featureID, dependsOn int64) error
-	ToggleVote(ctx context.Context, featureID int64, voterToken string) (int64, error)
+	ToggleVote(ctx context.Context, featureID int64, voterToken, reason string, urgency store.NullVoteUrgencyType) (int64, error)
+	ListVoteSignals(ctx context.Context, featureID int64) ([]VoteSignalDTO, error)
 	ListComments(ctx context.Context, featureID int64) ([]FeatureCommentDTO, error)
 	CreateComment(ctx context.Context, featureID int64, body, authorName string) (*FeatureCommentDTO, error)
 }
@@ -116,6 +128,7 @@ func (s *FeaturesServiceImpl) CreateFeature(ctx context.Context, repoID int64, t
 		RepositoryID: repoID,
 		Title:        title,
 		Description:  description,
+		ReviewStatus: store.ReviewStatusTypeApproved,
 	})
 	if err != nil {
 		return nil, err
@@ -132,16 +145,21 @@ func (s *FeaturesServiceImpl) DeleteFeature(ctx context.Context, featureID int64
 }
 
 func (s *FeaturesServiceImpl) PatchFeature(ctx context.Context, featureID int64, p PatchFeatureParams) (*FeatureDTO, error) {
-	nullStatus := store.NullFeatureStatus{}
-	if p.Status != nil {
-		nullStatus = store.NullFeatureStatus{FeatureStatus: *p.Status, Valid: true}
+	nullReviewStatus := store.NullReviewStatusType{}
+	if p.ReviewStatus != nil {
+		nullReviewStatus = store.NullReviewStatusType{ReviewStatusType: *p.ReviewStatus, Valid: true}
+	}
+	nullBuildStatus := store.NullBuildStatusType{}
+	if p.BuildStatus != nil {
+		nullBuildStatus = store.NullBuildStatusType{BuildStatusType: *p.BuildStatus, Valid: true}
 	}
 	f, err := s.q.PatchFeature(ctx, store.PatchFeatureParams{
-		ID:          featureID,
-		Title:       p.Title,
-		Description: p.Description,
-		Status:      nullStatus,
-		Area:        p.Area,
+		ID:           featureID,
+		Title:        p.Title,
+		Description:  p.Description,
+		ReviewStatus: nullReviewStatus,
+		BuildStatus:  nullBuildStatus,
+		Area:         p.Area,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrFeatureNotFound
@@ -206,7 +224,7 @@ func (s *FeaturesServiceImpl) RemoveDependency(ctx context.Context, featureID, d
 	})
 }
 
-func (s *FeaturesServiceImpl) ToggleVote(ctx context.Context, featureID int64, voterToken string) (int64, error) {
+func (s *FeaturesServiceImpl) ToggleVote(ctx context.Context, featureID int64, voterToken, reason string, urgency store.NullVoteUrgencyType) (int64, error) {
 	_, err := s.q.GetFeatureVote(ctx, store.GetFeatureVoteParams{
 		FeatureID:  featureID,
 		VoterToken: voterToken,
@@ -216,6 +234,8 @@ func (s *FeaturesServiceImpl) ToggleVote(ctx context.Context, featureID int64, v
 		if _, err := s.q.AddFeatureVote(ctx, store.AddFeatureVoteParams{
 			FeatureID:  featureID,
 			VoterToken: voterToken,
+			Reason:     reason,
+			Urgency:    urgency,
 		}); err != nil {
 			return 0, err
 		}
@@ -235,6 +255,30 @@ func (s *FeaturesServiceImpl) ToggleVote(ctx context.Context, featureID int64, v
 		return 0, err
 	}
 	return count, nil
+}
+
+func (s *FeaturesServiceImpl) ListVoteSignals(ctx context.Context, featureID int64) ([]VoteSignalDTO, error) {
+	rows, err := s.q.ListFeatureVotesWithSignals(ctx, featureID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]VoteSignalDTO, len(rows))
+	for i, v := range rows {
+		var urgency *string
+		if v.Urgency.Valid {
+			s := string(v.Urgency.VoteUrgencyType)
+			urgency = &s
+		}
+		out[i] = VoteSignalDTO{
+			ID:         v.ID,
+			FeatureID:  v.FeatureID,
+			VoterToken: v.VoterToken,
+			Reason:     v.Reason,
+			Urgency:    urgency,
+			CreatedAt:  v.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		}
+	}
+	return out, nil
 }
 
 func (s *FeaturesServiceImpl) ListComments(ctx context.Context, featureID int64) ([]FeatureCommentDTO, error) {
@@ -267,12 +311,18 @@ func (s *FeaturesServiceImpl) toDTO(ctx context.Context, f store.Feature) (Featu
 	if err != nil {
 		return FeatureDTO{}, err
 	}
+	var buildStatus *string
+	if f.BuildStatus.Valid {
+		s := string(f.BuildStatus.BuildStatusType)
+		buildStatus = &s
+	}
 	return FeatureDTO{
 		ID:            f.ID,
 		RepositoryID:  f.RepositoryID,
 		Title:         f.Title,
 		Description:   f.Description,
-		Status:        string(f.Status),
+		ReviewStatus:  string(f.ReviewStatus),
+		BuildStatus:   buildStatus,
 		Area:          f.Area,
 		RoadmapX:      f.RoadmapX,
 		RoadmapY:      f.RoadmapY,

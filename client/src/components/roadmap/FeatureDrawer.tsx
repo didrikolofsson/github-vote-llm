@@ -7,7 +7,7 @@ import {
 import type {
   Feature,
   FeatureDependency,
-  FeatureStatus,
+  FeatureBuildStatus,
 } from "@/lib/api-schemas";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
@@ -43,11 +43,11 @@ import {
   useComboboxAnchor,
 } from "@/components/ui/combobox";
 
-const STATUS_OPTIONS: { value: FeatureStatus; label: string }[] = [
-  { value: "open", label: "Open" },
-  { value: "planned", label: "Planned" },
+const STATUS_OPTIONS: { value: FeatureBuildStatus; label: string }[] = [
+  { value: "pending", label: "Pending" },
   { value: "in_progress", label: "In progress" },
   { value: "done", label: "Done" },
+  { value: "stuck", label: "Stuck" },
   { value: "rejected", label: "Rejected" },
 ];
 
@@ -157,7 +157,7 @@ export function FeatureDrawer({
     mutationFn: (p: {
       title?: string;
       description?: string;
-      status?: string;
+      build_status?: FeatureBuildStatus;
     }) => updateFeature(repoId, feature!.id, p),
     onSuccess: invalidate,
   });
@@ -264,15 +264,20 @@ export function FeatureDrawer({
               <div className="flex flex-col gap-1.5">
                 <Label className="text-muted-foreground text-xs">Status</Label>
                 <Select
-                  value={feature.status}
-                  onValueChange={(v) => patch.mutate({ status: v })}
+                  value={feature.build_status ?? "pending"}
+                  onValueChange={(v) =>
+                    patch.mutate({ build_status: v as FeatureBuildStatus })
+                  }
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {STATUS_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
+                      <SelectItem
+                        key={opt.value}
+                        value={opt.value ?? "pending"}
+                      >
                         {opt.label}
                       </SelectItem>
                     ))}
