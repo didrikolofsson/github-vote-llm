@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/didrikolofsson/github-vote-llm/internal/hub"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,13 +18,13 @@ var (
 )
 
 type FeatureDTO struct {
-	ID            int64   `json:"id"`
-	RepositoryID  int64   `json:"repository_id"`
-	Title         string  `json:"title"`
-	Description   string  `json:"description"`
-	ReviewStatus  string  `json:"review_status"`
-	BuildStatus   *string `json:"build_status"`
-	Area          *string `json:"area"`
+	ID            int64    `json:"id"`
+	RepositoryID  int64    `json:"repository_id"`
+	Title         string   `json:"title"`
+	Description   string   `json:"description"`
+	ReviewStatus  string   `json:"review_status"`
+	BuildStatus   *string  `json:"build_status"`
+	Area          *string  `json:"area"`
 	RoadmapX      *float64 `json:"roadmap_x"`
 	RoadmapY      *float64 `json:"roadmap_y"`
 	RoadmapLocked bool     `json:"roadmap_locked"`
@@ -86,6 +87,7 @@ type FeaturesService interface {
 type FeaturesServiceImpl struct {
 	db *pgxpool.Pool
 	q  *store.Queries
+	h  hub.Hub
 }
 
 func NewFeaturesService(db *pgxpool.Pool, q *store.Queries) FeaturesService {

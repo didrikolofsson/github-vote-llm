@@ -19,7 +19,8 @@ var (
 
 type RepositoriesService interface {
 	ListForOrganization(ctx context.Context, orgID, userID int64) ([]dtos.Repository, error)
-	GetRepository(ctx context.Context, repoID, userID int64) (*dtos.Repository, error)
+	GetRepositoryByID(ctx context.Context, repoID, userID int64) (*dtos.Repository, error)
+	GetRepositoryByOwnerAndName(ctx context.Context, orgID int64, owner, name string) (*dtos.Repository, error)
 	GetRepositoryMeta(ctx context.Context, repoId int64) (*dtos.RepoMeta, error)
 	AddRepository(ctx context.Context, orgID, userID int64, owner, name string) (*dtos.Repository, error)
 	UpdatePortalPublic(ctx context.Context, repoID, userID int64, public bool) (*dtos.Repository, error)
@@ -50,7 +51,7 @@ func (s *RepositoriesServiceImpl) ListForOrganization(ctx context.Context, orgID
 	return out, nil
 }
 
-func (s *RepositoriesServiceImpl) GetRepository(ctx context.Context, repoID, userID int64) (*dtos.Repository, error) {
+func (s *RepositoriesServiceImpl) GetRepositoryByID(ctx context.Context, repoID, userID int64) (*dtos.Repository, error) {
 	r, err := s.q.GetRepository(ctx, repoID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrRepositoryNotFound
@@ -59,6 +60,22 @@ func (s *RepositoriesServiceImpl) GetRepository(ctx context.Context, repoID, use
 		return nil, err
 	}
 	if err := s.verifyOrgMember(ctx, r.OrganizationID, userID); err != nil {
+		return nil, err
+	}
+	dto := storeRepoToDTO(r)
+	return &dto, nil
+}
+
+func (s *RepositoriesServiceImpl) GetRepositoryByOwnerAndName(ctx context.Context, orgID int64, owner, name string) (*dtos.Repository, error) {
+	r, err := s.q.GetRepositoryByOwnerAndName(ctx, store.GetRepositoryByOwnerAndNameParams{
+		OrganizationID: orgID,
+		Owner:          owner,
+		Name:           name,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrRepositoryNotFound
+	}
+	if err != nil {
 		return nil, err
 	}
 	dto := storeRepoToDTO(r)
