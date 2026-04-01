@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sort"
 
+	"github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -13,45 +14,11 @@ import (
 
 var ErrPortalNotFound = errors.New("portal not found or not public")
 
-// PortalFeatureDTO is the public-facing shape for a feature card.
-type PortalFeatureDTO struct {
-	ID           int64                  `json:"id"`
-	Title        string                 `json:"title"`
-	Description  string                 `json:"description"`
-	ReviewStatus store.ReviewStatusType `json:"review_status"`
-	BuildStatus  *store.BuildStatusType `json:"build_status"`
-	Area         *string                `json:"area"`
-	VoteCount    int64                  `json:"vote_count"`
-	HasVoted     bool                   `json:"has_voted"`
-	CreatedAt    string                 `json:"created_at"`
-	UpdatedAt    string                 `json:"updated_at"`
-}
-
-// PortalCommentDTO is the public-facing shape for a comment.
-type PortalCommentDTO struct {
-	ID         int64  `json:"id"`
-	FeatureID  int64  `json:"feature_id"`
-	Body       string `json:"body"`
-	AuthorName string `json:"author_name"`
-	CreatedAt  string `json:"created_at"`
-}
-
-// PortalPageDTO is the full data payload for a public portal page.
-type PortalPageDTO struct {
-	OrgSlug    string             `json:"org_slug"`
-	RepoOwner  string             `json:"repo_owner"`
-	RepoName   string             `json:"repo_name"`
-	Requests   []PortalFeatureDTO `json:"requests"`    // build_status: NULL (approved, not yet committed)
-	Pending    []PortalFeatureDTO `json:"pending"`     // build_status: pending (committed, not started)
-	InProgress []PortalFeatureDTO `json:"in_progress"` // build_status: in_progress or stuck
-	Done       []PortalFeatureDTO `json:"done"`        // build_status: done
-}
-
 type PortalService interface {
-	GetPortalPage(ctx context.Context, orgSlug, repoName, voterToken string) (*PortalPageDTO, error)
+	GetPortalPage(ctx context.Context, orgSlug, repoName, voterToken string) (*dtos.PortalPageDTO, error)
 	ToggleVote(ctx context.Context, orgSlug, repoName string, featureID int64, voterToken, reason string, urgency store.NullVoteUrgencyType) (int64, error)
-	ListComments(ctx context.Context, orgSlug, repoName string, featureID int64) ([]PortalCommentDTO, error)
-	CreateComment(ctx context.Context, orgSlug, repoName string, featureID int64, body, authorName string) (*PortalCommentDTO, error)
+	ListComments(ctx context.Context, orgSlug, repoName string, featureID int64) ([]dtos.PortalCommentDTO, error)
+	CreateComment(ctx context.Context, orgSlug, repoName string, featureID int64, body, authorName string) (*dtos.PortalCommentDTO, error)
 }
 
 type PortalServiceImpl struct {
@@ -75,7 +42,7 @@ func (s *PortalServiceImpl) resolvePublicRepo(ctx context.Context, orgSlug, repo
 	return repo, err
 }
 
-func (s *PortalServiceImpl) GetPortalPage(ctx context.Context, orgSlug, repoName, voterToken string) (*PortalPageDTO, error) {
+func (s *PortalServiceImpl) GetPortalPage(ctx context.Context, orgSlug, repoName, voterToken string) (*dtos.PortalPageDTO, error) {
 	repo, err := s.resolvePublicRepo(ctx, orgSlug, repoName)
 	if err != nil {
 		return nil, err
@@ -88,10 +55,10 @@ func (s *PortalServiceImpl) GetPortalPage(ctx context.Context, orgSlug, repoName
 
 	const recentlyShippedLimit = 10
 
-	requests := []PortalFeatureDTO{}
-	pending := []PortalFeatureDTO{}
-	inProgress := []PortalFeatureDTO{}
-	done := []PortalFeatureDTO{}
+	requests := []dtos.PortalFeatureDTO{}
+	pending := []dtos.PortalFeatureDTO{}
+	inProgress := []dtos.PortalFeatureDTO{}
+	done := []dtos.PortalFeatureDTO{}
 
 	for _, row := range rows {
 		hasVoted := false
@@ -121,7 +88,7 @@ func (s *PortalServiceImpl) GetPortalPage(ctx context.Context, orgSlug, repoName
 	}
 
 	// Recently shipped: top N done features sorted by updated_at desc.
-	recentlyShipped := make([]PortalFeatureDTO, len(done))
+	recentlyShipped := make([]dtos.PortalFeatureDTO, len(done))
 	copy(recentlyShipped, done)
 	sort.Slice(recentlyShipped, func(i, j int) bool {
 		return recentlyShipped[i].UpdatedAt > recentlyShipped[j].UpdatedAt
@@ -130,10 +97,11 @@ func (s *PortalServiceImpl) GetPortalPage(ctx context.Context, orgSlug, repoName
 		recentlyShipped = recentlyShipped[:recentlyShippedLimit]
 	}
 
-	return &PortalPageDTO{
+	return &dtos.PortalPageDTO{
 		OrgSlug:    orgSlug,
 		RepoOwner:  repo.Owner,
 		RepoName:   repo.Name,
+		RepoID:     repo.ID,
 		Requests:   requests,
 		Pending:    pending,
 		InProgress: inProgress,
@@ -181,7 +149,7 @@ func (s *PortalServiceImpl) ToggleVote(ctx context.Context, orgSlug, repoName st
 	return s.q.CountFeatureVotes(ctx, featureID)
 }
 
-func (s *PortalServiceImpl) ListComments(ctx context.Context, orgSlug, repoName string, featureID int64) ([]PortalCommentDTO, error) {
+func (s *PortalServiceImpl) ListComments(ctx context.Context, orgSlug, repoName string, featureID int64) ([]dtos.PortalCommentDTO, error) {
 	repo, err := s.resolvePublicRepo(ctx, orgSlug, repoName)
 	if err != nil {
 		return nil, err
@@ -200,9 +168,9 @@ func (s *PortalServiceImpl) ListComments(ctx context.Context, orgSlug, repoName 
 		return nil, err
 	}
 
-	out := make([]PortalCommentDTO, len(rows))
+	out := make([]dtos.PortalCommentDTO, len(rows))
 	for i, c := range rows {
-		out[i] = PortalCommentDTO{
+		out[i] = dtos.PortalCommentDTO{
 			ID:         c.ID,
 			FeatureID:  c.FeatureID,
 			Body:       c.Body,
@@ -213,7 +181,7 @@ func (s *PortalServiceImpl) ListComments(ctx context.Context, orgSlug, repoName 
 	return out, nil
 }
 
-func (s *PortalServiceImpl) CreateComment(ctx context.Context, orgSlug, repoName string, featureID int64, body, authorName string) (*PortalCommentDTO, error) {
+func (s *PortalServiceImpl) CreateComment(ctx context.Context, orgSlug, repoName string, featureID int64, body, authorName string) (*dtos.PortalCommentDTO, error) {
 	repo, err := s.resolvePublicRepo(ctx, orgSlug, repoName)
 	if err != nil {
 		return nil, err
@@ -240,7 +208,7 @@ func (s *PortalServiceImpl) CreateComment(ctx context.Context, orgSlug, repoName
 		return nil, err
 	}
 
-	dto := PortalCommentDTO{
+	dto := dtos.PortalCommentDTO{
 		ID:         c.ID,
 		FeatureID:  c.FeatureID,
 		Body:       c.Body,
@@ -250,12 +218,12 @@ func (s *PortalServiceImpl) CreateComment(ctx context.Context, orgSlug, repoName
 	return &dto, nil
 }
 
-func portalFeatureFromRow(row store.ListFeaturesForPortalRow, hasVoted bool) PortalFeatureDTO {
+func portalFeatureFromRow(row store.ListFeaturesForPortalRow, hasVoted bool) dtos.PortalFeatureDTO {
 	var buildStatus *store.BuildStatusType
 	if row.BuildStatus.Valid {
 		buildStatus = &row.BuildStatus.BuildStatusType
 	}
-	return PortalFeatureDTO{
+	return dtos.PortalFeatureDTO{
 		ID:           row.ID,
 		Title:        row.Title,
 		Description:  row.Description,

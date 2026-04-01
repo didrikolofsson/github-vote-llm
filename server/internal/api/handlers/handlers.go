@@ -3,6 +3,7 @@ package handlers
 import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
+	"github.com/didrikolofsson/github-vote-llm/internal/hub"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/oauth2"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
@@ -34,7 +35,8 @@ func NewHandlerCollection(conn *pgxpool.Pool, q *store.Queries, env *config.Envi
 	githubService := services.NewGithubService(conn, q, githubOAuthCfg, env.TOKEN_ENCRYPTION_KEY)
 	reposService := services.NewRepositoriesService(conn, q)
 	membersService := services.NewMembersService(q)
-	featuresService := services.NewFeaturesService(conn, q)
+	portalEventHub := hub.NewHub()
+	featuresService := services.NewFeaturesService(conn, q, portalEventHub)
 	portalService := services.NewPortalService(conn, q)
 
 	return &HandlerCollection{
@@ -45,6 +47,6 @@ func NewHandlerCollection(conn *pgxpool.Pool, q *store.Queries, env *config.Envi
 		Repository:   NewRepositoryHandlers(reposService, apiLogger),
 		Members:      NewMembersHandlers(membersService, apiLogger),
 		Feature:      NewFeatureHandlers(featuresService, apiLogger),
-		Portal:       NewPortalHandlers(portalService, apiLogger),
+		Portal:       NewPortalHandlers(portalService, apiLogger, portalEventHub),
 	}
 }

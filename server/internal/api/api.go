@@ -68,6 +68,7 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	// Public portal routes (no auth)
 	portal := api.Group("/portal/:orgSlug/:repoName")
 	portal.GET("", r.h.Portal.GetPortalPage)
+	portal.GET("/events", r.h.Portal.Subscribe)
 	portal.POST("/features/:featureId/vote", r.h.Portal.ToggleVote)
 	portal.GET("/features/:featureId/comments", r.h.Portal.ListComments)
 	portal.POST("/features/:featureId/comments", r.h.Portal.CreateComment)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api/request"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
+	"github.com/didrikolofsson/github-vote-llm/internal/hub"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
@@ -17,15 +18,17 @@ type PortalHandlers interface {
 	ToggleVote(c *gin.Context)
 	ListComments(c *gin.Context)
 	CreateComment(c *gin.Context)
+	Subscribe(c *gin.Context)
 }
 
 type PortalHandlersImpl struct {
 	s services.PortalService
 	l *logger.Logger
+	h hub.Hub
 }
 
-func NewPortalHandlers(s services.PortalService, l *logger.Logger) PortalHandlers {
-	return &PortalHandlersImpl{s: s, l: l}
+func NewPortalHandlers(s services.PortalService, l *logger.Logger, h hub.Hub) PortalHandlers {
+	return &PortalHandlersImpl{s: s, l: l, h: h}
 }
 
 // GET /v1/portal/:orgSlug/:repoName?voter_token=<uuid>
@@ -149,4 +152,40 @@ func (h *PortalHandlersImpl) CreateComment(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, comment)
+}
+
+// GET /v1/portal/:orgSlug/:repoName/events?repo_id=<id>
+// EventSource is GET-only and cannot send a JSON body; repo_id must be a query param.
+type SubscribeRequestParams struct {
+	RepoID int64 `form:"repo_id" binding:"required"`
+}
+
+func (h *PortalHandlersImpl) Subscribe(c *gin.Context) {
+	var params SubscribeRequestParams
+	if err := c.ShouldBindQuery(&params); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request parameters"})
+		return
+	}
+
+	ch := h.h.Subscribe(params.RepoID)
+	defer h.h.Unsubscribe(params.RepoID, ch)
+
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+
+	c.SSEvent("connected", "")
+	c.Writer.Flush()
+
+	for {
+		select {
+		case <-c.Request.Context().Done():
+			return
+		case <-ch:
+			c.SSEvent("feature_updated", "")
+			c.Writer.Flush()
+		}
+	}
+
 }

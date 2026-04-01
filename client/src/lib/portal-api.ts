@@ -51,6 +51,7 @@ export const PortalPageSchema = z.object({
   org_slug: z.string(),
   repo_owner: z.string(),
   repo_name: z.string(),
+  repo_id: z.number(),
   requests: z.array(PortalFeatureSchema),
   pending: z.array(PortalFeatureSchema),
   in_progress: z.array(PortalFeatureSchema),

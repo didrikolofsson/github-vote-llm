@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { GitFork } from "lucide-react";
@@ -13,6 +13,7 @@ import { ProposalsBoard } from "./ProposalsBoard";
 import { RoadmapColumns } from "./RoadmapColumns";
 import { RecentlyShipped } from "./RecentlyShipped";
 import { FeatureSheet } from "./FeatureSheet";
+import usePortalSSE from "@/hooks/use-portal-sse";
 
 function getOrCreateVoterToken(): string {
   const key = "voter_token";
@@ -39,6 +40,15 @@ export default function PortalPage() {
     queryKey,
     queryFn: () => getPortalPage(orgSlug!, repoName!, voterToken),
     enabled: !!orgSlug && !!repoName,
+  });
+
+  usePortalSSE({
+    orgSlug,
+    repoName,
+    repoId: data?.repo_id, // This should ensure that the SSE is only subscribed when the data is loaded
+    onMessage: (data) => {
+      console.log("Portal SSE message received", data);
+    },
   });
 
   const [selectedFeatureId, setSelectedFeatureId] = useState<number | null>(

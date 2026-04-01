@@ -90,8 +90,8 @@ type FeaturesServiceImpl struct {
 	h  hub.Hub
 }
 
-func NewFeaturesService(db *pgxpool.Pool, q *store.Queries) FeaturesService {
-	return &FeaturesServiceImpl{db: db, q: q}
+func NewFeaturesService(db *pgxpool.Pool, q *store.Queries, h hub.Hub) FeaturesService {
+	return &FeaturesServiceImpl{db: db, q: q, h: h}
 }
 
 func (s *FeaturesServiceImpl) ListFeatures(ctx context.Context, repoID int64) ([]FeatureDTO, error) {
@@ -139,6 +139,9 @@ func (s *FeaturesServiceImpl) CreateFeature(ctx context.Context, repoID int64, t
 	if err != nil {
 		return nil, err
 	}
+
+	s.h.Publish(f.RepositoryID)
+
 	return &dto, nil
 }
 
