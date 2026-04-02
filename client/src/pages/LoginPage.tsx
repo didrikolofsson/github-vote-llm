@@ -1,68 +1,193 @@
-import { useState, type FormEvent } from 'react';
-import { useAuth } from '../lib/auth';
+import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { cn } from "@/lib/utils";
+import { useAuth } from "../lib/auth";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+const loginSchema = z.object({
+  email: z
+    .string()
+    .min(1, "Email is required")
+    .email("Please enter a valid email address"),
+  password: z
+    .string()
+    .min(1, "Password is required")
+    .min(8, "Password must be at least 8 characters"),
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
-  const { login } = useAuth();
-  const [key, setKey] = useState('');
-  const [error, setError] = useState('');
+  const { login, signup, error, clearError } = useAuth();
+  const [mode, setMode] = useState<"login" | "signup">("login");
 
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    const trimmed = key.trim();
-    if (!trimmed) {
-      setError('api key required');
-      return;
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    mode: "onSubmit",
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
+
+  const isSubmitting = form.formState.isSubmitting;
+
+  async function onSubmit(data: LoginFormValues) {
+    clearError();
+    try {
+      if (mode === "signup") {
+        await signup(data.email.trim(), data.password);
+      } else {
+        await login(data.email.trim(), data.password);
+      }
+    } catch {
+      // Error is set in auth context
     }
-    login(trimmed);
+  }
+
+  function handleModeSwitch(e: React.MouseEvent) {
+    e.preventDefault();
+    setMode((m) => (m === "login" ? "signup" : "login"));
+    clearError();
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-      {/* Faint corner decoration */}
-      <div className="fixed top-6 left-6 text-[10px] tracking-[0.3em] text-border uppercase">
-        github-vote-llm
-      </div>
-      <div className="fixed bottom-6 right-6 text-[10px] tracking-[0.2em] text-border uppercase">
-        v1.0
-      </div>
-
-      <div className="animate-slide-up w-[300px]">
-        {/* Wordmark */}
-        <div className="mb-10 text-center">
-          <div className="text-[11px] tracking-[0.45em] uppercase text-emerald-400 font-semibold mb-2">
-            vote-llm
-          </div>
-          <div className="w-6 h-px bg-gray-800 mx-auto" />
-          <div className="mt-2 text-[10px] tracking-[0.2em] text-gray-500 uppercase">
-            authentication required
-          </div>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-          <div>
-            <input
-              type="password"
-              value={key}
-              onChange={(e) => {
-                setKey(e.target.value);
-                setError('');
-              }}
-              placeholder="X-Api-Key"
-              autoFocus
-              className="w-full py-2.5 px-3 bg-gray-900 border border-gray-800 text-gray-100 text-xs tracking-[0.04em] outline-none rounded-none box-border transition-[border-color] duration-150 focus:border-gray-500"
-            />
-            {error && (
-              <p className="mt-1.5 text-[11px] text-red tracking-[0.04em]">{error}</p>
-            )}
-          </div>
-          <button
-            type="submit"
-            className="w-full py-2.5 px-3 bg-emerald-400 text-gray-950 text-[11px] tracking-[0.2em] uppercase font-semibold border-none cursor-pointer rounded-none transition-opacity duration-150 hover:opacity-[0.85]"
-          >
-            Continue
-          </button>
-        </form>
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className={cn("flex flex-col w-full max-w-sm animate-slide-up")}>
+        <Card className="px-4 py-4 sm:px-6 sm:py-6">
+          <CardHeader className="gap-2">
+            <CardTitle>
+              {mode === "signup"
+                ? "Create your account"
+                : "Login to your account"}
+            </CardTitle>
+            <CardDescription>
+              {mode === "signup"
+                ? "Enter your email below to create your account"
+                : "Enter your email below to login to your account"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <form onSubmit={form.handleSubmit(onSubmit)}>
+              <FieldGroup className="gap-6">
+                <Controller
+                  name="email"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="email">Email</FieldLabel>
+                      <Input
+                        {...field}
+                        id="email"
+                        type="email"
+                        placeholder="m@example.com"
+                        autoComplete="email"
+                        aria-invalid={fieldState.invalid}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          clearError();
+                        }}
+                      />
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
+                <Controller
+                  name="password"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="password">Password</FieldLabel>
+                      <Input
+                        {...field}
+                        id="password"
+                        type="password"
+                        autoComplete={
+                          mode === "signup"
+                            ? "new-password"
+                            : "current-password"
+                        }
+                        aria-invalid={fieldState.invalid}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          clearError();
+                        }}
+                      />
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+                <Field>
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full mt-2"
+                  >
+                    {isSubmitting
+                      ? "…"
+                      : mode === "signup"
+                        ? "Sign up"
+                        : "Login"}
+                  </Button>
+                  <FieldDescription className="text-center pt-2">
+                    {mode === "login" ? (
+                      <>
+                        Don&apos;t have an account?{" "}
+                        <Button
+                          type="button"
+                          variant="link"
+                          onClick={handleModeSwitch}
+                          className="h-auto p-0 text-sm"
+                        >
+                          Sign up
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        Already have an account?{" "}
+                        <Button
+                          type="button"
+                          variant="link"
+                          onClick={handleModeSwitch}
+                          className="h-auto p-0 text-sm"
+                        >
+                          Sign in
+                        </Button>
+                      </>
+                    )}
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

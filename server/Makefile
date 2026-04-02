@@ -1,6 +1,4 @@
 dev:
-	trap 'kill 0' EXIT; \
-	ngrok http 8080 --log=stdout > /dev/null & \
 	air
 
 build:
@@ -12,6 +10,9 @@ test:
 generate:
 	sqlc generate -f db/sqlc.yaml
 
+generate-pkce:
+	node scripts/pkce.js
+
 migrate-new:
 	migrate create -ext sql -dir db/migrations -seq $(name)
 
@@ -20,6 +21,3 @@ migrate-up:
 
 migrate-down:
 	migrate -source file://db/migrations -database $$DATABASE_URL down 1
-
-lint-openapi:
-	npx --yes @redocly/cli@latest lint openapi.yaml

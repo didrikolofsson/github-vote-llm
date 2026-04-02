@@ -5,66 +5,283 @@
 package store
 
 import (
+	"database/sql/driver"
+	"fmt"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Execution struct {
-	ID          int64
-	Owner       string
-	Repo        string
-	IssueNumber int32
-	Status      string
-	Branch      *string
-	PrUrl       *string
-	Error       *string
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+type BuildStatusType string
+
+const (
+	BuildStatusTypePending    BuildStatusType = "pending"
+	BuildStatusTypeInProgress BuildStatusType = "in_progress"
+	BuildStatusTypeStuck      BuildStatusType = "stuck"
+	BuildStatusTypeDone       BuildStatusType = "done"
+	BuildStatusTypeRejected   BuildStatusType = "rejected"
+)
+
+func (e *BuildStatusType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = BuildStatusType(s)
+	case string:
+		*e = BuildStatusType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for BuildStatusType: %T", src)
+	}
+	return nil
 }
 
-type IssueVote struct {
-	ID          int64
-	Owner       string
-	Repo        string
-	IssueNumber int32
-	VoteCount   int32
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+type NullBuildStatusType struct {
+	BuildStatusType BuildStatusType
+	Valid           bool // Valid is true if BuildStatusType is not NULL
 }
 
-type Proposal struct {
-	ID          int64
-	Owner       string
-	Repo        string
-	Title       string
-	Description string
-	VoteCount   int32
-	Status      string
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+// Scan implements the Scanner interface.
+func (ns *NullBuildStatusType) Scan(value interface{}) error {
+	if value == nil {
+		ns.BuildStatusType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.BuildStatusType.Scan(value)
 }
 
-type ProposalComment struct {
+// Value implements the driver Valuer interface.
+func (ns NullBuildStatusType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.BuildStatusType), nil
+}
+
+type OrganizationMemberRole string
+
+const (
+	OrganizationMemberRoleOwner  OrganizationMemberRole = "owner"
+	OrganizationMemberRoleMember OrganizationMemberRole = "member"
+)
+
+func (e *OrganizationMemberRole) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = OrganizationMemberRole(s)
+	case string:
+		*e = OrganizationMemberRole(s)
+	default:
+		return fmt.Errorf("unsupported scan type for OrganizationMemberRole: %T", src)
+	}
+	return nil
+}
+
+type NullOrganizationMemberRole struct {
+	OrganizationMemberRole OrganizationMemberRole
+	Valid                  bool // Valid is true if OrganizationMemberRole is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullOrganizationMemberRole) Scan(value interface{}) error {
+	if value == nil {
+		ns.OrganizationMemberRole, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.OrganizationMemberRole.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullOrganizationMemberRole) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.OrganizationMemberRole), nil
+}
+
+type ReviewStatusType string
+
+const (
+	ReviewStatusTypePending  ReviewStatusType = "pending"
+	ReviewStatusTypeApproved ReviewStatusType = "approved"
+	ReviewStatusTypeRejected ReviewStatusType = "rejected"
+)
+
+func (e *ReviewStatusType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ReviewStatusType(s)
+	case string:
+		*e = ReviewStatusType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ReviewStatusType: %T", src)
+	}
+	return nil
+}
+
+type NullReviewStatusType struct {
+	ReviewStatusType ReviewStatusType
+	Valid            bool // Valid is true if ReviewStatusType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullReviewStatusType) Scan(value interface{}) error {
+	if value == nil {
+		ns.ReviewStatusType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ReviewStatusType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullReviewStatusType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ReviewStatusType), nil
+}
+
+type VoteUrgencyType string
+
+const (
+	VoteUrgencyTypeBlocking   VoteUrgencyType = "blocking"
+	VoteUrgencyTypeImportant  VoteUrgencyType = "important"
+	VoteUrgencyTypeNiceToHave VoteUrgencyType = "nice_to_have"
+)
+
+func (e *VoteUrgencyType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = VoteUrgencyType(s)
+	case string:
+		*e = VoteUrgencyType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for VoteUrgencyType: %T", src)
+	}
+	return nil
+}
+
+type NullVoteUrgencyType struct {
+	VoteUrgencyType VoteUrgencyType
+	Valid           bool // Valid is true if VoteUrgencyType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullVoteUrgencyType) Scan(value interface{}) error {
+	if value == nil {
+		ns.VoteUrgencyType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.VoteUrgencyType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullVoteUrgencyType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.VoteUrgencyType), nil
+}
+
+type AuthorizationCode struct {
+	ID            int64
+	Code          string
+	UserID        int64
+	CodeChallenge string
+	RedirectUri   string
+	Used          bool
+	ExpiresAt     pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamptz
+}
+
+type Feature struct {
+	ID            int64
+	RepositoryID  int64
+	Title         string
+	Description   string
+	Area          *string
+	RoadmapX      *float64
+	RoadmapY      *float64
+	RoadmapLocked bool
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	ReviewStatus  ReviewStatusType
+	BuildStatus   NullBuildStatusType
+}
+
+type FeatureComment struct {
 	ID         int64
-	ProposalID int64
+	FeatureID  int64
 	Body       string
 	AuthorName string
 	CreatedAt  pgtype.Timestamptz
 }
 
-type RepoConfig struct {
-	ID                  int64
-	Owner               string
-	Repo                string
-	LabelApproved       *string
-	LabelInProgress     *string
-	LabelDone           *string
-	LabelFailed         *string
-	LabelFeatureRequest *string
-	VoteThreshold       *int32
-	TimeoutMinutes      *int32
-	MaxBudgetUsd        pgtype.Numeric
-	AnthropicApiKey     *string
-	CreatedAt           pgtype.Timestamptz
-	UpdatedAt           pgtype.Timestamptz
-	IsBoardPublic       bool
+type FeatureDependency struct {
+	FeatureID int64
+	DependsOn int64
+}
+
+type FeatureVote struct {
+	ID         int64
+	FeatureID  int64
+	VoterToken string
+	CreatedAt  pgtype.Timestamptz
+	Reason     string
+	Urgency    NullVoteUrgencyType
+}
+
+type GithubConnection struct {
+	UserID               int64
+	AccessTokenEncrypted string
+	RefreshToken         *string
+	TokenExpiresAt       pgtype.Timestamptz
+	GithubUserID         *int64
+	GithubLogin          *string
+	CreatedAt            pgtype.Timestamptz
+	UpdatedAt            pgtype.Timestamptz
+}
+
+type Organization struct {
+	ID        int64
+	Name      string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+	Slug      string
+}
+
+type OrganizationMember struct {
+	OrganizationID int64
+	UserID         int64
+	Role           OrganizationMemberRole
+	CreatedAt      pgtype.Timestamptz
+}
+
+type RefreshToken struct {
+	ID        int64
+	TokenHash string
+	UserID    int64
+	ExpiresAt pgtype.Timestamptz
+	CreatedAt pgtype.Timestamptz
+}
+
+type Repository struct {
+	ID             int64
+	OrganizationID int64
+	Owner          string
+	Name           string
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	PortalPublic   bool
+	Description    *string
+}
+
+type User struct {
+	ID        int64
+	Email     string
+	Password  string
+	Username  *string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }

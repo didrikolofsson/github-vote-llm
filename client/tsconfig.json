@@ -32,7 +32,6 @@
   },
   "include": [
     "src",
-    "vite.config.ts",
-    "openapi-ts.config.ts"
+    "vite.config.ts"
   ]
 }

@@ -3,11 +3,9 @@ package main
 import (
 	"context"
 	"log"
-	"os"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api"
-	apihandlers "github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
-	api_services "github.com/didrikolofsson/github-vote-llm/internal/api/services"
+	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
@@ -28,39 +26,27 @@ func main() {
 		log.Fatalf("failed to load environment: %v", err)
 	}
 
-	appLog := logger.New()
-	defer appLog.Sync()
+	appLogger := logger.New().Named("main")
+	defer appLogger.Sync()
 
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, env.DATABASE_URL)
+	conn, err := pgxpool.New(ctx, env.DATABASE_URL)
 	if err != nil {
-		log.Fatalf("failed to create database pool: %v", err)
-	}
-	defer pool.Close()
-
-	if err := pool.Ping(ctx); err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
+	defer conn.Close()
 
-	router := gin.New()
-	router.SetTrustedProxies(nil)
+	apiLogger := logger.New().Named("api")
+	defer apiLogger.Sync()
 
-	st := store.NewPostgresStore(pool)
+	q := store.New(conn)
+	handlers := handlers.NewHandlerCollection(conn, q, env, apiLogger)
 
-	runsService := api_services.NewRunsService(st)
-	reposService := api_services.NewReposService(st)
-	runsHandler := apihandlers.NewRunsHandler(runsService)
-	reposHandler := apihandlers.NewReposHandler(reposService)
-	boardHandler := apihandlers.NewBoardHandler(st)
+	router := api.NewRestApiRouter(
+		env,
+		apiLogger,
+		handlers,
+	).Create()
 
-	apiHandlers := apihandlers.New(boardHandler, runsHandler, reposHandler)
-
-	api.SetupPublicBoardRouter(router, apiHandlers)
-	api.SetupAPIRouter(router, appLog, apiHandlers, env)
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	router.Run(":" + port)
+	router.Run(":" + env.PORT)
 }
