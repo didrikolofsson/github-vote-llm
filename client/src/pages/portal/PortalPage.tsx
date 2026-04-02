@@ -13,7 +13,7 @@ import { ProposalsBoard } from "./ProposalsBoard";
 import { RoadmapColumns } from "./RoadmapColumns";
 import { RecentlyShipped } from "./RecentlyShipped";
 import { FeatureSheet } from "./FeatureSheet";
-import usePortalSSE from "@/hooks/use-portal-sse";
+import useSSE from "@/hooks/use-portal-sse";
 
 function getOrCreateVoterToken(): string {
   const key = "voter_token";
@@ -42,13 +42,10 @@ export default function PortalPage() {
     enabled: !!orgSlug && !!repoName,
   });
 
-  usePortalSSE({
-    orgSlug,
-    repoName,
-    repoId: data?.repo_id,
-    onMessage: (_event) => {
-      queryClient.refetchQueries({ queryKey });
-    },
+  useSSE({
+    url: `/v1/portal/${orgSlug}/${repoName}/events?repo_id=${data?.repo_id}`,
+    onMessage: () => queryClient.refetchQueries({ queryKey }),
+    enabled: !!orgSlug && !!repoName && !!data?.repo_id,
   });
 
   const [selectedFeatureId, setSelectedFeatureId] = useState<number | null>(

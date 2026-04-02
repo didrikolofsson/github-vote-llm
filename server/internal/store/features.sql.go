@@ -12,8 +12,14 @@ import (
 )
 
 const createFeature = `-- name: CreateFeature :one
-INSERT INTO features (repository_id, title, description, review_status)
-VALUES ($1, $2, $3, $4)
+INSERT INTO features (
+    repository_id,
+    title,
+    description,
+    review_status,
+    build_status
+  )
+VALUES ($1, $2, $3, $4, $5)
 RETURNING id, repository_id, title, description, area, roadmap_x, roadmap_y, roadmap_locked, created_at, updated_at, review_status, build_status
 `
 
@@ -22,6 +28,7 @@ type CreateFeatureParams struct {
 	Title        string
 	Description  string
 	ReviewStatus ReviewStatusType
+	BuildStatus  NullBuildStatusType
 }
 
 func (q *Queries) CreateFeature(ctx context.Context, arg CreateFeatureParams) (Feature, error) {
@@ -30,6 +37,7 @@ func (q *Queries) CreateFeature(ctx context.Context, arg CreateFeatureParams) (F
 		arg.Title,
 		arg.Description,
 		arg.ReviewStatus,
+		arg.BuildStatus,
 	)
 	var i Feature
 	err := row.Scan(
@@ -191,8 +199,14 @@ const patchFeature = `-- name: PatchFeature :one
 UPDATE features
 SET title = COALESCE($1::text, title),
   description = COALESCE($2::text, description),
-  review_status = COALESCE($3::review_status_type, review_status),
-  build_status = COALESCE($4::build_status_type, build_status),
+  review_status = COALESCE(
+    $3::review_status_type,
+    review_status
+  ),
+  build_status = COALESCE(
+    $4::build_status_type,
+    build_status
+  ),
   area = COALESCE($5::text, area),
   updated_at = now()
 WHERE id = $6

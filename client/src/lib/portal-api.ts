@@ -77,10 +77,8 @@ export async function getPortalPage(
   repoName: string,
   voterToken: string,
 ): Promise<PortalPage> {
-  const params = voterToken
-    ? `?voter_token=${encodeURIComponent(voterToken)}`
-    : "";
-  const data = await portalRequest<unknown>(`/${orgSlug}/${repoName}${params}`);
+  const params = `?voter_token=${encodeURIComponent(voterToken)}`;
+  const data = await portalRequest(`/${orgSlug}/${repoName}${params}`);
   return PortalPageSchema.parse(data);
 }
 

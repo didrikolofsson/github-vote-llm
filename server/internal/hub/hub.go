@@ -2,40 +2,42 @@ package hub
 
 import "sync"
 
+type EventType string
+
 const (
-	EventFeatureCreated = "feature_created"
-	EventFeatureUpdated = "feature_updated"
+	EventFeatureCreated EventType = "feature_created"
+	EventFeatureUpdated EventType = "feature_updated"
 )
 
 type Hub interface {
-	Subscribe(repoID int64) chan string
-	Unsubscribe(repoID int64, ch chan string)
-	Publish(repoID int64, event string)
+	Subscribe(repoID int64) chan EventType
+	Unsubscribe(repoID int64, ch chan EventType)
+	Publish(repoID int64, event EventType)
 }
 
 type HubImpl struct {
 	mu      sync.RWMutex
-	clients map[int64]map[chan string]struct{}
+	clients map[int64]map[chan EventType]struct{}
 }
 
 func NewHub() Hub {
 	return &HubImpl{
-		clients: make(map[int64]map[chan string]struct{}),
+		clients: make(map[int64]map[chan EventType]struct{}),
 	}
 }
 
-func (h *HubImpl) Subscribe(repoID int64) chan string {
-	ch := make(chan string, 1)
+func (h *HubImpl) Subscribe(repoID int64) chan EventType {
+	ch := make(chan EventType, 1)
 	h.mu.Lock()
 	if h.clients[repoID] == nil {
-		h.clients[repoID] = make(map[chan string]struct{})
+		h.clients[repoID] = make(map[chan EventType]struct{})
 	}
 	h.clients[repoID][ch] = struct{}{}
 	h.mu.Unlock()
 	return ch
 }
 
-func (h *HubImpl) Unsubscribe(repoID int64, ch chan string) {
+func (h *HubImpl) Unsubscribe(repoID int64, ch chan EventType) {
 	h.mu.Lock()
 	if m, ok := h.clients[repoID]; ok {
 		delete(m, ch)
@@ -46,7 +48,7 @@ func (h *HubImpl) Unsubscribe(repoID int64, ch chan string) {
 	h.mu.Unlock()
 }
 
-func (h *HubImpl) Publish(repoID int64, event string) {
+func (h *HubImpl) Publish(repoID int64, event EventType) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for ch := range h.clients[repoID] {

@@ -131,6 +131,10 @@ func (s *FeaturesServiceImpl) CreateFeature(ctx context.Context, repoID int64, t
 		Title:        title,
 		Description:  description,
 		ReviewStatus: store.ReviewStatusTypeApproved,
+		BuildStatus: store.NullBuildStatusType{
+			BuildStatusType: store.BuildStatusTypePending,
+			Valid:           true,
+		},
 	})
 	if err != nil {
 		return nil, err
@@ -139,9 +143,7 @@ func (s *FeaturesServiceImpl) CreateFeature(ctx context.Context, repoID int64, t
 	if err != nil {
 		return nil, err
 	}
-
 	s.h.Publish(f.RepositoryID, hub.EventFeatureCreated)
-
 	return &dto, nil
 }
 
@@ -205,7 +207,6 @@ func (s *FeaturesServiceImpl) UpdatePosition(ctx context.Context, featureID int6
 	if err != nil {
 		return nil, err
 	}
-	s.h.Publish(f.RepositoryID, hub.EventFeatureUpdated)
 	return &dto, nil
 }
 
@@ -232,7 +233,6 @@ func (s *FeaturesServiceImpl) AddDependency(ctx context.Context, featureID, depe
 	}); err != nil {
 		return err
 	}
-	s.publishForFeature(ctx, featureID, hub.EventFeatureUpdated)
 	return nil
 }
 
@@ -243,7 +243,6 @@ func (s *FeaturesServiceImpl) RemoveDependency(ctx context.Context, featureID, d
 	}); err != nil {
 		return err
 	}
-	s.publishForFeature(ctx, featureID, hub.EventFeatureUpdated)
 	return nil
 }
 
@@ -277,7 +276,7 @@ func (s *FeaturesServiceImpl) ToggleVote(ctx context.Context, featureID int64, v
 	if err != nil {
 		return 0, err
 	}
-	s.publishForFeature(ctx, featureID, hub.EventFeatureUpdated)
+	s.h.Publish(featureID, hub.EventFeatureUpdated)
 	return count, nil
 }
 
@@ -327,16 +326,8 @@ func (s *FeaturesServiceImpl) CreateComment(ctx context.Context, featureID int64
 		return nil, err
 	}
 	dto := storeCommentToDTO(c)
-	s.publishForFeature(ctx, featureID, hub.EventFeatureUpdated)
+	s.h.Publish(featureID, hub.EventFeatureUpdated)
 	return &dto, nil
-}
-
-func (s *FeaturesServiceImpl) publishForFeature(ctx context.Context, featureID int64, event string) {
-	f, err := s.q.GetFeature(ctx, featureID)
-	if err != nil {
-		return
-	}
-	s.h.Publish(f.RepositoryID, event)
 }
 
 func (s *FeaturesServiceImpl) toDTO(ctx context.Context, f store.Feature) (FeatureDTO, error) {

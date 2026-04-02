@@ -1,33 +1,31 @@
 import { useEffect } from "react";
 
-type UsePortalSSEProps = {
-  orgSlug: string | null | undefined;
-  repoName: string | null | undefined;
-  repoId: number | null | undefined;
+type UseSSEProps = {
+  url: string;
   onMessage: (event: MessageEvent) => void;
+  eventName?: string;
+  enabled?: boolean;
 };
 
-const usePortalSSE = ({
-  orgSlug,
-  repoName,
-  repoId,
+const useSSE = ({
+  url,
   onMessage,
-}: UsePortalSSEProps) => {
+  eventName = "event",
+  enabled = true,
+}: UseSSEProps) => {
   useEffect(() => {
-    if (!orgSlug || !repoName || !repoId) return;
+    if (!enabled) return;
 
-    const portalSSEUrl = `/v1/portal/${orgSlug}/${repoName}/events?repo_id=${repoId}`;
-    const eventSource = new EventSource(portalSSEUrl);
-
-    eventSource.addEventListener("event", onMessage);
+    const eventSource = new EventSource(url);
+    eventSource.addEventListener(eventName, onMessage);
     eventSource.onerror = (event) =>
-      console.error("Error in portal SSE", event);
+      console.error("Server-Sent Event error:", event);
 
     return () => {
-      eventSource.removeEventListener("event", onMessage);
+      eventSource.removeEventListener(eventName, onMessage);
       eventSource.close();
     };
-  }, [orgSlug, repoName, repoId]);
+  }, [url]);
 };
 
-export default usePortalSSE;
+export default useSSE;

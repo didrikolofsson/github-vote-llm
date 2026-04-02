@@ -56,8 +56,8 @@ export function RoadmapColumns({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Column
-          title="Planned"
-          dot="bg-violet-400"
+          title="Pending"
+          dot="bg-zinc-400"
           features={pending}
           onSelect={onSelect}
         />
