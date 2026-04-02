@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { GitFork } from "lucide-react";
@@ -45,9 +45,9 @@ export default function PortalPage() {
   usePortalSSE({
     orgSlug,
     repoName,
-    repoId: data?.repo_id, // This should ensure that the SSE is only subscribed when the data is loaded
-    onMessage: (data) => {
-      console.log("Portal SSE message received", data);
+    repoId: data?.repo_id,
+    onMessage: (_event) => {
+      queryClient.refetchQueries({ queryKey });
     },
   });
 

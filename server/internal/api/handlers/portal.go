@@ -175,15 +175,15 @@ func (h *PortalHandlersImpl) Subscribe(c *gin.Context) {
 	c.Header("Connection", "keep-alive")
 	c.Header("X-Accel-Buffering", "no")
 
-	c.SSEvent("connected", "")
+	c.SSEvent("event", "connected")
 	c.Writer.Flush()
 
 	for {
 		select {
 		case <-c.Request.Context().Done():
 			return
-		case <-ch:
-			c.SSEvent("feature_updated", "")
+		case msg := <-ch:
+			c.SSEvent("event", msg)
 			c.Writer.Flush()
 		}
 	}

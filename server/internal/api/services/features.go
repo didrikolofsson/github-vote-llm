@@ -140,13 +140,21 @@ func (s *FeaturesServiceImpl) CreateFeature(ctx context.Context, repoID int64, t
 		return nil, err
 	}
 
-	s.h.Publish(f.RepositoryID)
+	s.h.Publish(f.RepositoryID, hub.EventFeatureCreated)
 
 	return &dto, nil
 }
 
 func (s *FeaturesServiceImpl) DeleteFeature(ctx context.Context, featureID int64) error {
-	return s.q.DeleteFeature(ctx, featureID)
+	f, err := s.q.GetFeature(ctx, featureID)
+	if err != nil {
+		return err
+	}
+	if err := s.q.DeleteFeature(ctx, featureID); err != nil {
+		return err
+	}
+	s.h.Publish(f.RepositoryID, hub.EventFeatureUpdated)
+	return nil
 }
 
 func (s *FeaturesServiceImpl) PatchFeature(ctx context.Context, featureID int64, p PatchFeatureParams) (*FeatureDTO, error) {
@@ -176,6 +184,7 @@ func (s *FeaturesServiceImpl) PatchFeature(ctx context.Context, featureID int64,
 	if err != nil {
 		return nil, err
 	}
+	s.h.Publish(f.RepositoryID, hub.EventFeatureUpdated)
 	return &dto, nil
 }
 
@@ -196,6 +205,7 @@ func (s *FeaturesServiceImpl) UpdatePosition(ctx context.Context, featureID int6
 	if err != nil {
 		return nil, err
 	}
+	s.h.Publish(f.RepositoryID, hub.EventFeatureUpdated)
 	return &dto, nil
 }
 
@@ -216,17 +226,25 @@ func (s *FeaturesServiceImpl) GetRoadmap(ctx context.Context, repoID int64) (*Ro
 }
 
 func (s *FeaturesServiceImpl) AddDependency(ctx context.Context, featureID, dependsOn int64) error {
-	return s.q.AddFeatureDependency(ctx, store.AddFeatureDependencyParams{
+	if err := s.q.AddFeatureDependency(ctx, store.AddFeatureDependencyParams{
 		FeatureID: featureID,
 		DependsOn: dependsOn,
-	})
+	}); err != nil {
+		return err
+	}
+	s.publishForFeature(ctx, featureID, hub.EventFeatureUpdated)
+	return nil
 }
 
 func (s *FeaturesServiceImpl) RemoveDependency(ctx context.Context, featureID, dependsOn int64) error {
-	return s.q.RemoveFeatureDependency(ctx, store.RemoveFeatureDependencyParams{
+	if err := s.q.RemoveFeatureDependency(ctx, store.RemoveFeatureDependencyParams{
 		FeatureID: featureID,
 		DependsOn: dependsOn,
-	})
+	}); err != nil {
+		return err
+	}
+	s.publishForFeature(ctx, featureID, hub.EventFeatureUpdated)
+	return nil
 }
 
 func (s *FeaturesServiceImpl) ToggleVote(ctx context.Context, featureID int64, voterToken, reason string, urgency store.NullVoteUrgencyType) (int64, error) {
@@ -259,6 +277,7 @@ func (s *FeaturesServiceImpl) ToggleVote(ctx context.Context, featureID int64, v
 	if err != nil {
 		return 0, err
 	}
+	s.publishForFeature(ctx, featureID, hub.EventFeatureUpdated)
 	return count, nil
 }
 
@@ -308,7 +327,16 @@ func (s *FeaturesServiceImpl) CreateComment(ctx context.Context, featureID int64
 		return nil, err
 	}
 	dto := storeCommentToDTO(c)
+	s.publishForFeature(ctx, featureID, hub.EventFeatureUpdated)
 	return &dto, nil
+}
+
+func (s *FeaturesServiceImpl) publishForFeature(ctx context.Context, featureID int64, event string) {
+	f, err := s.q.GetFeature(ctx, featureID)
+	if err != nil {
+		return
+	}
+	s.h.Publish(f.RepositoryID, event)
 }
 
 func (s *FeaturesServiceImpl) toDTO(ctx context.Context, f store.Feature) (FeatureDTO, error) {
