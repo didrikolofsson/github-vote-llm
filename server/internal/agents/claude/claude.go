@@ -26,7 +26,7 @@ func NewClaudeRunner(apiKey, workDir string) *ClaudeRunner {
 }
 
 func (r *ClaudeRunner) Run(ctx context.Context, prompt string) (<-chan agents.Event, error) {
-	cmd := exec.CommandContext(ctx, "claude", "p", prompt)
+	cmd := exec.CommandContext(ctx, "claude", "-p", prompt)
 	cmd.Env = append(os.Environ(), "ANTHROPIC_API_KEY="+r.apiKey)
 	cmd.Dir = r.workDir
 

@@ -7,6 +7,7 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
+	"github.com/didrikolofsson/github-vote-llm/internal/jobs"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
@@ -42,10 +43,15 @@ func main() {
 	q := store.New(conn)
 	handlers := handlers.NewHandlerCollection(conn, q, env, apiLogger)
 
+	riverClient := jobs.InitJobSchedulerClient(ctx, conn)
+	riverClient.Start(ctx)
+	defer riverClient.Stop(ctx)
+
 	router := api.NewRestApiRouter(
 		env,
 		apiLogger,
 		handlers,
+		riverClient,
 	).Create()
 
 	router.Run(":" + env.PORT)

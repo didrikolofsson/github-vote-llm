@@ -56,6 +56,50 @@ func (ns NullBuildStatusType) Value() (driver.Value, error) {
 	return string(ns.BuildStatusType), nil
 }
 
+type FeatureRunStatus string
+
+const (
+	FeatureRunStatusPending   FeatureRunStatus = "pending"
+	FeatureRunStatusRunning   FeatureRunStatus = "running"
+	FeatureRunStatusCompleted FeatureRunStatus = "completed"
+	FeatureRunStatusFailed    FeatureRunStatus = "failed"
+)
+
+func (e *FeatureRunStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = FeatureRunStatus(s)
+	case string:
+		*e = FeatureRunStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for FeatureRunStatus: %T", src)
+	}
+	return nil
+}
+
+type NullFeatureRunStatus struct {
+	FeatureRunStatus FeatureRunStatus
+	Valid            bool // Valid is true if FeatureRunStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullFeatureRunStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.FeatureRunStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.FeatureRunStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullFeatureRunStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.FeatureRunStatus), nil
+}
+
 type OrganizationMemberRole string
 
 const (
@@ -221,6 +265,16 @@ type FeatureComment struct {
 type FeatureDependency struct {
 	FeatureID int64
 	DependsOn int64
+}
+
+type FeatureRun struct {
+	ID              int64
+	Prompt          string
+	FeatureID       int64
+	Status          FeatureRunStatus
+	CreatedByUserID int64
+	CreatedAt       pgtype.Timestamptz
+	CompletedAt     pgtype.Timestamptz
 }
 
 type FeatureVote struct {

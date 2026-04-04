@@ -8,6 +8,8 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
+	"github.com/riverqueue/river"
 )
 
 type RestApiRouter interface {
@@ -18,17 +20,20 @@ type RestApiRouterImpl struct {
 	env    *config.Environment
 	logger *logger.Logger
 	h      *handlers.HandlerCollection
+	rc     *river.Client[pgx.Tx]
 }
 
 func NewRestApiRouter(
 	env *config.Environment,
 	logger *logger.Logger,
 	h *handlers.HandlerCollection,
+	rc *river.Client[pgx.Tx],
 ) RestApiRouter {
 	return &RestApiRouterImpl{
 		env:    env,
 		logger: logger,
 		h:      h,
+		rc:     rc,
 	}
 }
 

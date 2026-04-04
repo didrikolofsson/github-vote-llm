@@ -79,6 +79,7 @@ func (h *GithubHandlersImpl) Authorize(c *gin.Context) {
 }
 
 func (h *GithubHandlersImpl) Callback(c *gin.Context) {
+	fontendUrl := strings.TrimSuffix(h.env.FRONTEND_URL, "/")
 	if ghErr := c.Query("error"); ghErr != "" {
 		desc := c.Query("error_description")
 		q := url.Values{}
@@ -86,7 +87,7 @@ func (h *GithubHandlersImpl) Callback(c *gin.Context) {
 		if desc != "" {
 			q.Set("error_description", desc)
 		}
-		loc := strings.TrimSuffix(h.env.FRONTEND_URL, "/") + "?" + q.Encode()
+		loc := fontendUrl + "?" + q.Encode()
 		c.Redirect(http.StatusTemporaryRedirect, loc)
 		return
 	}
@@ -121,8 +122,8 @@ func (h *GithubHandlersImpl) Callback(c *gin.Context) {
 		return
 	}
 
-	success := strings.TrimSuffix(h.env.FRONTEND_URL, "/") + "/settings?github_connected=1"
-	c.Redirect(http.StatusTemporaryRedirect, success)
+	successUrl := fontendUrl + "/settings?github_connected=1"
+	c.Redirect(http.StatusTemporaryRedirect, successUrl)
 }
 
 func (h *GithubHandlersImpl) Status(c *gin.Context) {
