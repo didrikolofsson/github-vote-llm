@@ -1,4 +1,4 @@
-package jobs
+package river
 
 import (
 	"context"
@@ -12,10 +12,8 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 )
 
-func InitJobSchedulerClient(ctx context.Context, pool *pgxpool.Pool) *river.Client[pgx.Tx] {
-	workers := river.NewWorkers()
-	river.AddWorker(workers, &RunAgentWorker{})
-
+func NewRiverClient(ctx context.Context, pool *pgxpool.Pool) *river.Client[pgx.Tx] {
+	workers := NewWorkersCollection()
 	riverClient, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Logger: slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 			Level: slog.LevelDebug,
@@ -28,6 +26,5 @@ func InitJobSchedulerClient(ctx context.Context, pool *pgxpool.Pool) *river.Clie
 	if err != nil {
 		log.Fatalf("failed to create river client: %v", err)
 	}
-
 	return riverClient
 }
