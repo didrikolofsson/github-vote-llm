@@ -9,7 +9,9 @@ import (
 )
 
 type RunClaudeArgs struct {
-	Prompt string `json:"prompt"`
+	Prompt          string `json:"prompt"`
+	FeatureID       int64  `json:"feature_id"`
+	CreatedByUserID int64  `json:"created_by_user_id"`
 }
 
 func (RunClaudeArgs) Kind() string {

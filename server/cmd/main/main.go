@@ -41,9 +41,8 @@ func main() {
 	defer apiLogger.Sync()
 
 	q := store.New(pool)
-	handlers := handlers.NewHandlerCollection(pool, q, env, apiLogger)
-
 	rc := river.NewRiverClient(ctx, pool)
+	handlers := handlers.NewHandlerCollection(pool, q, env, apiLogger, rc)
 	rc.Start(ctx)
 	defer rc.Stop(ctx)
 

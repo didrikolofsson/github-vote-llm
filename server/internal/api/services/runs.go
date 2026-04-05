@@ -5,8 +5,11 @@ import (
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
 	api_errors "github.com/didrikolofsson/github-vote-llm/internal/api/errors"
+	"github.com/didrikolofsson/github-vote-llm/internal/river/jobs"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
 )
 
 type CreateRunBody struct {
@@ -21,10 +24,11 @@ type RunService interface {
 type RunServiceImpl struct {
 	db *pgxpool.Pool
 	q  *store.Queries
+	rc *river.Client[pgx.Tx]
 }
 
-func NewRunService(db *pgxpool.Pool, q *store.Queries) RunService {
-	return &RunServiceImpl{db: db, q: q}
+func NewRunService(db *pgxpool.Pool, q *store.Queries, rc *river.Client[pgx.Tx]) RunService {
+	return &RunServiceImpl{db: db, q: q, rc: rc}
 }
 
 func storeToRunDTO(run store.FeatureRun) *dtos.RunDTO {
@@ -43,19 +47,40 @@ func (s *RunServiceImpl) CreateRun(
 	featureID,
 	createdByUserID int64,
 ) (*dtos.RunDTO, error) {
-	run, err := s.q.CreateRun(ctx, store.CreateRunParams{
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.q.WithTx(tx)
+
+	run, err := qtx.CreateRun(ctx, store.CreateRunParams{
 		Prompt:          prompt,
 		FeatureID:       featureID,
 		Status:          store.FeatureRunStatusPending,
 		CreatedByUserID: createdByUserID,
 	})
-
 	if err != nil {
 		if api_errors.IsForeignKeyViolationErr(err) {
 			return nil, ErrFeatureNotFound
 		}
 		return nil, err
 	}
+
+	_, err = s.rc.InsertTx(ctx, tx, &jobs.RunClaudeArgs{
+		Prompt:          prompt,
+		FeatureID:       featureID,
+		CreatedByUserID: createdByUserID,
+	}, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
 	dto := storeToRunDTO(run)
 	return dto, nil
 }

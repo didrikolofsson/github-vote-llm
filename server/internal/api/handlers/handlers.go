@@ -7,7 +7,9 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/oauth2"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
 )
 
 // Add new handlers here. Fields are exported so package api can wire routes.
@@ -23,7 +25,7 @@ type HandlerCollection struct {
 	Portal       PortalHandlers
 }
 
-func NewHandlerCollection(conn *pgxpool.Pool, q *store.Queries, env *config.Environment, apiLogger *logger.Logger) *HandlerCollection {
+func NewHandlerCollection(conn *pgxpool.Pool, q *store.Queries, env *config.Environment, apiLogger *logger.Logger, rc *river.Client[pgx.Tx]) *HandlerCollection {
 	githubOAuthCfg := oauth2.NewGitHubOAuthConfig(
 		env.GITHUB_CLIENT_ID,
 		env.GITHUB_CLIENT_SECRET,
@@ -36,7 +38,7 @@ func NewHandlerCollection(conn *pgxpool.Pool, q *store.Queries, env *config.Envi
 	githubService := services.NewGithubService(conn, q, githubOAuthCfg, env.TOKEN_ENCRYPTION_KEY)
 	reposService := services.NewRepositoriesService(conn, q)
 	membersService := services.NewMembersService(q)
-	runService := services.NewRunService(conn, q)
+	runService := services.NewRunService(conn, q, rc)
 	portalEventHub := hub.NewHub()
 	featuresService := services.NewFeaturesService(conn, q, portalEventHub)
 	portalService := services.NewPortalService(conn, q)
