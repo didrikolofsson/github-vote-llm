@@ -27,13 +27,11 @@ func NewRestApiRouter(
 	env *config.Environment,
 	logger *logger.Logger,
 	h *handlers.HandlerCollection,
-	rc *river.Client[pgx.Tx],
 ) RestApiRouter {
 	return &RestApiRouterImpl{
 		env:    env,
 		logger: logger,
 		h:      h,
-		rc:     rc,
 	}
 }
 

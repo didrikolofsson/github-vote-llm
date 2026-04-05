@@ -3,23 +3,27 @@ package services
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
 	"github.com/didrikolofsson/github-vote-llm/internal/encryption"
-	"github.com/didrikolofsson/github-vote-llm/internal/oauth2"
+	gh "github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
-	"github.com/google/go-github/v68/github"
+	"github.com/google/go-github/v84/github"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	oa "golang.org/x/oauth2"
+	"golang.org/x/oauth2"
 )
 
 var ErrGitHubNotConnected = errors.New("github: no connection found for user")
+
+type GithubServiceConfigParams struct {
+	TokenEncryptionKey string
+	Config             oauth2.Config
+}
 
 type GithubService interface {
 	Callback(ctx context.Context, code string, userID int64, tokenEncryptionKey string) error
@@ -29,34 +33,32 @@ type GithubService interface {
 }
 
 type GithubServiceImpl struct {
-	db                 *pgxpool.Pool
-	q                  *store.Queries
-	config             *oa.Config
-	tokenEncryptionKey string
+	db *pgxpool.Pool
+	q  *store.Queries
+	c  *oauth2.Config
+	p  *GithubServiceConfigParams
 }
 
-func NewGithubService(db *pgxpool.Pool, q *store.Queries, config *oa.Config, tokenEncryptionKey string) GithubService {
-	return &GithubServiceImpl{db: db, q: q, config: config, tokenEncryptionKey: tokenEncryptionKey}
+func NewGithubService(db *pgxpool.Pool, q *store.Queries, p *GithubServiceConfigParams) GithubService {
+	return &GithubServiceImpl{db: db, q: q, p: p}
 }
 
 func (s *GithubServiceImpl) Callback(ctx context.Context, code string, userID int64, tokenEncryptionKey string) error {
-	token, err := s.config.Exchange(ctx, code)
+	token, err := s.c.Exchange(ctx, code)
 	if err != nil {
 		return err
 	}
 
-	encryptedAccessTokenBytes, err := encryption.Encrypt([]byte(token.AccessToken), tokenEncryptionKey)
+	encryptedAccessToken, err := encryption.Encrypt([]byte(token.AccessToken), tokenEncryptionKey)
 	if err != nil {
 		return err
 	}
-	encryptedAccessToken := base64.StdEncoding.EncodeToString(encryptedAccessTokenBytes)
 	var encryptedRefreshToken *string
 	if token.RefreshToken != "" {
-		encryptedRefreshBytes, encErr := encryption.Encrypt([]byte(token.RefreshToken), tokenEncryptionKey)
+		encoded, encErr := encryption.Encrypt([]byte(token.RefreshToken), tokenEncryptionKey)
 		if encErr != nil {
 			return encErr
 		}
-		encoded := base64.StdEncoding.EncodeToString(encryptedRefreshBytes)
 		encryptedRefreshToken = &encoded
 	}
 	var expiresAt pgtype.Timestamptz
@@ -84,10 +86,16 @@ func (s *GithubServiceImpl) Status(ctx context.Context, userID int64) (*GithubUs
 		}
 		return nil, err
 	}
-
-	ts := oauth2.NewGithubTokenSource(userID, s.q, s.config, s.tokenEncryptionKey)
-	httpClient := oa.NewClient(ctx, ts)
-	user, _, err := github.NewClient(httpClient).Users.Get(ctx, "")
+	client := gh.NewGithubClientByUserID(
+		gh.NewGithubClientByUserIDParams{
+			Context:            ctx,
+			Queries:            s.q,
+			Config:             s.c,
+			UserID:             userID,
+			TokenEncryptionKey: s.p.TokenEncryptionKey,
+		},
+	)
+	user, _, err := client.Users.Get(ctx, "")
 	if err != nil {
 		return nil, err
 	}
@@ -106,10 +114,8 @@ func (s *GithubServiceImpl) Disconnect(ctx context.Context, userID int64) error 
 	// Best-effort: revoke the token on GitHub so the OAuth consent screen
 	// appears again on the next connect attempt.
 	if err == nil {
-		if tokenBytes, decErr := base64.StdEncoding.DecodeString(conn.AccessTokenEncrypted); decErr == nil {
-			if decrypted, decErr := encryption.Decrypt(tokenBytes, s.tokenEncryptionKey); decErr == nil {
-				_ = s.revokeGitHubToken(ctx, string(decrypted))
-			}
+		if decrypted, decErr := encryption.Decrypt(conn.AccessTokenEncrypted, s.p.TokenEncryptionKey); decErr == nil {
+			_ = s.revokeGitHubToken(ctx, string(decrypted))
 		}
 	}
 
@@ -122,12 +128,12 @@ func (s *GithubServiceImpl) revokeGitHubToken(ctx context.Context, accessToken s
 		return err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete,
-		"https://api.github.com/applications/"+s.config.ClientID+"/token",
+		"https://api.github.com/applications/"+s.p.Config.ClientID+"/token",
 		bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
-	req.SetBasicAuth(s.config.ClientID, s.config.ClientSecret)
+	req.SetBasicAuth(s.p.Config.ClientID, s.p.Config.ClientSecret)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/vnd.github+json")
 	resp, err := http.DefaultClient.Do(req)
@@ -146,11 +152,17 @@ func (s *GithubServiceImpl) ListReposByAuthenticatedUser(ctx context.Context, us
 		return nil, false, err
 	}
 
-	ts := oauth2.NewGithubTokenSource(userID, s.q, s.config, s.tokenEncryptionKey)
-	httpClient := oa.NewClient(ctx, ts)
-	githubClient := github.NewClient(httpClient)
+	client := gh.NewGithubClientByUserID(
+		gh.NewGithubClientByUserIDParams{
+			Context:            ctx,
+			Queries:            s.q,
+			Config:             s.c,
+			UserID:             userID,
+			TokenEncryptionKey: s.p.TokenEncryptionKey,
+		},
+	)
 
-	repos, resp, err := githubClient.Repositories.ListByAuthenticatedUser(ctx, &github.RepositoryListByAuthenticatedUserOptions{
+	repos, resp, err := client.Repositories.ListByAuthenticatedUser(ctx, &github.RepositoryListByAuthenticatedUserOptions{
 		ListOptions: github.ListOptions{Page: page, PerPage: 30},
 	})
 	if err != nil {

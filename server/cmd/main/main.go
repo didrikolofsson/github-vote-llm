@@ -7,6 +7,7 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
+	"github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/river"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
@@ -42,7 +43,24 @@ func main() {
 
 	q := store.New(pool)
 	rc := river.NewRiverClient(ctx, pool)
-	handlers := handlers.NewHandlerCollection(pool, q, env, apiLogger, rc)
+	githubOAuthCfg := github.NewGithubOAuthConfig(
+		github.NewGithubOAuthConfigParams{
+			ClientID:     env.GITHUB_CLIENT_ID,
+			ClientSecret: env.GITHUB_CLIENT_SECRET,
+			RedirectURL:  env.SERVER_URL + "/v1/github/callback",
+		},
+	)
+
+	handlers := handlers.NewHandlerCollection(
+		handlers.NewHandlerCollectionParams{
+			Conn:           pool,
+			Queries:        q,
+			Env:            env,
+			ApiLogger:      apiLogger,
+			RiverClient:    rc,
+			GithubOAuthCfg: githubOAuthCfg,
+		},
+	)
 	rc.Start(ctx)
 	defer rc.Stop(ctx)
 
@@ -50,7 +68,6 @@ func main() {
 		env,
 		apiLogger,
 		handlers,
-		rc,
 	).Create()
 
 	router.Run(":" + env.PORT)

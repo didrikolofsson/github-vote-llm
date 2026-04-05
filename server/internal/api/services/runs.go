@@ -68,9 +68,9 @@ func (s *RunServiceImpl) CreateRun(
 	}
 
 	_, err = s.rc.InsertTx(ctx, tx, &jobs.RunClaudeArgs{
-		Prompt:          prompt,
-		FeatureID:       featureID,
-		CreatedByUserID: createdByUserID,
+		Prompt:    prompt,
+		FeatureID: featureID,
+		UserID:    createdByUserID,
 	}, nil)
 
 	if err != nil {
