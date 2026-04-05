@@ -37,3 +37,8 @@ WHERE id = $1;
 SELECT COUNT(*) AS count
 FROM features
 WHERE repository_id = $1;
+-- name: GetRepositoryByFeatureID :one
+SELECT r.*
+FROM repositories r
+JOIN features f ON f.repository_id = r.id
+WHERE f.id = $1;

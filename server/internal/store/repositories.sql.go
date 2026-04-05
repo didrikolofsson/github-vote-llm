@@ -89,6 +89,29 @@ func (q *Queries) GetRepository(ctx context.Context, id int64) (Repository, erro
 	return i, err
 }
 
+const getRepositoryByFeatureID = `-- name: GetRepositoryByFeatureID :one
+SELECT r.id, r.organization_id, r.owner, r.name, r.created_at, r.updated_at, r.portal_public, r.description
+FROM repositories r
+JOIN features f ON f.repository_id = r.id
+WHERE f.id = $1
+`
+
+func (q *Queries) GetRepositoryByFeatureID(ctx context.Context, id int64) (Repository, error) {
+	row := q.db.QueryRow(ctx, getRepositoryByFeatureID, id)
+	var i Repository
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.Owner,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PortalPublic,
+		&i.Description,
+	)
+	return i, err
+}
+
 const getRepositoryByOwnerAndName = `-- name: GetRepositoryByOwnerAndName :one
 SELECT id, organization_id, owner, name, created_at, updated_at, portal_public, description
 FROM repositories

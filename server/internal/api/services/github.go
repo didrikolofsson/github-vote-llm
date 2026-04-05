@@ -35,7 +35,6 @@ type GithubService interface {
 type GithubServiceImpl struct {
 	db *pgxpool.Pool
 	q  *store.Queries
-	c  *oauth2.Config
 	p  *GithubServiceConfigParams
 }
 
@@ -44,7 +43,7 @@ func NewGithubService(db *pgxpool.Pool, q *store.Queries, p *GithubServiceConfig
 }
 
 func (s *GithubServiceImpl) Callback(ctx context.Context, code string, userID int64, tokenEncryptionKey string) error {
-	token, err := s.c.Exchange(ctx, code)
+	token, err := s.p.Config.Exchange(ctx, code)
 	if err != nil {
 		return err
 	}
@@ -90,7 +89,7 @@ func (s *GithubServiceImpl) Status(ctx context.Context, userID int64) (*GithubUs
 		gh.NewGithubClientByUserIDParams{
 			Context:            ctx,
 			Queries:            s.q,
-			Config:             s.c,
+			Config:             &s.p.Config,
 			UserID:             userID,
 			TokenEncryptionKey: s.p.TokenEncryptionKey,
 		},
@@ -156,7 +155,7 @@ func (s *GithubServiceImpl) ListReposByAuthenticatedUser(ctx context.Context, us
 		gh.NewGithubClientByUserIDParams{
 			Context:            ctx,
 			Queries:            s.q,
-			Config:             s.c,
+			Config:             &s.p.Config,
 			UserID:             userID,
 			TokenEncryptionKey: s.p.TokenEncryptionKey,
 		},

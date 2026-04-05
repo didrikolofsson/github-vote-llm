@@ -18,10 +18,15 @@ type ClaudeRunner struct {
 	workDir string
 }
 
-func NewClaudeRunner(apiKey, workDir string) *ClaudeRunner {
+type NewClaudeRunnerParams struct {
+	ApiKey  string
+	WorkDir string
+}
+
+func NewClaudeRunner(p NewClaudeRunnerParams) *ClaudeRunner {
 	return &ClaudeRunner{
-		apiKey:  apiKey,
-		workDir: workDir,
+		apiKey:  p.ApiKey,
+		workDir: p.WorkDir,
 	}
 }
 

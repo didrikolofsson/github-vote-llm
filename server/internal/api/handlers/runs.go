@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
+	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/gin-gonic/gin"
 )
 
@@ -13,11 +14,12 @@ type RunsHandlers interface {
 }
 
 type RunsHandlersImpl struct {
-	s services.RunService
+	s   services.RunService
+	env *config.Environment
 }
 
-func NewRunsHandlers(s services.RunService) RunsHandlers {
-	return &RunsHandlersImpl{s: s}
+func NewRunsHandlers(s services.RunService, env *config.Environment) RunsHandlers {
+	return &RunsHandlersImpl{s: s, env: env}
 }
 
 type createRunBody struct {
@@ -40,7 +42,13 @@ func (h *RunsHandlersImpl) Create(c *gin.Context) {
 		return
 	}
 
-	run, err := h.s.CreateRun(c.Request.Context(), body.Prompt, featureID, body.CreatedByUserID)
+	run, err := h.s.CreateRun(c.Request.Context(), services.CreateRunParams{
+		Prompt:    body.Prompt,
+		FeatureID: featureID,
+		UserID:    body.CreatedByUserID,
+		Env:       h.env,
+		ApiKey:    h.env.ANTHROPIC_API_KEY,
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return

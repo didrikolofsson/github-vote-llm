@@ -55,7 +55,7 @@ func NewHandlerCollection(p NewHandlerCollectionParams) *HandlerCollection {
 		Organization: NewOrganizationHandlers(organizationService, p.ApiLogger),
 		Github:       NewGithubHandlers(p.Env, githubService),
 		Repository:   NewRepositoryHandlers(reposService, p.ApiLogger),
-		Run:          NewRunsHandlers(runService),
+		Run:          NewRunsHandlers(runService, p.Env),
 		Members:      NewMembersHandlers(membersService, p.ApiLogger),
 		Feature:      NewFeatureHandlers(featuresService, p.ApiLogger),
 		Portal:       NewPortalHandlers(portalService, p.ApiLogger, portalEventHub),

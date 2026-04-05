@@ -42,7 +42,6 @@ func main() {
 	defer apiLogger.Sync()
 
 	q := store.New(pool)
-	rc := river.NewRiverClient(ctx, pool)
 	githubOAuthCfg := github.NewGithubOAuthConfig(
 		github.NewGithubOAuthConfigParams{
 			ClientID:     env.GITHUB_CLIENT_ID,
@@ -50,6 +49,7 @@ func main() {
 			RedirectURL:  env.SERVER_URL + "/v1/github/callback",
 		},
 	)
+	rc := river.NewRiverClient(ctx, pool, q, githubOAuthCfg)
 
 	handlers := handlers.NewHandlerCollection(
 		handlers.NewHandlerCollectionParams{
