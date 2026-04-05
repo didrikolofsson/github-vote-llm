@@ -17,6 +17,7 @@ type HandlerCollection struct {
 	Organization OrganizationHandlers
 	Github       GithubHandlers
 	Repository   RepositoryHandlers
+	Run          RunsHandlers
 	Members      MembersHandlers
 	Feature      FeatureHandlers
 	Portal       PortalHandlers
@@ -35,6 +36,7 @@ func NewHandlerCollection(conn *pgxpool.Pool, q *store.Queries, env *config.Envi
 	githubService := services.NewGithubService(conn, q, githubOAuthCfg, env.TOKEN_ENCRYPTION_KEY)
 	reposService := services.NewRepositoriesService(conn, q)
 	membersService := services.NewMembersService(q)
+	runService := services.NewRunService(conn, q)
 	portalEventHub := hub.NewHub()
 	featuresService := services.NewFeaturesService(conn, q, portalEventHub)
 	portalService := services.NewPortalService(conn, q)
@@ -45,6 +47,7 @@ func NewHandlerCollection(conn *pgxpool.Pool, q *store.Queries, env *config.Envi
 		Organization: NewOrganizationHandlers(organizationService, apiLogger),
 		Github:       NewGithubHandlers(env, githubService),
 		Repository:   NewRepositoryHandlers(reposService, apiLogger),
+		Run:          NewRunsHandlers(runService),
 		Members:      NewMembersHandlers(membersService, apiLogger),
 		Feature:      NewFeatureHandlers(featuresService, apiLogger),
 		Portal:       NewPortalHandlers(portalService, apiLogger, portalEventHub),

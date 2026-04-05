@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
+	api_errors "github.com/didrikolofsson/github-vote-llm/internal/api/errors"
 	"github.com/didrikolofsson/github-vote-llm/internal/helpers"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"
@@ -48,8 +49,7 @@ func (s *UserServiceImpl) SignupUser(ctx context.Context, params *store.CreateUs
 	})
 
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		if api_errors.IsAlreadyExistsErr(err) {
 			return nil, ErrUserExists
 		}
 		return nil, err

@@ -1,5 +1,6 @@
 import {
   addFeatureDependency,
+  createRun as createFeatureRun,
   deleteFeature,
   removeFeatureDependency,
   updateFeature,
@@ -42,6 +43,8 @@ import {
   ComboboxValue,
   useComboboxAnchor,
 } from "@/components/ui/combobox";
+import { userInfo } from "os";
+import { useAuth } from "@/lib/auth";
 
 const STATUS_OPTIONS: { value: FeatureBuildStatus; label: string }[] = [
   { value: "pending", label: "Pending" },
@@ -117,6 +120,7 @@ export function FeatureDrawer({
   dependencies,
   onClose,
 }: FeatureDrawerProps) {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
@@ -181,6 +185,15 @@ export function FeatureDrawer({
       onClose();
     },
   });
+
+  type CreateFeatureRunParams = {
+    prompt: string;
+    featureId: number;
+    createdByUserId: number;
+  }
+  const createRun = useMutation({
+    mutationFn: ({ prompt, featureId, createdByUserId }: CreateFeatureRunParams) => createFeatureRun(prompt, featureId, createdByUserId),
+  })
 
   function handleDescriptionBlur() {
     if (descriptionDraft !== description) {
@@ -301,6 +314,11 @@ export function FeatureDrawer({
             </div>
 
             <DrawerFooter>
+              <Button onClick={() => createRun.mutate({
+                prompt: "Create a new implementation for the feature",
+                featureId: feature.id,
+                createdByUserId: user?.id!,
+              })}>Create run</Button>
               <Button
                 variant="destructive"
                 size="sm"

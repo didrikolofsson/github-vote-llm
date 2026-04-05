@@ -176,6 +176,7 @@ import {
   RepositoryListResponseSchema,
   RepositorySchema,
   RoadmapSchema,
+  RunSchema,
 } from "./api-schemas";
 
 export type {
@@ -188,7 +189,7 @@ export type {
   OrganizationMemberRole,
   OrganizationWithMembers,
   Repository,
-  Roadmap,
+  Roadmap
 } from "./api-schemas";
 
 export const UserProfileSchema = z.object({
@@ -556,4 +557,12 @@ export async function createFeatureComment(
       schema: FeatureCommentSchema,
     },
   );
+}
+
+export async function createRun(prompt: string, featureId: number, createdByUserId: number) {
+  return requestWithRefresh(`/features/${featureId}/runs`, {
+    method: "POST",
+    body: JSON.stringify({ prompt, created_by_user_id: createdByUserId }),
+    schema: RunSchema,
+  });
 }

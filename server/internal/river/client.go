@@ -16,7 +16,7 @@ func NewRiverClient(ctx context.Context, pool *pgxpool.Pool) *river.Client[pgx.T
 	workers := NewWorkersCollection()
 	riverClient, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Logger: slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-			Level: slog.LevelDebug,
+			Level: slog.LevelInfo,
 		})),
 		Queues: map[string]river.QueueConfig{
 			river.QueueDefault: {MaxWorkers: 100},

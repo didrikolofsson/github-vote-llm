@@ -4,18 +4,18 @@ import (
 	"context"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
+	api_errors "github.com/didrikolofsson/github-vote-llm/internal/api/errors"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type CreateRunParams struct {
-	Prompt          string `json:"promp"`
-	FeatureID       int64  `json:"feature_id"`
+type CreateRunBody struct {
+	Prompt          string `json:"prompt"`
 	CreatedByUserID int64  `json:"created_by_user_id"`
 }
 
 type RunService interface {
-	CreateRun(ctx context.Context, params CreateRunParams) (*dtos.RunDTO, error)
+	CreateRun(ctx context.Context, prompt string, featureID, createdByUserID int64) (*dtos.RunDTO, error)
 }
 
 type RunServiceImpl struct {
@@ -37,16 +37,23 @@ func storeToRunDTO(run store.FeatureRun) *dtos.RunDTO {
 }
 
 // Create new run db record
-func (s *RunServiceImpl) CreateRun(ctx context.Context, params CreateRunParams) (*dtos.RunDTO, error) {
-
+func (s *RunServiceImpl) CreateRun(
+	ctx context.Context,
+	prompt string,
+	featureID,
+	createdByUserID int64,
+) (*dtos.RunDTO, error) {
 	run, err := s.q.CreateRun(ctx, store.CreateRunParams{
-		Prompt:          params.Prompt,
-		FeatureID:       params.FeatureID,
+		Prompt:          prompt,
+		FeatureID:       featureID,
 		Status:          store.FeatureRunStatusPending,
-		CreatedByUserID: params.CreatedByUserID,
+		CreatedByUserID: createdByUserID,
 	})
 
 	if err != nil {
+		if api_errors.IsForeignKeyViolationErr(err) {
+			return nil, ErrFeatureNotFound
+		}
 		return nil, err
 	}
 	dto := storeToRunDTO(run)

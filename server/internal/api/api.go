@@ -117,5 +117,9 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 	repos.DELETE("/features/:featureId/dependencies/:dependsOn", r.h.Feature.RemoveDependency)
 	repos.PATCH("/portal", r.h.Repository.UpdatePortalVisibility)
 
+	// Feature runs
+	featureRuns := api.Group("/features/:featureId/runs")
+	featureRuns.POST("", r.h.Run.Create)
+
 	return router
 }

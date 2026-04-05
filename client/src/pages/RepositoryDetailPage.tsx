@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RoadmapCanvas } from "@/components/roadmap/RoadmapCanvas";
 import {
+  createRun as createFeatureRun,
   listMyOrganizations,
   listOrgRepositories,
   removeRepository,
@@ -31,6 +32,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 export default function RepositoryDetailPage() {
+  const queryClient = useQueryClient();
   const { repoId } = useParams<{ repoId: string }>();
   const navigate = useNavigate();
   const repoIdNum = repoId ? parseInt(repoId, 10) : undefined;
@@ -49,8 +51,6 @@ export default function RepositoryDetailPage() {
   });
   const repoData = repos.find((r) => r.id === repoIdNum);
 
-  const queryClient = useQueryClient();
-
   const removeRepo = useMutation({
     mutationFn: () => removeRepository(orgId!, repoIdNum!),
     onSuccess: () => {
@@ -60,6 +60,15 @@ export default function RepositoryDetailPage() {
       navigate("/repositories");
     },
   });
+
+  type CreateFeatureRunParams = {
+    prompt: string;
+    featureId: number;
+    createdByUserId: number;
+  }
+  const createRun = useMutation({
+    mutationFn: ({ prompt, featureId, createdByUserId }: CreateFeatureRunParams) => createFeatureRun(prompt, featureId, createdByUserId),
+  })
 
   const togglePortal = useMutation({
     mutationFn: (portalPublic: boolean) =>
@@ -169,6 +178,11 @@ export default function RepositoryDetailPage() {
           value="runs"
           className="px-8 pb-8 mt-6 w-full max-w-[1280px] mx-auto"
         >
+          <Button onClick={() => createRun.mutate({
+            prompt: "Create a new implementation for the feature",
+            featureId: 1,
+            createdByUserId: 1,
+          })}>Create run</Button>
           <div className="py-16 text-center rounded-lg bg-muted/50">
             <p className="text-sm font-medium text-muted-foreground">
               No implementations yet

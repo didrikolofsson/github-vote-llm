@@ -101,6 +101,18 @@ export const RoadmapSchema = z.object({
   dependencies: z.array(FeatureDependencySchema),
 });
 
+// ─── Run ──────────────────────────────────────────────────────────────────────
+const RunStatusSchema = z.enum(["pending", "running", "completed", "failed"]);
+export const RunSchema = z.object({
+  id: z.number(),
+  prompt: z.string(),
+  feature_id: z.number(),
+  status: RunStatusSchema,
+  created_by_user_id: z.number(),
+  created_at: z.string().datetime(),
+  completed_at: z.string().datetime().nullable(),
+})
+
 // ─── Exported types ───────────────────────────────────────────────────────────
 
 export type Organization = z.infer<typeof OrganizationSchema>;
@@ -111,6 +123,7 @@ export type OrganizationMemberRole = z.infer<
   typeof OrganizationMemberRoleSchema
 >;
 export type Repository = z.infer<typeof RepositorySchema>;
+export type RunStatus = z.infer<typeof RunStatusSchema>;
 export type Feature = z.infer<typeof FeatureSchema>;
 export type FeatureReviewStatus = z.infer<typeof FeatureReviewStatusSchema>;
 export type FeatureBuildStatus = z.infer<typeof FeatureBuildStatusSchema>;
