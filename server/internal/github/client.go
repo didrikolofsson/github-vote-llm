@@ -9,31 +9,19 @@ import (
 	"github.com/google/go-github/v84/github"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/oauth2"
-	goagh "golang.org/x/oauth2/github"
+	gh "golang.org/x/oauth2/github"
 )
 
-// NewOAuthConfig builds the standard GitHub OAuth2 client config (authorize + token URLs, scopes).
-type NewGithubOAuthConfigParams struct {
-	ClientID     string
-	ClientSecret string
-	RedirectURL  string
-}
-
-func NewGithubOAuthConfig(p NewGithubOAuthConfigParams) *oauth2.Config {
+func NewGithubOAuthConfig(clientID, clientSecret, redirectURL string) *oauth2.Config {
 	return &oauth2.Config{
-		ClientID:     p.ClientID,
-		ClientSecret: p.ClientSecret,
-		Endpoint:     goagh.Endpoint,
-		RedirectURL:  p.RedirectURL,
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		Endpoint:     gh.Endpoint,
+		RedirectURL:  redirectURL,
 		Scopes:       []string{"user:email"},
 	}
 }
 
-// GithubTokenSource implements [oauth2.TokenSource]: it reads the user's tokens
-// from the DB, refreshes via [oauth2.Config.TokenSource] when expired, and
-// persists the new ciphertext. ctx is used for DB I/O and the refresh HTTP
-// request; construct a new GithubTokenSource per inbound request (see
-// [oauth2.NewClient]) so cancellation propagates.
 type GithubTokenSource struct {
 	ctx                context.Context
 	userID             int64
@@ -139,23 +127,21 @@ func (ts *GithubTokenSource) Token() (*oauth2.Token, error) {
 	return token, nil
 }
 
-type NewGithubClientByUserIDParams struct {
-	Context            context.Context
-	Queries            *store.Queries
-	Config             *oauth2.Config
-	UserID             int64
-	TokenEncryptionKey string
-}
-
-func NewGithubClientByUserID(p NewGithubClientByUserIDParams) *github.Client {
+func NewGithubClientByUserID(
+	ctx context.Context,
+	q *store.Queries,
+	config *oauth2.Config,
+	userID int64,
+	tokenEncryptionKey string,
+) *github.Client {
 	ts := NewGithubTokenSource(
-		p.Context,
-		p.Queries,
-		p.Config,
-		p.UserID,
-		p.TokenEncryptionKey,
+		ctx,
+		q,
+		config,
+		userID,
+		tokenEncryptionKey,
 	)
-	httpClient := oauth2.NewClient(p.Context, ts)
+	httpClient := oauth2.NewClient(ctx, ts)
 	client := github.NewClient(httpClient)
 	return client
 }

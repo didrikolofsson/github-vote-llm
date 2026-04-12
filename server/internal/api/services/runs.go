@@ -6,7 +6,7 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
 	api_errors "github.com/didrikolofsson/github-vote-llm/internal/api/errors"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
-	"github.com/didrikolofsson/github-vote-llm/internal/river/jobs"
+	"github.com/didrikolofsson/github-vote-llm/internal/jobs/jobargs"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -79,9 +79,8 @@ func (s *RunServiceImpl) CreateRun(
 		return nil, err
 	}
 
-	_, err = s.rc.InsertTx(ctx, tx, &jobs.RunClaudeArgs{
+	_, err = s.rc.InsertTx(ctx, tx, &jobargs.RunAgentArgs{
 		Prompt:             p.Prompt,
-		UserID:             p.UserID,
 		TokenEncryptionKey: p.Env.TOKEN_ENCRYPTION_KEY,
 		Repository: &dtos.Repository{
 			Owner: repo.Owner,

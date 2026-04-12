@@ -18,7 +18,10 @@ import (
 	"golang.org/x/oauth2"
 )
 
-var ErrGitHubNotConnected = errors.New("github: no connection found for user")
+var (
+	ErrGitHubNotConnected     = errors.New("github: no connection found for user")
+	ErrGitHubTokenUnavailable = errors.New("github: token unavailable or refresh failed")
+)
 
 type GithubServiceConfigParams struct {
 	TokenEncryptionKey string
@@ -86,13 +89,11 @@ func (s *GithubServiceImpl) Status(ctx context.Context, userID int64) (*GithubUs
 		return nil, err
 	}
 	client := gh.NewGithubClientByUserID(
-		gh.NewGithubClientByUserIDParams{
-			Context:            ctx,
-			Queries:            s.q,
-			Config:             &s.p.Config,
-			UserID:             userID,
-			TokenEncryptionKey: s.p.TokenEncryptionKey,
-		},
+		ctx,
+		s.q,
+		&s.p.Config,
+		userID,
+		s.p.TokenEncryptionKey,
 	)
 	user, _, err := client.Users.Get(ctx, "")
 	if err != nil {
@@ -152,13 +153,11 @@ func (s *GithubServiceImpl) ListReposByAuthenticatedUser(ctx context.Context, us
 	}
 
 	client := gh.NewGithubClientByUserID(
-		gh.NewGithubClientByUserIDParams{
-			Context:            ctx,
-			Queries:            s.q,
-			Config:             &s.p.Config,
-			UserID:             userID,
-			TokenEncryptionKey: s.p.TokenEncryptionKey,
-		},
+		ctx,
+		s.q,
+		&s.p.Config,
+		userID,
+		s.p.TokenEncryptionKey,
 	)
 
 	repos, resp, err := client.Repositories.ListByAuthenticatedUser(ctx, &github.RepositoryListByAuthenticatedUserOptions{

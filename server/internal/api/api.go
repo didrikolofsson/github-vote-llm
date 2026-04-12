@@ -8,39 +8,18 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
-	"github.com/riverqueue/river"
 )
 
-type RestApiRouter interface {
-	Create() *gin.Engine
-}
-
-type RestApiRouterImpl struct {
-	env    *config.Environment
-	logger *logger.Logger
-	h      *handlers.HandlerCollection
-	rc     *river.Client[pgx.Tx]
-}
-
-func NewRestApiRouter(
-	env *config.Environment,
+func New(
+	h handlers.Handlers,
 	logger *logger.Logger,
-	h *handlers.HandlerCollection,
-) RestApiRouter {
-	return &RestApiRouterImpl{
-		env:    env,
-		logger: logger,
-		h:      h,
-	}
-}
-
-func (r *RestApiRouterImpl) Create() *gin.Engine {
+	env *config.Environment,
+) *gin.Engine {
 	router := gin.New()
 
 	router.SetTrustedProxies(nil)
 	router.Use(middleware.AddRequestID)
-	router.Use(middleware.LogRequests(r.logger))
+	router.Use(middleware.LogRequests(logger))
 
 	api := router.Group("/v1/")
 	api.GET("/health", func(c *gin.Context) {
@@ -49,75 +28,75 @@ func (r *RestApiRouterImpl) Create() *gin.Engine {
 
 	// OAuth2 endpoints
 	auth := api.Group("/auth")
-	auth.POST("/authorize", r.h.Auth.Authorize)
-	auth.POST("/token", r.h.Auth.Token)
-	auth.POST("/revoke", r.h.Auth.Revoke)
+	auth.POST("/authorize", h.Auth.Authorize)
+	auth.POST("/token", h.Auth.Token)
+	auth.POST("/revoke", h.Auth.Revoke)
 
 	github := api.Group("/github")
-	github.GET("/callback", r.h.Github.Callback)
-	github.Use(middleware.RequireAuth(r.env.JWT_SECRET))
-	github.GET("/authorize", r.h.Github.Authorize)
-	github.GET("/status", r.h.Github.Status)
-	github.GET("/repositories", r.h.Github.ListReposByAuthenticatedUser)
-	github.DELETE("/connection", r.h.Github.Disconnect)
+	github.GET("/callback", h.Github.Callback)
+	github.Use(middleware.RequireAuth(env.JWT_SECRET))
+	github.GET("/authorize", h.Github.Authorize)
+	github.GET("/status", h.Github.Status)
+	github.GET("/repositories", h.Github.ListReposByAuthenticatedUser)
+	github.DELETE("/connection", h.Github.Disconnect)
 
 	users := api.Group("/users")
-	users.POST("/signup", r.h.User.SignupUser)
-	users.Use(middleware.RequireAuth(r.env.JWT_SECRET))
-	users.GET("/me", r.h.User.GetMe)
-	users.PATCH("/me/username", r.h.User.UpdateUsername)
-	users.DELETE("/:id", r.h.User.DeleteUser)
+	users.POST("/signup", h.User.SignupUser)
+	users.Use(middleware.RequireAuth(env.JWT_SECRET))
+	users.GET("/me", h.User.GetMe)
+	users.PATCH("/me/username", h.User.UpdateUsername)
+	users.DELETE("/:id", h.User.DeleteUser)
 
 	// Public portal routes (no auth)
 	portal := api.Group("/portal/:orgSlug/:repoName")
-	portal.GET("", r.h.Portal.GetPortalPage)
-	portal.GET("/events", r.h.Portal.Subscribe)
-	portal.POST("/features/:featureId/vote", r.h.Portal.ToggleVote)
-	portal.GET("/features/:featureId/comments", r.h.Portal.ListComments)
-	portal.POST("/features/:featureId/comments", r.h.Portal.CreateComment)
+	portal.GET("", h.Portal.GetPortalPage)
+	portal.GET("/events", h.Portal.Subscribe)
+	portal.POST("/features/:featureId/vote", h.Portal.ToggleVote)
+	portal.GET("/features/:featureId/comments", h.Portal.ListComments)
+	portal.POST("/features/:featureId/comments", h.Portal.CreateComment)
 
 	// Organization endpoints
 	organizations := api.Group("/organizations")
-	organizations.Use(middleware.RequireAuth(r.env.JWT_SECRET))
-	organizations.GET("", r.h.Organization.ListMyOrganizations)
-	organizations.POST("", r.h.Organization.CreateOrganization)
-	organizations.GET("/:id", r.h.Organization.GetOrganization)
-	organizations.PUT("/:id", r.h.Organization.UpdateOrganization)
-	organizations.PATCH("/:id/slug", r.h.Organization.UpdateSlug)
-	organizations.DELETE("/:id", r.h.Organization.DeleteOrganization)
+	organizations.Use(middleware.RequireAuth(env.JWT_SECRET))
+	organizations.GET("", h.Organization.ListMyOrganizations)
+	organizations.POST("", h.Organization.CreateOrganization)
+	organizations.GET("/:id", h.Organization.GetOrganization)
+	organizations.PUT("/:id", h.Organization.UpdateOrganization)
+	organizations.PATCH("/:id/slug", h.Organization.UpdateSlug)
+	organizations.DELETE("/:id", h.Organization.DeleteOrganization)
 
 	// Organization repositories
-	organizations.GET("/:id/repositories", r.h.Repository.List)
-	organizations.POST("/:id/repositories", r.h.Repository.Add)
-	organizations.DELETE("/:id/repositories/:repoId", r.h.Repository.Remove)
+	organizations.GET("/:id/repositories", h.Repository.List)
+	organizations.POST("/:id/repositories", h.Repository.Add)
+	organizations.DELETE("/:id/repositories/:repoId", h.Repository.Remove)
 
 	// Organization members
-	organizations.GET("/:id/members", r.h.Members.List)
-	organizations.POST("/:id/members", r.h.Members.Invite)
-	organizations.DELETE("/:id/members/:user_id", r.h.Members.Remove)
-	organizations.PATCH("/:id/members/:user_id", r.h.Members.UpdateRole)
+	organizations.GET("/:id/members", h.Members.List)
+	organizations.POST("/:id/members", h.Members.Invite)
+	organizations.DELETE("/:id/members/:user_id", h.Members.Remove)
+	organizations.PATCH("/:id/members/:user_id", h.Members.UpdateRole)
 
 	// Repository features (all private for now)
 	repos := api.Group("/repositories/:repoId")
-	repos.Use(middleware.RequireAuth(r.env.JWT_SECRET))
-	repos.GET("/roadmap", r.h.Feature.GetRoadmap)
-	repos.GET("/meta", r.h.Repository.GetRepoMeta)
-	repos.GET("/features", r.h.Feature.ListFeatures)
-	repos.GET("/features/:featureId", r.h.Feature.GetFeature)
-	repos.POST("/features", r.h.Feature.CreateFeature)
-	repos.DELETE("/features/:featureId", r.h.Feature.DeleteFeature)
-	repos.GET("/features/:featureId/comments", r.h.Feature.ListComments)
-	repos.POST("/features/:featureId/comments", r.h.Feature.CreateComment)
-	repos.POST("/features/:featureId/vote", r.h.Feature.ToggleVote)
-	repos.PATCH("/features/:featureId", r.h.Feature.PatchFeature)
-	repos.PATCH("/features/:featureId/position", r.h.Feature.UpdatePosition)
-	repos.POST("/features/:featureId/dependencies", r.h.Feature.AddDependency)
-	repos.DELETE("/features/:featureId/dependencies/:dependsOn", r.h.Feature.RemoveDependency)
-	repos.PATCH("/portal", r.h.Repository.UpdatePortalVisibility)
+	repos.Use(middleware.RequireAuth(env.JWT_SECRET))
+	repos.GET("/roadmap", h.Feature.GetRoadmap)
+	repos.GET("/meta", h.Repository.GetRepoMeta)
+	repos.GET("/features", h.Feature.ListFeatures)
+	repos.GET("/features/:featureId", h.Feature.GetFeature)
+	repos.POST("/features", h.Feature.CreateFeature)
+	repos.DELETE("/features/:featureId", h.Feature.DeleteFeature)
+	repos.GET("/features/:featureId/comments", h.Feature.ListComments)
+	repos.POST("/features/:featureId/comments", h.Feature.CreateComment)
+	repos.POST("/features/:featureId/vote", h.Feature.ToggleVote)
+	repos.PATCH("/features/:featureId", h.Feature.PatchFeature)
+	repos.PATCH("/features/:featureId/position", h.Feature.UpdatePosition)
+	repos.POST("/features/:featureId/dependencies", h.Feature.AddDependency)
+	repos.DELETE("/features/:featureId/dependencies/:dependsOn", h.Feature.RemoveDependency)
+	repos.PATCH("/portal", h.Repository.UpdatePortalVisibility)
 
 	// Feature runs
 	featureRuns := api.Group("/features/:featureId/runs")
-	featureRuns.POST("", r.h.Run.Create)
+	featureRuns.POST("", h.Runs.Create)
 
 	return router
 }
