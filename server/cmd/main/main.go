@@ -3,14 +3,15 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/github"
-	"github.com/didrikolofsson/github-vote-llm/internal/jobs/jobclient"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
+	"github.com/didrikolofsson/github-vote-llm/internal/river/jobclient"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -27,6 +28,11 @@ func main() {
 	env, err := config.LoadEnv()
 	if err != nil {
 		log.Fatalf("failed to load environment: %v", err)
+	}
+
+	// Ensure workspace directory exists
+	if err := os.MkdirAll(env.WORKSPACE_DIR, 0755); err != nil {
+		log.Fatalf("failed to create workspace directory: %v", err)
 	}
 
 	appLogger := logger.New().Named("main")
@@ -48,13 +54,13 @@ func main() {
 		env.SERVER_URL+"/v1/github/callback",
 	)
 
-	jobClient, err := jobclient.New(db, q, githubOAuthCfg, env)
+	s := services.New(db, q, env, githubOAuthCfg)
+	jc, err := jobclient.New(s)
 	if err != nil {
 		log.Fatalf("failed to create job client: %v", err)
 	}
 
-	s := services.New(db, q, env, githubOAuthCfg, jobClient)
-	h := handlers.New(s, apiLogger, env)
+	h := handlers.New(s, jc, apiLogger, env)
 	router := api.New(h, apiLogger, env)
 
 	router.Run(":" + env.PORT)

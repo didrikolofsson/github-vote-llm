@@ -4,9 +4,7 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/hub"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/riverqueue/river"
 	"golang.org/x/oauth2"
 )
 
@@ -27,7 +25,6 @@ func New(
 	q *store.Queries,
 	env *config.Environment,
 	githubOAuthCfg *oauth2.Config,
-	rc *river.Client[pgx.Tx],
 ) *Services {
 	return &Services{
 		UserService:         NewUserService(db, q),
@@ -39,7 +36,7 @@ func New(
 		}),
 		RepositoriesService: NewRepositoriesService(db, q),
 		MembersService:      NewMembersService(q),
-		RunService:          NewRunService(db, q, rc),
+		RunService:          NewRunService(db, q),
 		FeaturesService:     NewFeaturesService(db, q, hub.NewHub()),
 		PortalService:       NewPortalService(db, q),
 	}

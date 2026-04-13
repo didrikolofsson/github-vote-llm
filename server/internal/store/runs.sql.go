@@ -46,3 +46,24 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (FeatureRu
 	)
 	return i, err
 }
+
+const getRunByID = `-- name: GetRunByID :one
+SELECT id, prompt, feature_id, status, created_by_user_id, created_at, completed_at
+FROM feature_runs
+WHERE id = $1
+`
+
+func (q *Queries) GetRunByID(ctx context.Context, id int64) (FeatureRun, error) {
+	row := q.db.QueryRow(ctx, getRunByID, id)
+	var i FeatureRun
+	err := row.Scan(
+		&i.ID,
+		&i.Prompt,
+		&i.FeatureID,
+		&i.Status,
+		&i.CreatedByUserID,
+		&i.CreatedAt,
+		&i.CompletedAt,
+	)
+	return i, err
+}

@@ -6,11 +6,9 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
 	api_errors "github.com/didrikolofsson/github-vote-llm/internal/api/errors"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
-	"github.com/didrikolofsson/github-vote-llm/internal/jobs/jobargs"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/riverqueue/river"
 )
 
 type CreateRunBody struct {
@@ -33,11 +31,10 @@ type RunService interface {
 type RunServiceImpl struct {
 	db *pgxpool.Pool
 	q  *store.Queries
-	rc *river.Client[pgx.Tx]
 }
 
-func NewRunService(db *pgxpool.Pool, q *store.Queries, rc *river.Client[pgx.Tx]) RunService {
-	return &RunServiceImpl{db: db, q: q, rc: rc}
+func NewRunService(db *pgxpool.Pool, q *store.Queries) RunService {
+	return &RunServiceImpl{db: db, q: q}
 }
 
 func storeToRunDTO(run store.FeatureRun) *dtos.RunDTO {
@@ -71,26 +68,6 @@ func (s *RunServiceImpl) CreateRun(
 		if api_errors.IsForeignKeyViolationErr(err) {
 			return nil, ErrFeatureNotFound
 		}
-		return nil, err
-	}
-
-	repo, err := qtx.GetRepositoryByFeatureID(ctx, run.FeatureID)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = s.rc.InsertTx(ctx, tx, &jobargs.RunAgentArgs{
-		Prompt:             p.Prompt,
-		TokenEncryptionKey: p.Env.TOKEN_ENCRYPTION_KEY,
-		Repository: &dtos.Repository{
-			Owner: repo.Owner,
-			Name:  repo.Name,
-		},
-		Workspace: p.Env.WORKSPACE_DIR,
-		ApiKey:    p.ApiKey,
-	}, nil)
-
-	if err != nil {
 		return nil, err
 	}
 

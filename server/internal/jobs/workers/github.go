@@ -3,22 +3,21 @@ package workers
 import (
 	"context"
 	"errors"
-	"fmt"
-	"net/url"
-	"os/exec"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/github"
+	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
+	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs/jobargs"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
-	"golang.org/x/oauth2"
 )
 
 type CloneRepoWorker struct {
 	river.WorkerDefaults[jobargs.CloneRepoArgs]
-	Queries            *store.Queries
-	Config             *oauth2.Config
-	TokenEncryptionKey string
+	db          *pgxpool.Pool
+	Services    *services.Services
+	RiverClient *river.Client[pgx.Tx]
 }
 
 var (
@@ -30,59 +29,36 @@ var (
 func (w *CloneRepoWorker) Work(
 	ctx context.Context, job *river.Job[jobargs.CloneRepoArgs],
 ) error {
-	conn, err := w.Queries.GetGitHubConnectionByUserID(ctx, job.Args.UserID)
+	tx, err := w.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback(ctx)
 
-	if conn.AccessTokenEncrypted == "" {
-		return ErrGitHubNotConnected
-	}
-
-	ts := github.NewGithubTokenSource(
-		ctx,
-		w.Queries,
-		w.Config,
-		conn.UserID,
-		w.TokenEncryptionKey,
-	)
-
-	tok, err := ts.Token()
+	qtx := store.New(tx)
+	run, err := qtx.GetRunByID(ctx, job.Args.RunID)
 	if err != nil {
 		return err
 	}
-	if tok.AccessToken == "" {
-		return ErrGitHubTokenUnavailable
-	}
-
-	client := github.NewGithubClientByUserID(
-		ctx,
-		w.Queries,
-		w.Config,
-		conn.UserID,
-		w.TokenEncryptionKey,
-	)
-
-	repo, _, err := client.Repositories.Get(ctx, job.Args.Owner, job.Args.Name)
+	env, err := config.LoadEnv()
 	if err != nil {
 		return err
 	}
-	if repo.CloneURL == nil || *repo.CloneURL == "" {
-		return ErrInvalidCloneURL
-	}
-	cloneURL := *repo.CloneURL
-
-	u, err := url.Parse(cloneURL)
-	if err != nil {
-		return fmt.Errorf("parse clone url: %w", err)
-	}
-	u.User = url.UserPassword("x-access-token", tok.AccessToken)
-	authCloneURL := u.String()
-
-	cmd := exec.CommandContext(ctx, "git", "clone", authCloneURL)
-	cmd.Dir = job.Args.Workspace
-	if err := cmd.Run(); err != nil {
+	if err := w.Services.GithubService.CloneRepoToWorkspace(
+		ctx, job.Args.UserID, job.Args.Owner, job.Args.Name, job.Args.Workspace,
+	); err != nil {
 		return err
 	}
+
+	w.RiverClient.InsertTx(ctx, tx, &jobargs.RunAgentArgs{
+		Prompt:  run.Prompt,
+		WorkDir: job.Args.Workspace,
+		ApiKey:  env.ANTHROPIC_API_KEY,
+	}, nil)
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
 	return nil
 }

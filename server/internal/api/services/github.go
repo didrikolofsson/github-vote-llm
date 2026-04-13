@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
+	"os/exec"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
 	"github.com/didrikolofsson/github-vote-llm/internal/encryption"
@@ -31,8 +33,9 @@ type GithubServiceConfigParams struct {
 type GithubService interface {
 	Callback(ctx context.Context, code string, userID int64, tokenEncryptionKey string) error
 	Status(ctx context.Context, userID int64) (*GithubUserResponse, error)
-	ListReposByAuthenticatedUser(ctx context.Context, userID int64, page int) ([]dtos.GitHubRepository, bool, error)
 	Disconnect(ctx context.Context, userID int64) error
+	ListReposByAuthenticatedUser(ctx context.Context, userID int64, page int) ([]dtos.GitHubRepository, bool, error)
+	CloneRepoToWorkspace(ctx context.Context, userID int64, owner string, name string, workspace string) error
 }
 
 type GithubServiceImpl struct {
@@ -88,13 +91,14 @@ func (s *GithubServiceImpl) Status(ctx context.Context, userID int64) (*GithubUs
 		}
 		return nil, err
 	}
-	client := gh.NewGithubClientByUserID(
+	ts := gh.NewGithubTokenSource(
 		ctx,
 		s.q,
 		&s.p.Config,
 		userID,
 		s.p.TokenEncryptionKey,
 	)
+	client := gh.NewGithubClientByUserID(ctx, ts)
 	user, _, err := client.Users.Get(ctx, "")
 	if err != nil {
 		return nil, err
@@ -152,13 +156,14 @@ func (s *GithubServiceImpl) ListReposByAuthenticatedUser(ctx context.Context, us
 		return nil, false, err
 	}
 
-	client := gh.NewGithubClientByUserID(
+	ts := gh.NewGithubTokenSource(
 		ctx,
 		s.q,
 		&s.p.Config,
 		userID,
 		s.p.TokenEncryptionKey,
 	)
+	client := gh.NewGithubClientByUserID(ctx, ts)
 
 	repos, resp, err := client.Repositories.ListByAuthenticatedUser(ctx, &github.RepositoryListByAuthenticatedUserOptions{
 		ListOptions: github.ListOptions{Page: page, PerPage: 30},
@@ -175,4 +180,60 @@ func (s *GithubServiceImpl) ListReposByAuthenticatedUser(ctx context.Context, us
 		}
 	}
 	return out, resp.NextPage > 0, nil
+}
+
+var (
+	ErrInvalidCloneURL = errors.New("github: invalid or missing clone URL")
+)
+
+func (s *GithubServiceImpl) CloneRepoToWorkspace(
+	ctx context.Context, userID int64, owner, name, workspace string,
+) error {
+	conn, err := s.q.GetGitHubConnectionByUserID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if conn.AccessTokenEncrypted == "" {
+		return ErrGitHubNotConnected
+	}
+
+	ts := gh.NewGithubTokenSource(
+		ctx,
+		s.q,
+		&s.p.Config,
+		userID,
+		s.p.TokenEncryptionKey,
+	)
+	tok, err := ts.Token()
+	if err != nil {
+		return err
+	}
+	if tok.AccessToken == "" {
+		return ErrGitHubTokenUnavailable
+	}
+
+	client := gh.NewGithubClientByUserID(ctx, ts)
+
+	repo, _, err := client.Repositories.Get(ctx, owner, name)
+	if err != nil {
+		return err
+	}
+	if repo.CloneURL == nil || *repo.CloneURL == "" {
+		return ErrInvalidCloneURL
+	}
+
+	u, err := url.Parse(*repo.CloneURL)
+	if err != nil {
+		return err
+	}
+	u.User = url.UserPassword("x-access-token", tok.AccessToken)
+	authCloneURL := u.String()
+
+	cmd := exec.CommandContext(ctx, "git", "clone", authCloneURL)
+	cmd.Dir = workspace
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	return nil
 }

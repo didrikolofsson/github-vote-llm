@@ -7,3 +7,7 @@ INSERT INTO feature_runs (
     )
 VALUES ($1, $2, $3, $4)
 RETURNING *;
+-- name: GetRunByID :one
+SELECT *
+FROM feature_runs
+WHERE id = $1;

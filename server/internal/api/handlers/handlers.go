@@ -4,6 +4,7 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/hub"
+	"github.com/didrikolofsson/github-vote-llm/internal/jobs/jobclient"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 )
 
@@ -21,6 +22,7 @@ type Handlers struct {
 
 func New(
 	s *services.Services,
+	jc jobclient.Client,
 	logger *logger.Logger,
 	env *config.Environment,
 ) Handlers {

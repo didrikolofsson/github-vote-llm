@@ -4,36 +4,32 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/config"
+	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs/workers"
-	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
-	"golang.org/x/oauth2"
 )
 
-func New(
-	pool *pgxpool.Pool,
-	q *store.Queries,
-	githubOAuthCfg *oauth2.Config,
-	env *config.Environment,
-) (*river.Client[pgx.Tx], error) {
+type Client *river.Client[pgx.Tx]
+
+func New(s *services.Services) (Client, error) {
 	w := river.NewWorkers()
 
-	river.AddWorker(w, &workers.CloneRepoWorker{
+	cloneRepoWorker := &workers.CloneRepoWorker{
 		Queries:            q,
-		Config:             githubOAuthCfg,
+		GithubOAuthConfig:  githubOAuthCfg,
 		TokenEncryptionKey: env.TOKEN_ENCRYPTION_KEY,
-	})
-
-	river.AddWorker(w, &workers.RunAgentWorker{
+	}
+	runAgentWorker := &workers.RunAgentWorker{
 		Queries:           q,
 		GithubOAuthConfig: githubOAuthCfg,
-	})
+	}
 
-	return river.NewClient(riverpgxv5.New(pool), &river.Config{
+	river.AddWorker(w, cloneRepoWorker)
+	river.AddWorker(w, runAgentWorker)
+
+	client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Logger: slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 			Level: slog.LevelInfo,
 		})),
@@ -42,4 +38,12 @@ func New(
 		},
 		Workers: w,
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	cloneRepoWorker.RiverClient = client
+	runAgentWorker.RiverClient = client
+
+	return client, nil
 }

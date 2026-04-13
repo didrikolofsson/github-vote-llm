@@ -129,18 +129,8 @@ func (ts *GithubTokenSource) Token() (*oauth2.Token, error) {
 
 func NewGithubClientByUserID(
 	ctx context.Context,
-	q *store.Queries,
-	config *oauth2.Config,
-	userID int64,
-	tokenEncryptionKey string,
+	ts *GithubTokenSource,
 ) *github.Client {
-	ts := NewGithubTokenSource(
-		ctx,
-		q,
-		config,
-		userID,
-		tokenEncryptionKey,
-	)
 	httpClient := oauth2.NewClient(ctx, ts)
 	client := github.NewClient(httpClient)
 	return client
