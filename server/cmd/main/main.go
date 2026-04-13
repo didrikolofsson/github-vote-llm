@@ -11,7 +11,7 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
-	"github.com/didrikolofsson/github-vote-llm/internal/river/jobclient"
+	"github.com/didrikolofsson/github-vote-llm/internal/jobs/jobclient"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -55,12 +55,12 @@ func main() {
 	)
 
 	s := services.New(db, q, env, githubOAuthCfg)
-	jc, err := jobclient.New(s)
+	jc, err := jobclient.New(db, s.GithubService, env)
 	if err != nil {
 		log.Fatalf("failed to create job client: %v", err)
 	}
 
-	h := handlers.New(s, jc, apiLogger, env)
+	h := handlers.New(s, jc, db, apiLogger, env)
 	router := api.New(h, apiLogger, env)
 
 	router.Run(":" + env.PORT)

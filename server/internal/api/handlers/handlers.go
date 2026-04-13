@@ -4,8 +4,10 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/hub"
-	"github.com/didrikolofsson/github-vote-llm/internal/jobs/jobclient"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
 )
 
 type Handlers struct {
@@ -22,7 +24,8 @@ type Handlers struct {
 
 func New(
 	s *services.Services,
-	jc jobclient.Client,
+	jc *river.Client[pgx.Tx],
+	db *pgxpool.Pool,
 	logger *logger.Logger,
 	env *config.Environment,
 ) Handlers {
@@ -32,7 +35,7 @@ func New(
 		Organization: NewOrganizationHandlers(s.OrganizationService, logger),
 		Github:       NewGithubHandlers(env, s.GithubService),
 		Repository:   NewRepositoryHandlers(s.RepositoriesService, logger),
-		Runs:         NewRunsHandlers(s.RunService, env),
+		Runs:         NewRunsHandlers(s.RunService, jc, db),
 		Members:      NewMembersHandlers(s.MembersService, logger),
 		Feature:      NewFeatureHandlers(s.FeaturesService, logger),
 		Portal:       NewPortalHandlers(s.PortalService, logger, hub.NewHub()),

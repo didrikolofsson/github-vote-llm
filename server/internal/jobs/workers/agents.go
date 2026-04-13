@@ -6,24 +6,24 @@ import (
 
 	"github.com/didrikolofsson/github-vote-llm/internal/agents/claude"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs/jobargs"
-	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
-	"golang.org/x/oauth2"
 )
 
 type RunAgentWorker struct {
 	river.WorkerDefaults[jobargs.RunAgentArgs]
-	Queries           *store.Queries
-	GithubOAuthConfig *oauth2.Config
-	RiverClient       *river.Client[pgx.Tx]
+	ApiKey      string
+	RiverClient *river.Client[pgx.Tx]
+}
+
+func NewRunAgentWorker(apiKey string) *RunAgentWorker {
+	return &RunAgentWorker{ApiKey: apiKey}
 }
 
 func (w *RunAgentWorker) Work(ctx context.Context, job *river.Job[jobargs.RunAgentArgs]) error {
-	// Run Claude in cloned repo
 	fmt.Println("Running Claude in cloned repo")
 	runner := claude.NewClaudeRunner(claude.NewClaudeRunnerParams{
-		ApiKey:  job.Args.ApiKey,
+		ApiKey:  w.ApiKey,
 		WorkDir: job.Args.WorkDir,
 	})
 	ch, err := runner.Run(ctx, job.Args.Prompt)

@@ -5,26 +5,19 @@ import (
 	"os"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
+	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs/workers"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 )
 
-type Client *river.Client[pgx.Tx]
-
-func New(s *services.Services) (Client, error) {
+func New(pool *pgxpool.Pool, githubSvc services.GithubService, env *config.Environment) (*river.Client[pgx.Tx], error) {
 	w := river.NewWorkers()
 
-	cloneRepoWorker := &workers.CloneRepoWorker{
-		Queries:            q,
-		GithubOAuthConfig:  githubOAuthCfg,
-		TokenEncryptionKey: env.TOKEN_ENCRYPTION_KEY,
-	}
-	runAgentWorker := &workers.RunAgentWorker{
-		Queries:           q,
-		GithubOAuthConfig: githubOAuthCfg,
-	}
+	cloneRepoWorker := workers.NewCloneRepoWorker(pool, githubSvc, env.WORKSPACE_DIR)
+	runAgentWorker := workers.NewRunAgentWorker(env.ANTHROPIC_API_KEY)
 
 	river.AddWorker(w, cloneRepoWorker)
 	river.AddWorker(w, runAgentWorker)
