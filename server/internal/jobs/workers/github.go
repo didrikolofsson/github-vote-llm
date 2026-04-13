@@ -27,12 +27,15 @@ func NewCloneRepoWorker(
 	db *pgxpool.Pool,
 	githubSvc services.GithubService,
 	workspaceDir string,
-) *CloneRepoWorker {
+) (*CloneRepoWorker, error) {
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		return nil, fmt.Errorf("creating workspace directory: %w", err)
+	}
 	return &CloneRepoWorker{
 		db:           db,
 		GithubSvc:    githubSvc,
 		WorkspaceDir: workspaceDir,
-	}
+	}, nil
 }
 
 var (

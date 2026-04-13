@@ -16,7 +16,10 @@ import (
 func New(pool *pgxpool.Pool, githubSvc services.GithubService, env *config.Environment) (*river.Client[pgx.Tx], error) {
 	w := river.NewWorkers()
 
-	cloneRepoWorker := workers.NewCloneRepoWorker(pool, githubSvc, env.WORKSPACE_DIR)
+	cloneRepoWorker, err := workers.NewCloneRepoWorker(pool, githubSvc, env.WORKSPACE_DIR)
+	if err != nil {
+		return nil, err
+	}
 	runAgentWorker := workers.NewRunAgentWorker(env.ANTHROPIC_API_KEY)
 
 	river.AddWorker(w, cloneRepoWorker)
