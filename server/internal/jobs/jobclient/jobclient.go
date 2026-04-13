@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
+	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs/workers"
 	"github.com/jackc/pgx/v5"

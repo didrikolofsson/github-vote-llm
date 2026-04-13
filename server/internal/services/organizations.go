@@ -5,7 +5,7 @@ import (
 	"errors"
 	"regexp"
 	"strings"
-	"github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
+	"github.com/didrikolofsson/github-vote-llm/internal/dtos"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"

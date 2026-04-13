@@ -3,8 +3,8 @@ package services
 import (
 	"context"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
-	api_errors "github.com/didrikolofsson/github-vote-llm/internal/api/errors"
+	"github.com/didrikolofsson/github-vote-llm/internal/dtos"
+	api_errors "github.com/didrikolofsson/github-vote-llm/internal/errors"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"

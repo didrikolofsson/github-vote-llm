@@ -11,7 +11,7 @@ import (
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
-	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
+	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs/jobclient"

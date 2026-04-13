@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
-	api_errors "github.com/didrikolofsson/github-vote-llm/internal/api/errors"
+	"github.com/didrikolofsson/github-vote-llm/internal/dtos"
+	api_errors "github.com/didrikolofsson/github-vote-llm/internal/errors"
 	"github.com/didrikolofsson/github-vote-llm/internal/helpers"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"

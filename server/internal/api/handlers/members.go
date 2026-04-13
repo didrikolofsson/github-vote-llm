@@ -7,7 +7,7 @@ import (
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api/middleware"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/request"
-	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
+	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/gin-gonic/gin"
 )

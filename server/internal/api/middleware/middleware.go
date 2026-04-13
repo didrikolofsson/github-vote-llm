@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
+	"github.com/didrikolofsson/github-vote-llm/internal/dtos"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"

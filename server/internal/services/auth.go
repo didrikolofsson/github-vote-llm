@@ -9,7 +9,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
+	"github.com/didrikolofsson/github-vote-llm/internal/dtos"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/helpers"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"

@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
+	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs/jobargs"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"

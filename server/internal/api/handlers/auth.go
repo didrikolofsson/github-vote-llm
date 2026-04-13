@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
+	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/gin-gonic/gin"
 )
 

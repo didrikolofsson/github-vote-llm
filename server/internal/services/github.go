@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"os/exec"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/api/dtos"
+	"github.com/didrikolofsson/github-vote-llm/internal/dtos"
 	"github.com/didrikolofsson/github-vote-llm/internal/encryption"
 	gh "github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
