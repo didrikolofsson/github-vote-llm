@@ -6,11 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
 	"os/exec"
-	"strings"
 	"time"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
@@ -39,9 +37,6 @@ type GithubService interface {
 	ExchangeCodeForAccessToken(ctx context.Context, code string, userID int64) error
 	GetGitHubConnectionStatus(ctx context.Context, userID int64) (*GithubUserResponse, error)
 	DeleteGitHubConnection(ctx context.Context, userID int64) error
-	DefaultFrontendURL() string
-	BuildGitHubOAuthOriginCookie(origin string, secure bool) (*http.Cookie, error)
-	ReadGitHubOAuthOriginCookie(r *http.Request) (string, bool)
 
 	// Operations
 	ListReposByAuthenticatedUser(ctx context.Context, userID int64, page int) ([]dtos.GitHubRepository, bool, error)
@@ -75,113 +70,6 @@ var (
 	ErrFailedToBuildOAuthState    = errors.New("github: failed to build oauth state")
 	ErrInvalidOrExpiredOAuthState = errors.New("github: invalid or expired oauth state")
 )
-
-const githubOAuthOriginCookieName = "gvllm_gh_oauth_origin"
-
-type githubOAuthOriginClaims struct {
-	Origin string `json:"origin"`
-	jwt.RegisteredClaims
-}
-
-func (s *GithubServiceImpl) DefaultFrontendURL() string {
-	return s.env.FRONTEND_URL
-}
-
-func (s *GithubServiceImpl) BuildGitHubOAuthOriginCookie(origin string, secure bool) (*http.Cookie, error) {
-	origin = strings.TrimSpace(origin)
-	if origin == "" {
-		return nil, errors.New("github: empty origin")
-	}
-	if !s.isAllowedFrontendOrigin(origin) {
-		return nil, errors.New("github: disallowed origin")
-	}
-
-	now := time.Now()
-	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, githubOAuthOriginClaims{
-		Origin: origin,
-		RegisteredClaims: jwt.RegisteredClaims{
-			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(10 * time.Minute)),
-		},
-	})
-	val, err := tok.SignedString([]byte(s.env.JWT_SECRET))
-	if err != nil {
-		return nil, errors.New("github: failed to sign origin cookie")
-	}
-
-	return &http.Cookie{
-		Name:     githubOAuthOriginCookieName,
-		Value:    val,
-		Path:     "/v1/github/callback",
-		MaxAge:   600,
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-	}, nil
-}
-
-func (s *GithubServiceImpl) ReadGitHubOAuthOriginCookie(r *http.Request) (string, bool) {
-	c, err := r.Cookie(githubOAuthOriginCookieName)
-	if err != nil || c == nil || c.Value == "" {
-		return "", false
-	}
-	var claims githubOAuthOriginClaims
-	tok, err := jwt.ParseWithClaims(c.Value, &claims, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
-		return []byte(s.env.JWT_SECRET), nil
-	})
-	if err != nil || tok == nil || !tok.Valid {
-		return "", false
-	}
-	origin := strings.TrimSpace(claims.Origin)
-	if origin == "" {
-		return "", false
-	}
-	if !s.isAllowedFrontendOrigin(origin) {
-		return "", false
-	}
-	return origin, true
-}
-
-func (s *GithubServiceImpl) isAllowedFrontendOrigin(origin string) bool {
-	u, err := url.Parse(origin)
-	if err != nil || u == nil {
-		return false
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return false
-	}
-	if u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
-		return false
-	}
-	host := u.Hostname()
-	if host == "" {
-		return false
-	}
-	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
-		return true
-	}
-	if strings.EqualFold(host, "localhost") {
-		return true
-	}
-
-	// Safe default: allow the configured frontend origin exactly, and also allow
-	// same-host variants (useful for dev ports) as long as scheme matches.
-	def, err := url.Parse(s.env.FRONTEND_URL)
-	if err != nil || def == nil {
-		return origin == s.env.FRONTEND_URL
-	}
-	if strings.EqualFold(origin, s.env.FRONTEND_URL) {
-		return true
-	}
-	if strings.EqualFold(u.Scheme, def.Scheme) && strings.EqualFold(u.Hostname(), def.Hostname()) {
-		// Keep it strict to hostname+scheme; allow any port for that host.
-		return true
-	}
-	return false
-}
 
 // Authorize lets the client initiate the OAuth2 flow by returning the GitHub authorization URL.
 // Requires JWT (see api router). Response matches client: { "authorize_url": "..." }.

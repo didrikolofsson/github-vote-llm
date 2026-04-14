@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api/middleware"
+	"github.com/didrikolofsson/github-vote-llm/internal/helpers"
 	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/oauth2/github"
@@ -34,43 +35,9 @@ func NewGithubHandlers(s services.GithubService) GithubHandlers {
 	return &GithubHandlersImpl{s: s}
 }
 
-func isRequestSecure(r *http.Request) bool {
-	if r == nil {
-		return false
-	}
-	if r.TLS != nil {
-		return true
-	}
-	if proto := r.Header.Get("X-Forwarded-Proto"); strings.EqualFold(proto, "https") {
-		return true
-	}
-	return false
-}
-
-func inferFrontendOrigin(r *http.Request) string {
-	if r == nil {
-		return ""
-	}
-	if o := strings.TrimSpace(r.Header.Get("Origin")); o != "" {
-		return o
-	}
-	ref := strings.TrimSpace(r.Header.Get("Referer"))
-	if ref == "" {
-		return ""
-	}
-	u, err := url.Parse(ref)
-	if err != nil || u == nil {
-		return ""
-	}
-	if u.Scheme == "" || u.Host == "" {
-		return ""
-	}
-	u.Path = ""
-	u.RawQuery = ""
-	u.Fragment = ""
-	u.User = nil
-	return u.String()
-}
+var (
+	REQUEST_ORIGIN_COOKIE_NAME = "gvllm_request_origin"
+)
 
 // Authorize lets the client initiate the OAuth2 flow by returning the GitHub authorization URL.
 func (h *GithubHandlersImpl) Authorize(c *gin.Context) {
@@ -80,12 +47,16 @@ func (h *GithubHandlersImpl) Authorize(c *gin.Context) {
 		return
 	}
 
-	origin := inferFrontendOrigin(c.Request)
-	if origin != "" {
-		if cookie, err := h.s.BuildGitHubOAuthOriginCookie(origin, isRequestSecure(c.Request)); err == nil && cookie != nil {
-			http.SetCookie(c.Writer, cookie)
-		}
+	origin := c.Request.Referer()
+	cookie, err := helpers.BuildRequestOriginCookie(
+		REQUEST_ORIGIN_COOKIE_NAME, origin, true,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
+
+	http.SetCookie(c.Writer, cookie)
 
 	authorizeURL, err := h.s.CreateOAuthState(c.Request.Context(), userID)
 	if err != nil {
@@ -96,21 +67,11 @@ func (h *GithubHandlersImpl) Authorize(c *gin.Context) {
 }
 
 func (h *GithubHandlersImpl) Callback(c *gin.Context) {
-	redirectBase, ok := h.s.ReadGitHubOAuthOriginCookie(c.Request)
+	redirectBase, ok := helpers.ReadRequestOriginCookie(REQUEST_ORIGIN_COOKIE_NAME, c.Request)
 	if !ok || redirectBase == "" {
-		redirectBase = h.s.DefaultFrontendURL()
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing or invalid request origin"})
+		return
 	}
-
-	// Best-effort cleanup: clear the cookie after we’ve used it.
-	http.SetCookie(c.Writer, &http.Cookie{
-		Name:     "gvllm_gh_oauth_origin",
-		Value:    "",
-		Path:     "/v1/github/callback",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   isRequestSecure(c.Request),
-		SameSite: http.SameSiteLaxMode,
-	})
 
 	if ghErr := c.Query("error"); ghErr != "" {
 		desc := c.Query("error_description")
@@ -119,7 +80,8 @@ func (h *GithubHandlersImpl) Callback(c *gin.Context) {
 		if desc != "" {
 			q.Set("error_description", desc)
 		}
-		loc := redirectBase + "?" + q.Encode()
+		helpers.DeleteRequestOriginCookie(REQUEST_ORIGIN_COOKIE_NAME, c.Writer)
+		loc := strings.TrimSuffix(redirectBase, "/") + "?" + q.Encode()
 		c.Redirect(http.StatusTemporaryRedirect, loc)
 		return
 	}
@@ -148,7 +110,8 @@ func (h *GithubHandlersImpl) Callback(c *gin.Context) {
 		return
 	}
 
-	successUrl := redirectBase + "/settings?github_connected=1"
+	helpers.DeleteRequestOriginCookie(REQUEST_ORIGIN_COOKIE_NAME, c.Writer)
+	successUrl := strings.TrimSuffix(redirectBase, "/") + "?github_connected=1"
 	c.Redirect(http.StatusTemporaryRedirect, successUrl)
 }
 
