@@ -11,3 +11,8 @@ RETURNING *;
 SELECT *
 FROM feature_runs
 WHERE id = $1;
+
+-- name: UpdateRunStatus :exec
+UPDATE feature_runs
+SET status = $1
+WHERE id = $2;

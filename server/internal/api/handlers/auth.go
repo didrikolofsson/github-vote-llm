@@ -18,12 +18,11 @@ type AuthHandlers interface {
 }
 
 type AuthHandlersImpl struct {
-	s         services.AuthService
-	jwtSecret string
+	s services.AuthService
 }
 
-func NewAuthHandlers(s services.AuthService, jwtSecret string) AuthHandlers {
-	return &AuthHandlersImpl{s: s, jwtSecret: jwtSecret}
+func NewAuthHandlers(s services.AuthService) AuthHandlers {
+	return &AuthHandlersImpl{s: s}
 }
 
 type authorizeRequest struct {

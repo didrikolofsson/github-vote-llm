@@ -5,10 +5,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/api/middleware"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/request"
-	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
+	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
 )
@@ -341,12 +340,4 @@ func featureIDFromContext(c *gin.Context) (int64, bool) {
 		return 0, false
 	}
 	return id, true
-}
-
-func requireAuth(c *gin.Context) (int64, bool) {
-	userID, ok := middleware.GetUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-	}
-	return userID, ok
 }

@@ -11,11 +11,10 @@ import (
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
-	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
-	"github.com/didrikolofsson/github-vote-llm/internal/github"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs/jobclient"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
+	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -23,17 +22,17 @@ import (
 )
 
 func main() {
+	appLogger := logger.New().Named("main")
+	defer appLogger.Sync()
+
 	if gin.Mode() == gin.DebugMode {
 		if err := godotenv.Load(); err != nil {
-			// Not fatal — dev may use direnv or system env vars instead of .env
+			appLogger.Fatalf("failed to load .env file: %v", err)
 		}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-
-	appLogger := logger.New().Named("main")
-	defer appLogger.Sync()
 
 	env, err := config.LoadEnv()
 	if err != nil {
@@ -51,14 +50,9 @@ func main() {
 	}
 
 	q := store.New(db)
-	githubOAuthCfg := github.NewGithubOAuthConfig(
-		env.GITHUB_CLIENT_ID,
-		env.GITHUB_CLIENT_SECRET,
-		env.SERVER_URL+"/v1/github/callback",
-	)
 
-	s := services.New(db, q, env, githubOAuthCfg)
-	jc, err := jobclient.New(db, s.GithubService, env)
+	s := services.New(db, q, env)
+	jc, err := jobclient.New(db, s, env)
 	if err != nil {
 		appLogger.Fatalf("failed to create job client: %v", err)
 	}
@@ -70,7 +64,7 @@ func main() {
 	apiLogger := logger.New().Named("api")
 	defer apiLogger.Sync()
 
-	h := handlers.New(s, jc, db, apiLogger, env)
+	h := handlers.New(s, jc, apiLogger)
 	router := api.New(h, apiLogger, env)
 
 	srv := &http.Server{

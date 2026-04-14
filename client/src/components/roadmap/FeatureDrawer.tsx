@@ -43,7 +43,6 @@ import {
   ComboboxValue,
   useComboboxAnchor,
 } from "@/components/ui/combobox";
-import { userInfo } from "os";
 import { useAuth } from "@/lib/auth";
 
 const STATUS_OPTIONS: { value: FeatureBuildStatus; label: string }[] = [

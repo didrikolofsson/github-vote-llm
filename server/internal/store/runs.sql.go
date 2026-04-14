@@ -67,3 +67,19 @@ func (q *Queries) GetRunByID(ctx context.Context, id int64) (FeatureRun, error) 
 	)
 	return i, err
 }
+
+const updateRunStatus = `-- name: UpdateRunStatus :exec
+UPDATE feature_runs
+SET status = $1
+WHERE id = $2
+`
+
+type UpdateRunStatusParams struct {
+	Status FeatureRunStatus
+	ID     int64
+}
+
+func (q *Queries) UpdateRunStatus(ctx context.Context, arg UpdateRunStatusParams) error {
+	_, err := q.db.Exec(ctx, updateRunStatus, arg.Status, arg.ID)
+	return err
+}

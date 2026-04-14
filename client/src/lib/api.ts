@@ -298,6 +298,7 @@ export const GitHubAuthorizeUrlSchema = z.object({
 export async function getGitHubAuthorizeUrl() {
   return requestWithRefresh("/github/authorize", {
     schema: GitHubAuthorizeUrlSchema,
+    credentials: "include",
   });
 }
 

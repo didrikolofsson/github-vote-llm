@@ -6,7 +6,6 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/dtos"
 	api_errors "github.com/didrikolofsson/github-vote-llm/internal/errors"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -17,7 +16,7 @@ type CreateRunParams struct {
 }
 
 type RunService interface {
-	CreateRun(ctx context.Context, tx pgx.Tx, p CreateRunParams) (*dtos.RunDTO, error)
+	CreateRun(ctx context.Context, p CreateRunParams) (*dtos.RunDTO, error)
 }
 
 type RunServiceImpl struct {
@@ -38,9 +37,8 @@ func storeToRunDTO(run store.FeatureRun) *dtos.RunDTO {
 	}
 }
 
-func (s *RunServiceImpl) CreateRun(ctx context.Context, tx pgx.Tx, p CreateRunParams) (*dtos.RunDTO, error) {
-	qtx := s.q.WithTx(tx)
-	run, err := qtx.CreateRun(ctx, store.CreateRunParams{
+func (s *RunServiceImpl) CreateRun(ctx context.Context, p CreateRunParams) (*dtos.RunDTO, error) {
+	run, err := s.q.CreateRun(ctx, store.CreateRunParams{
 		Prompt:          p.Prompt,
 		FeatureID:       p.FeatureID,
 		Status:          store.FeatureRunStatusPending,

@@ -20,6 +20,7 @@ func New(
 	router.SetTrustedProxies(nil)
 	router.Use(middleware.AddRequestID)
 	router.Use(middleware.LogRequests(logger))
+	router.Use(middleware.CORS(env.FRONTEND_URL))
 
 	api := router.Group("/v1/")
 	api.GET("/health", func(c *gin.Context) {

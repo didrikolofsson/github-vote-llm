@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs/jobargs"
+	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -57,8 +58,11 @@ func (w *CloneRepoWorker) Work(ctx context.Context, job *river.Job[jobargs.Clone
 	defer tx.Rollback(ctx)
 
 	qtx := store.New(tx)
-	run, err := qtx.GetRunByID(ctx, job.Args.RunID)
-	if err != nil {
+
+	if err := qtx.UpdateRunStatus(ctx, store.UpdateRunStatusParams{
+		Status: store.FeatureRunStatusRunning,
+		ID:     job.Args.RunID,
+	}); err != nil {
 		return err
 	}
 
@@ -68,13 +72,37 @@ func (w *CloneRepoWorker) Work(ctx context.Context, job *river.Job[jobargs.Clone
 		return err
 	}
 
+	branchName := fmt.Sprintf("vote-llm/run-%d", job.Args.RunID)
+	repoDir := filepath.Join(workspace, job.Args.Name)
+	if err := createBranch(ctx, repoDir, branchName); err != nil {
+		return err
+	}
+
+	run, err := qtx.GetRunByID(ctx, job.Args.RunID)
+	if err != nil {
+		return err
+	}
+
 	if _, err := w.RiverClient.InsertTx(ctx, tx, jobargs.RunAgentArgs{
-		Prompt:  run.Prompt,
-		WorkDir: workspace,
-		RunID:   job.Args.RunID,
+		UserID:     job.Args.UserID,
+		RunID:      job.Args.RunID,
+		Owner:      job.Args.Owner,
+		Name:       job.Args.Name,
+		BranchName: branchName,
+		Prompt:     run.Prompt,
+		WorkDir:    repoDir,
 	}, nil); err != nil {
 		return err
 	}
 
 	return tx.Commit(ctx)
+}
+
+func createBranch(ctx context.Context, repoDir, branchName string) error {
+	cmd := exec.CommandContext(ctx, "git", "checkout", "-b", branchName)
+	cmd.Dir = repoDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git checkout -b %s: %w\n%s", branchName, err, out)
+	}
+	return nil
 }
