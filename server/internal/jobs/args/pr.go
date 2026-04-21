@@ -1,6 +1,6 @@
-package jobargs
+package args
 
-type OpenPRArgs struct {
+type OpenRepoPullRequestArgs struct {
 	UserID     int64  `json:"user_id"`
 	RunID      int64  `json:"run_id"`
 	Owner      string `json:"owner"`
@@ -9,6 +9,6 @@ type OpenPRArgs struct {
 	Prompt     string `json:"prompt"`
 }
 
-func (OpenPRArgs) Kind() string {
+func (OpenRepoPullRequestArgs) Kind() string {
 	return "open_pr"
 }

@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/jobs/jobargs"
+	"github.com/didrikolofsson/github-vote-llm/internal/jobs/args"
 	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -54,7 +54,7 @@ func (h *RunsHandlersImpl) Create(c *gin.Context) {
 		return
 	}
 
-	_, err = h.jc.Insert(c.Request.Context(), jobargs.CloneRepoArgs{
+	_, err = h.jc.Insert(c.Request.Context(), args.CloneRepoArgs{
 		UserID: body.CreatedByUserID,
 		RunID:  run.ID,
 		Owner:  body.Owner,
