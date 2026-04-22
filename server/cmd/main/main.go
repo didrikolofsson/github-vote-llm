@@ -61,11 +61,14 @@ func main() {
 	s := services.New(services.ServicesDeps{DB: db, Queries: q, Env: env, JobClient: jc})
 
 	workers.Register(w, workers.RegisterWorkersDeps{Services: s, Env: env})
+	if err := jc.Start(ctx); err != nil {
+		appLogger.Fatalf("failed to start job client: %v", err)
+	}
 
 	apiLogger := logger.New().Named("api")
 	defer apiLogger.Sync()
 
-	h := handlers.New(s, jc, apiLogger)
+	h := handlers.New(handlers.NewHandlersDeps{Services: s, Logger: apiLogger})
 	router := api.New(h, apiLogger, env)
 
 	srv := &http.Server{
