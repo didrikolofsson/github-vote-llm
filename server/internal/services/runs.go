@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/didrikolofsson/github-vote-llm/internal/agents/claude"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/dtos"
 	api_errors "github.com/didrikolofsson/github-vote-llm/internal/errors"
@@ -25,14 +27,15 @@ type CreateRunParams struct {
 }
 
 type RunService struct {
-	db  *pgxpool.Pool
-	q   *store.Queries
-	jc  *river.Client[pgx.Tx]
-	env *config.Environment
+	db     *pgxpool.Pool
+	q      *store.Queries
+	jc     *river.Client[pgx.Tx]
+	env    *config.Environment
+	runner *claude.ClaudeRunner
 }
 
-func NewRunService(db *pgxpool.Pool, q *store.Queries, env *config.Environment, jc *river.Client[pgx.Tx]) *RunService {
-	return &RunService{db: db, q: q, env: env, jc: jc}
+func NewRunService(db *pgxpool.Pool, q *store.Queries, env *config.Environment, jc *river.Client[pgx.Tx], runner *claude.ClaudeRunner) *RunService {
+	return &RunService{db: db, q: q, env: env, jc: jc, runner: runner}
 }
 
 func storeToRunDTO(run store.FeatureRun) *dtos.RunDTO {
@@ -98,4 +101,68 @@ func (s *RunService) CreateRun(ctx context.Context, p CreateRunParams) (*dtos.Ru
 		return nil, err
 	}
 	return storeToRunDTO(run), nil
+}
+
+func prepareWorktree(ctx context.Context, repoDir, worktreeDir, branch string) error {
+	fetch := exec.CommandContext(ctx, "git", "-C", repoDir, "fetch", "origin", "main")
+	if out, err := fetch.CombinedOutput(); err != nil {
+		return fmt.Errorf("git fetch: %w: %s", err, out)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(worktreeDir), 0755); err != nil {
+		return err
+	}
+
+	add := exec.CommandContext(ctx, "git", "-C", repoDir, "worktree", "add", "-b", branch, worktreeDir, "origin/main")
+	if out, err := add.CombinedOutput(); err != nil {
+		return fmt.Errorf("git worktree add: %w: %s", err, out)
+	}
+	return nil
+}
+
+func (s *RunService) RunAgent(ctx context.Context, userID, runID int64) error {
+	run, err := s.q.GetRunByID(ctx, runID)
+	if err != nil {
+		return err
+	}
+
+	if err := s.q.UpdateRunStatus(ctx, store.UpdateRunStatusParams{
+		Status: store.FeatureRunStatusRunning,
+		ID:     runID,
+	}); err != nil {
+		return fmt.Errorf("failed to update run status: %w", err)
+	}
+
+	repoDir := filepath.Join(run.Workspace, run.RepositoryName)
+	worktreeDir := filepath.Join(run.Workspace, "worktrees", fmt.Sprintf("run-%d", run.ID))
+	branch := fmt.Sprintf("feature-%d-run-%d", run.FeatureID, run.ID)
+
+	if err := prepareWorktree(ctx, repoDir, worktreeDir, branch); err != nil {
+		if err := s.q.UpdateRunStatus(ctx, store.UpdateRunStatusParams{
+			Status: store.FeatureRunStatusFailed,
+			ID:     runID,
+		}); err != nil {
+			return fmt.Errorf("failed to update run status: %w", err)
+		}
+		return fmt.Errorf("failed to prepare worktree: %w", err)
+	}
+
+	if err := s.runner.Run(ctx, run.Prompt, worktreeDir); err != nil {
+		if err := s.q.UpdateRunStatus(ctx, store.UpdateRunStatusParams{
+			Status: store.FeatureRunStatusFailed,
+			ID:     runID,
+		}); err != nil {
+			return fmt.Errorf("failed to update run status: %w", err)
+		}
+		return fmt.Errorf("failed to run agent: %w", err)
+	}
+
+	if err := s.q.UpdateRunStatus(ctx, store.UpdateRunStatusParams{
+		Status: store.FeatureRunStatusCompleted,
+		ID:     runID,
+	}); err != nil {
+		return fmt.Errorf("failed to update run status: %w", err)
+	}
+
+	return nil
 }

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"github.com/didrikolofsson/github-vote-llm/internal/agents/claude"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/hub"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
@@ -10,11 +11,12 @@ import (
 )
 
 type ServicesDeps struct {
-	DB        *pgxpool.Pool
-	Queries   *store.Queries
-	Env       *config.Environment
-	JobClient *river.Client[pgx.Tx]
-	Hub       hub.Hub
+	DB          *pgxpool.Pool
+	Queries     *store.Queries
+	Env         *config.Environment
+	JobClient   *river.Client[pgx.Tx]
+	Hub         hub.Hub
+	AgentRunner *claude.ClaudeRunner
 }
 
 type Services struct {
@@ -39,7 +41,7 @@ func New(
 		GithubService:       NewGithubService(deps.DB, deps.Queries, deps.Env),
 		RepositoriesService: NewRepositoriesService(deps.DB, deps.Queries),
 		MembersService:      NewMembersService(deps.Queries),
-		RunService:          NewRunService(deps.DB, deps.Queries, deps.Env, deps.JobClient),
+		RunService:          NewRunService(deps.DB, deps.Queries, deps.Env, deps.JobClient, deps.AgentRunner),
 		FeaturesService:     NewFeaturesService(deps.DB, deps.Queries, deps.Hub),
 		PortalService:       NewPortalService(deps.DB, deps.Queries),
 	}

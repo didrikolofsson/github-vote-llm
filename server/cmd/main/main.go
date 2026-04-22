@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/didrikolofsson/github-vote-llm/internal/agents/claude"
 	"github.com/didrikolofsson/github-vote-llm/internal/api"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
@@ -57,11 +58,15 @@ func main() {
 	if err != nil {
 		appLogger.Fatalf("failed to create job client: %v", err)
 	}
+	claudeRunner := claude.NewClaudeRunner(claude.NewClaudeRunnerParams{
+		ApiKey: env.ANTHROPIC_API_KEY,
+	})
 
 	q := store.New(db)
 	eventHub := hub.NewHub()
 	s := services.New(services.ServicesDeps{
 		DB: db, Queries: q, Env: env, JobClient: jc, Hub: eventHub,
+		AgentRunner: claudeRunner,
 	})
 
 	workers.Register(w, workers.RegisterWorkersDeps{Services: s, Env: env})
