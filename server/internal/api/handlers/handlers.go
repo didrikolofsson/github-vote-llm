@@ -4,8 +4,6 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/hub"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/services"
-	"github.com/jackc/pgx/v5"
-	"github.com/riverqueue/river"
 )
 
 type Handlers struct {
@@ -20,20 +18,24 @@ type Handlers struct {
 	Portal       PortalHandlers
 }
 
+type NewHandlersDeps struct {
+	Services *services.Services
+	Logger   *logger.Logger
+	Hub      hub.Hub
+}
+
 func New(
-	s *services.Services,
-	jc *river.Client[pgx.Tx],
-	logger *logger.Logger,
+	deps NewHandlersDeps,
 ) Handlers {
 	return Handlers{
-		User:         NewUserHandlers(s.UserService, logger),
-		Auth:         NewAuthHandlers(s.AuthService),
-		Organization: NewOrganizationHandlers(s.OrganizationService, logger),
-		Github:       NewGithubHandlers(s.GithubService),
-		Repository:   NewRepositoryHandlers(s.RepositoriesService, logger),
-		Runs:         NewRunsHandlers(s.RunService, jc),
-		Members:      NewMembersHandlers(s.MembersService, logger),
-		Feature:      NewFeatureHandlers(s.FeaturesService, logger),
-		Portal:       NewPortalHandlers(s.PortalService, logger, hub.NewHub()),
+		User:         NewUserHandlers(deps.Services.UserService, deps.Logger),
+		Auth:         NewAuthHandlers(deps.Services.AuthService),
+		Organization: NewOrganizationHandlers(deps.Services.OrganizationService, deps.Logger),
+		Github:       NewGithubHandlers(deps.Services.GithubService),
+		Repository:   NewRepositoryHandlers(deps.Services.RepositoriesService, deps.Logger),
+		Runs:         NewRunsHandlers(deps.Services.RunService, deps.Logger),
+		Members:      NewMembersHandlers(deps.Services.MembersService, deps.Logger),
+		Feature:      NewFeatureHandlers(deps.Services.FeaturesService, deps.Logger),
+		Portal:       NewPortalHandlers(deps.Services.PortalService, deps.Logger, deps.Hub),
 	}
 }

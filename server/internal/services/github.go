@@ -297,7 +297,6 @@ func (s *GithubServiceImpl) CloneRepoToWorkspace(
 	if err := cmd.Run(); err != nil {
 		return err
 	}
-
 	return nil
 }
 

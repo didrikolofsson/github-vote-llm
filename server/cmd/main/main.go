@@ -12,13 +12,16 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
-	"github.com/didrikolofsson/github-vote-llm/internal/jobs/jobclient"
+	"github.com/didrikolofsson/github-vote-llm/internal/hub"
+	"github.com/didrikolofsson/github-vote-llm/internal/jobs"
+	"github.com/didrikolofsson/github-vote-llm/internal/jobs/workers"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	"github.com/riverqueue/river"
 )
 
 func main() {
@@ -49,14 +52,17 @@ func main() {
 		appLogger.Fatalf("failed to reach database: %v", err)
 	}
 
-	q := store.New(db)
-
-	s := services.New(db, q, env)
-	jc, err := jobclient.New(db, s, env)
+	w := river.NewWorkers()
+	jc, err := jobs.NewClient(jobs.JobClientDeps{DB: db, Workers: w})
 	if err != nil {
 		appLogger.Fatalf("failed to create job client: %v", err)
 	}
 
+	q := store.New(db)
+	eventHub := hub.NewHub()
+	s := services.New(services.ServicesDeps{DB: db, Queries: q, Env: env, JobClient: jc, Hub: eventHub})
+
+	workers.Register(w, workers.RegisterWorkersDeps{Services: s, Env: env})
 	if err := jc.Start(ctx); err != nil {
 		appLogger.Fatalf("failed to start job client: %v", err)
 	}
@@ -64,7 +70,7 @@ func main() {
 	apiLogger := logger.New().Named("api")
 	defer apiLogger.Sync()
 
-	h := handlers.New(s, jc, apiLogger)
+	h := handlers.New(handlers.NewHandlersDeps{Services: s, Logger: apiLogger, Hub: eventHub})
 	router := api.New(h, apiLogger, env)
 
 	srv := &http.Server{

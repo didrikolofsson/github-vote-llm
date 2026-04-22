@@ -4,8 +4,18 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/hub"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
 )
+
+type ServicesDeps struct {
+	DB        *pgxpool.Pool
+	Queries   *store.Queries
+	Env       *config.Environment
+	JobClient *river.Client[pgx.Tx]
+	Hub       hub.Hub
+}
 
 type Services struct {
 	UserService         UserService
@@ -20,19 +30,17 @@ type Services struct {
 }
 
 func New(
-	db *pgxpool.Pool,
-	q *store.Queries,
-	env *config.Environment,
+	deps ServicesDeps,
 ) *Services {
 	return &Services{
-		UserService:         NewUserService(db, q),
-		AuthService:         NewAuthService(db, q, env.JWT_SECRET),
-		OrganizationService: NewOrganizationService(db, q),
-		GithubService:       NewGithubService(db, q, env),
-		RepositoriesService: NewRepositoriesService(db, q),
-		MembersService:      NewMembersService(q),
-		RunService:          NewRunService(db, q),
-		FeaturesService:     NewFeaturesService(db, q, hub.NewHub()),
-		PortalService:       NewPortalService(db, q),
+		UserService:         NewUserService(deps.DB, deps.Queries),
+		AuthService:         NewAuthService(deps.DB, deps.Queries, deps.Env.JWT_SECRET),
+		OrganizationService: NewOrganizationService(deps.DB, deps.Queries),
+		GithubService:       NewGithubService(deps.DB, deps.Queries, deps.Env),
+		RepositoriesService: NewRepositoriesService(deps.DB, deps.Queries),
+		MembersService:      NewMembersService(deps.Queries),
+		RunService:          NewRunService(deps.DB, deps.Queries, deps.JobClient),
+		FeaturesService:     NewFeaturesService(deps.DB, deps.Queries, deps.Hub),
+		PortalService:       NewPortalService(deps.DB, deps.Queries),
 	}
 }
