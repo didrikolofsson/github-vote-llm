@@ -249,16 +249,8 @@ func (s *GithubService) CloneRepoToWorkspace(
 		return err
 	}
 
-	repo, err := s.q.GetRepositoryByFeatureID(ctx, run.FeatureID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrRepositoryNotFound
-		}
-		return err
-	}
-
 	// Workspace is created before job is enqueued.
-	repoPath := filepath.Join(run.Workspace, repo.Name)
+	repoPath := filepath.Join(run.Workspace, run.RepositoryName)
 	if _, err := os.Stat(repoPath); err == nil {
 		return nil
 	}
@@ -288,7 +280,7 @@ func (s *GithubService) CloneRepoToWorkspace(
 
 	client := gh.NewGithubClientByUserID(ctx, ts)
 
-	ghRepo, _, err := client.Repositories.Get(ctx, repo.Owner, repo.Name)
+	ghRepo, _, err := client.Repositories.Get(ctx, run.RepositoryOwner, run.RepositoryName)
 	if err != nil {
 		return err
 	}

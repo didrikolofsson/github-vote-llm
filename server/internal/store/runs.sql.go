@@ -7,6 +7,8 @@ package store
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createRun = `-- name: CreateRun :one
@@ -52,14 +54,35 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (FeatureRu
 }
 
 const getRunByID = `-- name: GetRunByID :one
-SELECT id, prompt, feature_id, status, created_by_user_id, created_at, completed_at, workspace
-FROM feature_runs
-WHERE id = $1
+SELECT fr.id, fr.prompt, fr.feature_id, fr.status, fr.created_by_user_id, fr.created_at, fr.completed_at, fr.workspace,
+    r.id AS repository_id,
+    r.organization_id AS organization_id,
+    r.name AS repository_name,
+    r.owner AS repository_owner
+FROM repositories AS r
+    INNER JOIN features AS f ON f.repository_id = r.id
+    INNER JOIN feature_runs AS fr ON fr.feature_id = f.id
+WHERE fr.id = $1
 `
 
-func (q *Queries) GetRunByID(ctx context.Context, id int64) (FeatureRun, error) {
+type GetRunByIDRow struct {
+	ID              int64
+	Prompt          string
+	FeatureID       int64
+	Status          FeatureRunStatus
+	CreatedByUserID int64
+	CreatedAt       pgtype.Timestamptz
+	CompletedAt     pgtype.Timestamptz
+	Workspace       string
+	RepositoryID    int64
+	OrganizationID  int64
+	RepositoryName  string
+	RepositoryOwner string
+}
+
+func (q *Queries) GetRunByID(ctx context.Context, id int64) (GetRunByIDRow, error) {
 	row := q.db.QueryRow(ctx, getRunByID, id)
-	var i FeatureRun
+	var i GetRunByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.Prompt,
@@ -69,6 +92,10 @@ func (q *Queries) GetRunByID(ctx context.Context, id int64) (FeatureRun, error) 
 		&i.CreatedAt,
 		&i.CompletedAt,
 		&i.Workspace,
+		&i.RepositoryID,
+		&i.OrganizationID,
+		&i.RepositoryName,
+		&i.RepositoryOwner,
 	)
 	return i, err
 }
