@@ -21,6 +21,7 @@ type Handlers struct {
 type NewHandlersDeps struct {
 	Services *services.Services
 	Logger   *logger.Logger
+	Hub      hub.Hub
 }
 
 func New(
@@ -35,6 +36,6 @@ func New(
 		Runs:         NewRunsHandlers(deps.Services.RunService, deps.Logger),
 		Members:      NewMembersHandlers(deps.Services.MembersService, deps.Logger),
 		Feature:      NewFeatureHandlers(deps.Services.FeaturesService, deps.Logger),
-		Portal:       NewPortalHandlers(deps.Services.PortalService, deps.Logger, hub.NewHub()),
+		Portal:       NewPortalHandlers(deps.Services.PortalService, deps.Logger, deps.Hub),
 	}
 }

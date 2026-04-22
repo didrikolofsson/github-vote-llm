@@ -14,6 +14,7 @@ type ServicesDeps struct {
 	Queries   *store.Queries
 	Env       *config.Environment
 	JobClient *river.Client[pgx.Tx]
+	Hub       hub.Hub
 }
 
 type Services struct {
@@ -39,7 +40,7 @@ func New(
 		RepositoriesService: NewRepositoriesService(deps.DB, deps.Queries),
 		MembersService:      NewMembersService(deps.Queries),
 		RunService:          NewRunService(deps.DB, deps.Queries, deps.JobClient),
-		FeaturesService:     NewFeaturesService(deps.DB, deps.Queries, hub.NewHub()),
+		FeaturesService:     NewFeaturesService(deps.DB, deps.Queries, deps.Hub),
 		PortalService:       NewPortalService(deps.DB, deps.Queries),
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
+	"github.com/didrikolofsson/github-vote-llm/internal/hub"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs/workers"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
@@ -58,7 +59,8 @@ func main() {
 	}
 
 	q := store.New(db)
-	s := services.New(services.ServicesDeps{DB: db, Queries: q, Env: env, JobClient: jc})
+	eventHub := hub.NewHub()
+	s := services.New(services.ServicesDeps{DB: db, Queries: q, Env: env, JobClient: jc, Hub: eventHub})
 
 	workers.Register(w, workers.RegisterWorkersDeps{Services: s, Env: env})
 	if err := jc.Start(ctx); err != nil {
@@ -68,7 +70,7 @@ func main() {
 	apiLogger := logger.New().Named("api")
 	defer apiLogger.Sync()
 
-	h := handlers.New(handlers.NewHandlersDeps{Services: s, Logger: apiLogger})
+	h := handlers.New(handlers.NewHandlersDeps{Services: s, Logger: apiLogger, Hub: eventHub})
 	router := api.New(h, apiLogger, env)
 
 	srv := &http.Server{
