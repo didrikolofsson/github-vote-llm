@@ -14,24 +14,17 @@ import (
 
 var ErrPortalNotFound = errors.New("portal not found or not public")
 
-type PortalService interface {
-	GetPortalPage(ctx context.Context, orgSlug, repoName, voterToken string) (*dtos.PortalPageDTO, error)
-	ToggleVote(ctx context.Context, orgSlug, repoName string, featureID int64, voterToken, reason string, urgency store.NullVoteUrgencyType) (int64, error)
-	ListComments(ctx context.Context, orgSlug, repoName string, featureID int64) ([]dtos.PortalCommentDTO, error)
-	CreateComment(ctx context.Context, orgSlug, repoName string, featureID int64, body, authorName string) (*dtos.PortalCommentDTO, error)
-}
-
-type PortalServiceImpl struct {
+type PortalService struct {
 	db *pgxpool.Pool
 	q  *store.Queries
 }
 
-func NewPortalService(db *pgxpool.Pool, q *store.Queries) PortalService {
-	return &PortalServiceImpl{db: db, q: q}
+func NewPortalService(db *pgxpool.Pool, q *store.Queries) *PortalService {
+	return &PortalService{db: db, q: q}
 }
 
 // resolvePublicRepo looks up a repository by org slug + repo name and ensures it is public.
-func (s *PortalServiceImpl) resolvePublicRepo(ctx context.Context, orgSlug, repoName string) (store.Repository, error) {
+func (s *PortalService) resolvePublicRepo(ctx context.Context, orgSlug, repoName string) (store.Repository, error) {
 	repo, err := s.q.GetPublicRepositoryByOrgAndName(ctx, store.GetPublicRepositoryByOrgAndNameParams{
 		Slug: orgSlug,
 		Name: repoName,
@@ -42,7 +35,7 @@ func (s *PortalServiceImpl) resolvePublicRepo(ctx context.Context, orgSlug, repo
 	return repo, err
 }
 
-func (s *PortalServiceImpl) GetPortalPage(ctx context.Context, orgSlug, repoName, voterToken string) (*dtos.PortalPageDTO, error) {
+func (s *PortalService) GetPortalPage(ctx context.Context, orgSlug, repoName, voterToken string) (*dtos.PortalPageDTO, error) {
 	repo, err := s.resolvePublicRepo(ctx, orgSlug, repoName)
 	if err != nil {
 		return nil, err
@@ -109,7 +102,7 @@ func (s *PortalServiceImpl) GetPortalPage(ctx context.Context, orgSlug, repoName
 	}, nil
 }
 
-func (s *PortalServiceImpl) ToggleVote(ctx context.Context, orgSlug, repoName string, featureID int64, voterToken, reason string, urgency store.NullVoteUrgencyType) (int64, error) {
+func (s *PortalService) ToggleVote(ctx context.Context, orgSlug, repoName string, featureID int64, voterToken, reason string, urgency store.NullVoteUrgencyType) (int64, error) {
 	repo, err := s.resolvePublicRepo(ctx, orgSlug, repoName)
 	if err != nil {
 		return 0, err
@@ -149,7 +142,7 @@ func (s *PortalServiceImpl) ToggleVote(ctx context.Context, orgSlug, repoName st
 	return s.q.CountFeatureVotes(ctx, featureID)
 }
 
-func (s *PortalServiceImpl) ListComments(ctx context.Context, orgSlug, repoName string, featureID int64) ([]dtos.PortalCommentDTO, error) {
+func (s *PortalService) ListComments(ctx context.Context, orgSlug, repoName string, featureID int64) ([]dtos.PortalCommentDTO, error) {
 	repo, err := s.resolvePublicRepo(ctx, orgSlug, repoName)
 	if err != nil {
 		return nil, err
@@ -181,7 +174,7 @@ func (s *PortalServiceImpl) ListComments(ctx context.Context, orgSlug, repoName 
 	return out, nil
 }
 
-func (s *PortalServiceImpl) CreateComment(ctx context.Context, orgSlug, repoName string, featureID int64, body, authorName string) (*dtos.PortalCommentDTO, error) {
+func (s *PortalService) CreateComment(ctx context.Context, orgSlug, repoName string, featureID int64, body, authorName string) (*dtos.PortalCommentDTO, error) {
 	repo, err := s.resolvePublicRepo(ctx, orgSlug, repoName)
 	if err != nil {
 		return nil, err

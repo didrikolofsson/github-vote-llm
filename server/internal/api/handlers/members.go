@@ -12,23 +12,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type MembersHandlers interface {
-	List(c *gin.Context)
-	Invite(c *gin.Context)
-	Remove(c *gin.Context)
-	UpdateRole(c *gin.Context)
-}
-
-type MembersHandlersImpl struct {
-	s services.MembersService
+type MembersHandlers struct {
+	s *services.MembersService
 	l *logger.Logger
 }
 
-func NewMembersHandlers(s services.MembersService, l *logger.Logger) MembersHandlers {
-	return &MembersHandlersImpl{s: s, l: l}
+func NewMembersHandlers(s *services.MembersService, l *logger.Logger) *MembersHandlers {
+	return &MembersHandlers{s: s, l: l}
 }
 
-func (h *MembersHandlersImpl) List(c *gin.Context) {
+func (h *MembersHandlers) List(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -58,7 +51,7 @@ type inviteRequest struct {
 	Email string `json:"email" binding:"required,email"`
 }
 
-func (h *MembersHandlersImpl) Invite(c *gin.Context) {
+func (h *MembersHandlers) Invite(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -98,7 +91,7 @@ func (h *MembersHandlersImpl) Invite(c *gin.Context) {
 	c.Status(http.StatusCreated)
 }
 
-func (h *MembersHandlersImpl) Remove(c *gin.Context) {
+func (h *MembersHandlers) Remove(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -138,7 +131,7 @@ type updateRoleRequest struct {
 	Role string `json:"role" binding:"required,oneof=owner member"`
 }
 
-func (h *MembersHandlersImpl) UpdateRole(c *gin.Context) {
+func (h *MembersHandlers) UpdateRole(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})

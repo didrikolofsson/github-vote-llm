@@ -23,22 +23,15 @@ type MemberWithEmail struct {
 	Role   string `json:"role"`
 }
 
-type MembersService interface {
-	ListMembers(ctx context.Context, orgID, requestingUserID int64) ([]MemberWithEmail, error)
-	InviteByEmail(ctx context.Context, orgID, requestingUserID int64, email string) error
-	RemoveMember(ctx context.Context, orgID, requestingUserID int64, userID int64) error
-	UpdateRole(ctx context.Context, orgID, requestingUserID int64, userID int64, role string) error
-}
-
-type MembersServiceImpl struct {
+type MembersService struct {
 	q *store.Queries
 }
 
-func NewMembersService(q *store.Queries) MembersService {
-	return &MembersServiceImpl{q: q}
+func NewMembersService(q *store.Queries) *MembersService {
+	return &MembersService{q: q}
 }
 
-func (s *MembersServiceImpl) ListMembers(ctx context.Context, orgID, requestingUserID int64) ([]MemberWithEmail, error) {
+func (s *MembersService) ListMembers(ctx context.Context, orgID, requestingUserID int64) ([]MemberWithEmail, error) {
 	if err := s.verifyOrgMember(ctx, orgID, requestingUserID); err != nil {
 		return nil, err
 	}
@@ -53,7 +46,7 @@ func (s *MembersServiceImpl) ListMembers(ctx context.Context, orgID, requestingU
 	return out, nil
 }
 
-func (s *MembersServiceImpl) InviteByEmail(ctx context.Context, orgID, requestingUserID int64, email string) error {
+func (s *MembersService) InviteByEmail(ctx context.Context, orgID, requestingUserID int64, email string) error {
 	if err := s.verifyOrgOwner(ctx, orgID, requestingUserID); err != nil {
 		return err
 	}
@@ -81,7 +74,7 @@ func (s *MembersServiceImpl) InviteByEmail(ctx context.Context, orgID, requestin
 	return nil
 }
 
-func (s *MembersServiceImpl) RemoveMember(ctx context.Context, orgID, requestingUserID int64, userID int64) error {
+func (s *MembersService) RemoveMember(ctx context.Context, orgID, requestingUserID int64, userID int64) error {
 	if err := s.verifyOrgOwner(ctx, orgID, requestingUserID); err != nil {
 		return err
 	}
@@ -114,7 +107,7 @@ func (s *MembersServiceImpl) RemoveMember(ctx context.Context, orgID, requesting
 	return nil
 }
 
-func (s *MembersServiceImpl) UpdateRole(ctx context.Context, orgID, requestingUserID int64, userID int64, role string) error {
+func (s *MembersService) UpdateRole(ctx context.Context, orgID, requestingUserID int64, userID int64, role string) error {
 	if err := s.verifyOrgOwner(ctx, orgID, requestingUserID); err != nil {
 		return err
 	}
@@ -157,7 +150,7 @@ func (s *MembersServiceImpl) UpdateRole(ctx context.Context, orgID, requestingUs
 	return err
 }
 
-func (s *MembersServiceImpl) verifyOrgMember(ctx context.Context, orgID, userID int64) error {
+func (s *MembersService) verifyOrgMember(ctx context.Context, orgID, userID int64) error {
 	members, err := s.q.GetOrganizationMembers(ctx, orgID)
 	if err != nil {
 		return err
@@ -170,7 +163,7 @@ func (s *MembersServiceImpl) verifyOrgMember(ctx context.Context, orgID, userID 
 	return ErrNotOrgMember
 }
 
-func (s *MembersServiceImpl) verifyOrgOwner(ctx context.Context, orgID, userID int64) error {
+func (s *MembersService) verifyOrgOwner(ctx context.Context, orgID, userID int64) error {
 	members, err := s.q.GetOrganizationMembers(ctx, orgID)
 	if err != nil {
 		return err

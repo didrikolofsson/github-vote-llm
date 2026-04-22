@@ -30,34 +30,20 @@ var (
 	ErrGitHubTokenUnavailable = errors.New("github: token unavailable or refresh failed")
 )
 
-type GithubService interface {
-	// Authorization
-	CreateOAuthState(ctx context.Context, userID int64) (string, error)
-	ReadOAuthStateClaims(ctx context.Context, state string) (*oauthStateClaims, error)
-	ExchangeCodeForAccessToken(ctx context.Context, code string, userID int64) error
-	GetGitHubConnectionStatus(ctx context.Context, userID int64) (*GithubUserResponse, error)
-	DeleteGitHubConnection(ctx context.Context, userID int64) error
-
-	// Operations
-	ListReposByAuthenticatedUser(ctx context.Context, userID int64, page int) ([]dtos.GitHubRepository, bool, error)
-	CloneRepoToWorkspace(ctx context.Context, userID int64, owner string, name string, workspace string) error
-	OpenPR(ctx context.Context, userID int64, owner, name, branch, title, body string) (string, error)
-}
-
-type GithubServiceImpl struct {
+type GithubService struct {
 	db  *pgxpool.Pool
 	q   *store.Queries
 	cfg *oauth2.Config
 	env *config.Environment
 }
 
-func NewGithubService(db *pgxpool.Pool, q *store.Queries, env *config.Environment) GithubService {
+func NewGithubService(db *pgxpool.Pool, q *store.Queries, env *config.Environment) *GithubService {
 	cfg := gh.NewGithubOAuthConfig(
 		env.GITHUB_CLIENT_ID,
 		env.GITHUB_CLIENT_SECRET,
 		env.SERVER_URL+"/v1/github/callback",
 	)
-	return &GithubServiceImpl{db: db, q: q, cfg: cfg, env: env}
+	return &GithubService{db: db, q: q, cfg: cfg, env: env}
 }
 
 // oauthStateClaims is signed into the GitHub `state` query param so /callback can bind the code to a user.
@@ -73,7 +59,7 @@ var (
 
 // Authorize lets the client initiate the OAuth2 flow by returning the GitHub authorization URL.
 // Requires JWT (see api router). Response matches client: { "authorize_url": "..." }.
-func (s *GithubServiceImpl) CreateOAuthState(ctx context.Context, userID int64) (string, error) {
+func (s *GithubService) CreateOAuthState(ctx context.Context, userID int64) (string, error) {
 	stateTok := jwt.NewWithClaims(jwt.SigningMethodHS256, oauthStateClaims{
 		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -97,7 +83,7 @@ func (s *GithubServiceImpl) CreateOAuthState(ctx context.Context, userID int64) 
 	return authorizeURL, nil
 }
 
-func (s *GithubServiceImpl) ReadOAuthStateClaims(ctx context.Context, state string) (*oauthStateClaims, error) {
+func (s *GithubService) ReadOAuthStateClaims(ctx context.Context, state string) (*oauthStateClaims, error) {
 	var claims oauthStateClaims
 	tok, err := jwt.ParseWithClaims(state, &claims, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -111,7 +97,7 @@ func (s *GithubServiceImpl) ReadOAuthStateClaims(ctx context.Context, state stri
 	return &claims, nil
 }
 
-func (s *GithubServiceImpl) ExchangeCodeForAccessToken(ctx context.Context, code string, userID int64) error {
+func (s *GithubService) ExchangeCodeForAccessToken(ctx context.Context, code string, userID int64) error {
 	token, err := s.cfg.Exchange(ctx, code)
 	if err != nil {
 		return err
@@ -147,7 +133,7 @@ type GithubUserResponse struct {
 	Login string `json:"login"`
 }
 
-func (s *GithubServiceImpl) GetGitHubConnectionStatus(ctx context.Context, userID int64) (*GithubUserResponse, error) {
+func (s *GithubService) GetGitHubConnectionStatus(ctx context.Context, userID int64) (*GithubUserResponse, error) {
 	if _, err := s.q.GetGitHubConnectionByUserID(ctx, userID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrGitHubNotConnected
@@ -172,7 +158,7 @@ func (s *GithubServiceImpl) GetGitHubConnectionStatus(ctx context.Context, userI
 	}, nil
 }
 
-func (s *GithubServiceImpl) DeleteGitHubConnection(ctx context.Context, userID int64) error {
+func (s *GithubService) DeleteGitHubConnection(ctx context.Context, userID int64) error {
 	conn, err := s.q.GetGitHubConnectionByUserID(ctx, userID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return err
@@ -189,7 +175,7 @@ func (s *GithubServiceImpl) DeleteGitHubConnection(ctx context.Context, userID i
 	return s.q.DeleteGitHubConnection(ctx, userID)
 }
 
-func (s *GithubServiceImpl) revokeGitHubToken(ctx context.Context, accessToken string) error {
+func (s *GithubService) revokeGitHubToken(ctx context.Context, accessToken string) error {
 	body, err := json.Marshal(map[string]string{"access_token": accessToken})
 	if err != nil {
 		return err
@@ -211,7 +197,7 @@ func (s *GithubServiceImpl) revokeGitHubToken(ctx context.Context, accessToken s
 	return nil
 }
 
-func (s *GithubServiceImpl) ListReposByAuthenticatedUser(ctx context.Context, userID int64, page int) ([]dtos.GitHubRepository, bool, error) {
+func (s *GithubService) ListReposByAuthenticatedUser(ctx context.Context, userID int64, page int) ([]dtos.GitHubRepository, bool, error) {
 	if _, err := s.q.GetGitHubConnectionByUserID(ctx, userID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, false, ErrGitHubNotConnected
@@ -249,7 +235,7 @@ var (
 	ErrInvalidCloneURL = errors.New("github: invalid or missing clone URL")
 )
 
-func (s *GithubServiceImpl) CloneRepoToWorkspace(
+func (s *GithubService) CloneRepoToWorkspace(
 	ctx context.Context, userID int64, owner, name, workspace string,
 ) error {
 	conn, err := s.q.GetGitHubConnectionByUserID(ctx, userID)
@@ -300,7 +286,7 @@ func (s *GithubServiceImpl) CloneRepoToWorkspace(
 	return nil
 }
 
-func (s *GithubServiceImpl) OpenPR(
+func (s *GithubService) OpenPR(
 	ctx context.Context, userID int64, owner, name, branch, title, body string,
 ) (string, error) {
 	ts := gh.NewGithubTokenSource(ctx, s.q, s.cfg, userID, s.env.TOKEN_ENCRYPTION_KEY)

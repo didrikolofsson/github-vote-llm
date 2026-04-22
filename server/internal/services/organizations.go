@@ -36,25 +36,16 @@ type CreateOrganizationParams struct {
 	OwnerID int64
 }
 
-type OrganizationService interface {
-	CreateOrganization(ctx context.Context, params CreateOrganizationParams) (*dtos.OrganizationWithMembers, error)
-	GetOrganizationByID(ctx context.Context, organizationID int64) (*dtos.OrganizationWithMembers, error)
-	ListOrganizationsForUser(ctx context.Context, userID int64) ([]dtos.Organization, error)
-	UpdateOrganizationByID(ctx context.Context, organizationID int64, params *store.UpdateOrganizationByIDParams) (*dtos.Organization, error)
-	UpdateOrganizationSlug(ctx context.Context, organizationID int64, slug string) (*dtos.Organization, error)
-	DeleteOrganization(ctx context.Context, organizationID int64) error
-}
-
-type OrganizationServiceImpl struct {
+type OrganizationService struct {
 	db *pgxpool.Pool
 	q  *store.Queries
 }
 
-func NewOrganizationService(db *pgxpool.Pool, q *store.Queries) OrganizationService {
-	return &OrganizationServiceImpl{db: db, q: q}
+func NewOrganizationService(db *pgxpool.Pool, q *store.Queries) *OrganizationService {
+	return &OrganizationService{db: db, q: q}
 }
 
-func (s *OrganizationServiceImpl) ListOrganizationsForUser(ctx context.Context, userID int64) ([]dtos.Organization, error) {
+func (s *OrganizationService) ListOrganizationsForUser(ctx context.Context, userID int64) ([]dtos.Organization, error) {
 	orgs, err := s.q.ListOrganizationsForUser(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -66,7 +57,7 @@ func (s *OrganizationServiceImpl) ListOrganizationsForUser(ctx context.Context, 
 	return out, nil
 }
 
-func (s *OrganizationServiceImpl) CreateOrganization(ctx context.Context, params CreateOrganizationParams) (*dtos.OrganizationWithMembers, error) {
+func (s *OrganizationService) CreateOrganization(ctx context.Context, params CreateOrganizationParams) (*dtos.OrganizationWithMembers, error) {
 	existing, _ := s.q.ListOrganizationsForUser(ctx, params.OwnerID)
 	if len(existing) > 0 {
 		return nil, ErrUserAlreadyInOrganization
@@ -117,7 +108,7 @@ func (s *OrganizationServiceImpl) CreateOrganization(ctx context.Context, params
 	}, nil
 }
 
-func (s *OrganizationServiceImpl) GetOrganizationByID(ctx context.Context, organizationID int64) (*dtos.OrganizationWithMembers, error) {
+func (s *OrganizationService) GetOrganizationByID(ctx context.Context, organizationID int64) (*dtos.OrganizationWithMembers, error) {
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, err
@@ -149,7 +140,7 @@ func (s *OrganizationServiceImpl) GetOrganizationByID(ctx context.Context, organ
 	}, nil
 }
 
-func (s *OrganizationServiceImpl) UpdateOrganizationByID(
+func (s *OrganizationService) UpdateOrganizationByID(
 	ctx context.Context,
 	organizationID int64,
 	params *store.UpdateOrganizationByIDParams,
@@ -170,7 +161,7 @@ func (s *OrganizationServiceImpl) UpdateOrganizationByID(
 	return &dto, nil
 }
 
-func (s *OrganizationServiceImpl) UpdateOrganizationSlug(ctx context.Context, organizationID int64, slug string) (*dtos.Organization, error) {
+func (s *OrganizationService) UpdateOrganizationSlug(ctx context.Context, organizationID int64, slug string) (*dtos.Organization, error) {
 	org, err := s.q.UpdateOrganizationSlug(ctx, store.UpdateOrganizationSlugParams{
 		ID:   organizationID,
 		Slug: slug,
@@ -189,7 +180,7 @@ func (s *OrganizationServiceImpl) UpdateOrganizationSlug(ctx context.Context, or
 	return &dto, nil
 }
 
-func (s *OrganizationServiceImpl) DeleteOrganization(ctx context.Context, organizationID int64) error {
+func (s *OrganizationService) DeleteOrganization(ctx context.Context, organizationID int64) error {
 	return s.q.DeleteOrganization(ctx, organizationID)
 }
 

@@ -26,24 +26,17 @@ var (
 	ErrInvalidRefreshToken = errors.New("invalid or expired refresh token")
 )
 
-type AuthService interface {
-	Authorize(ctx context.Context, email, password, codeChallenge, redirectURI string) (string, error)
-	ExchangeCode(ctx context.Context, code, codeVerifier, redirectURI string) (accessToken, refreshToken string, err error)
-	Refresh(ctx context.Context, refreshToken string) (accessToken string, err error)
-	Revoke(ctx context.Context, refreshToken string) error
-}
-
-type AuthServiceImpl struct {
+type AuthService struct {
 	db        *pgxpool.Pool
 	q         *store.Queries
 	jwtSecret []byte
 }
 
-func NewAuthService(db *pgxpool.Pool, q *store.Queries, jwtSecret string) AuthService {
-	return &AuthServiceImpl{db: db, q: q, jwtSecret: []byte(jwtSecret)}
+func NewAuthService(db *pgxpool.Pool, q *store.Queries, jwtSecret string) *AuthService {
+	return &AuthService{db: db, q: q, jwtSecret: []byte(jwtSecret)}
 }
 
-func (s *AuthServiceImpl) Authorize(ctx context.Context, email, password, codeChallenge, redirectURI string) (string, error) {
+func (s *AuthService) Authorize(ctx context.Context, email, password, codeChallenge, redirectURI string) (string, error) {
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return "", err
@@ -83,7 +76,7 @@ func (s *AuthServiceImpl) Authorize(ctx context.Context, email, password, codeCh
 	return code, nil
 }
 
-func (s *AuthServiceImpl) ExchangeCode(ctx context.Context, code, codeVerifier, redirectURI string) (string, string, error) {
+func (s *AuthService) ExchangeCode(ctx context.Context, code, codeVerifier, redirectURI string) (string, string, error) {
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return "", "", err
@@ -131,7 +124,7 @@ func (s *AuthServiceImpl) ExchangeCode(ctx context.Context, code, codeVerifier, 
 	return accessToken, refreshToken, nil
 }
 
-func (s *AuthServiceImpl) Refresh(ctx context.Context, refreshToken string) (string, error) {
+func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (string, error) {
 	rt, err := s.q.GetRefreshToken(ctx, hashToken(refreshToken))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrInvalidRefreshToken
@@ -151,11 +144,11 @@ func (s *AuthServiceImpl) Refresh(ctx context.Context, refreshToken string) (str
 	return s.issueAccessToken(user.ID, user.Email)
 }
 
-func (s *AuthServiceImpl) Revoke(ctx context.Context, refreshToken string) error {
+func (s *AuthService) Revoke(ctx context.Context, refreshToken string) error {
 	return s.q.DeleteRefreshToken(ctx, hashToken(refreshToken))
 }
 
-func (s *AuthServiceImpl) issueAccessToken(userID int64, email string) (string, error) {
+func (s *AuthService) issueAccessToken(userID int64, email string) (string, error) {
 	claims := dtos.Claims{
 		UserID: userID,
 		Email:  email,
@@ -168,7 +161,7 @@ func (s *AuthServiceImpl) issueAccessToken(userID int64, email string) (string, 
 	return token.SignedString(s.jwtSecret)
 }
 
-func (s *AuthServiceImpl) issueRefreshToken(ctx context.Context, userID int64) (string, error) {
+func (s *AuthService) issueRefreshToken(ctx context.Context, userID int64) (string, error) {
 	raw, err := generateRandomToken(32)
 	if err != nil {
 		return "", err

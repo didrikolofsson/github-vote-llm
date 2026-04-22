@@ -14,7 +14,7 @@ import (
 
 type CloneRepoWorker struct {
 	river.WorkerDefaults[args.CloneRepoArgs]
-	svc       services.GithubService
+	svc       *services.GithubService
 	workspace string
 }
 

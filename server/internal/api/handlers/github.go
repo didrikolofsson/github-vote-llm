@@ -18,21 +18,12 @@ var (
 	GitHubAuthURL = github.Endpoint.AuthURL
 )
 
-type GithubHandlers interface {
-	// Auth handlers
-	Authorize(c *gin.Context)
-	Callback(c *gin.Context)
-	Status(c *gin.Context)
-	Disconnect(c *gin.Context)
-	ListReposByAuthenticatedUser(c *gin.Context)
+type GithubHandlers struct {
+	s *services.GithubService
 }
 
-type GithubHandlersImpl struct {
-	s services.GithubService
-}
-
-func NewGithubHandlers(s services.GithubService) GithubHandlers {
-	return &GithubHandlersImpl{s: s}
+func NewGithubHandlers(s *services.GithubService) *GithubHandlers {
+	return &GithubHandlers{s: s}
 }
 
 var (
@@ -40,7 +31,7 @@ var (
 )
 
 // Authorize lets the client initiate the OAuth2 flow by returning the GitHub authorization URL.
-func (h *GithubHandlersImpl) Authorize(c *gin.Context) {
+func (h *GithubHandlers) Authorize(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -66,7 +57,7 @@ func (h *GithubHandlersImpl) Authorize(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"authorize_url": authorizeURL})
 }
 
-func (h *GithubHandlersImpl) Callback(c *gin.Context) {
+func (h *GithubHandlers) Callback(c *gin.Context) {
 	redirectBase, ok := helpers.ReadRequestOriginCookie(REQUEST_ORIGIN_COOKIE_NAME, c.Request)
 	if !ok || redirectBase == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing or invalid request origin"})
@@ -115,7 +106,7 @@ func (h *GithubHandlersImpl) Callback(c *gin.Context) {
 	c.Redirect(http.StatusTemporaryRedirect, successUrl)
 }
 
-func (h *GithubHandlersImpl) Status(c *gin.Context) {
+func (h *GithubHandlers) Status(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -138,7 +129,7 @@ func (h *GithubHandlersImpl) Status(c *gin.Context) {
 	})
 }
 
-func (h *GithubHandlersImpl) Disconnect(c *gin.Context) {
+func (h *GithubHandlers) Disconnect(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -153,7 +144,7 @@ func (h *GithubHandlersImpl) Disconnect(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-func (h *GithubHandlersImpl) ListReposByAuthenticatedUser(c *gin.Context) {
+func (h *GithubHandlers) ListReposByAuthenticatedUser(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})

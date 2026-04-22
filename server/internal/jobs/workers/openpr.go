@@ -8,7 +8,7 @@ import (
 
 type OpenPRWorker struct {
 	river.WorkerDefaults[args.OpenRepoPullRequestArgs]
-	svc services.GithubService
+	svc *services.GithubService
 }
 
 // func (w *OpenPRWorker) Work(ctx context.Context, job *river.Job[args.OpenRepoPullRequestArgs]) error {

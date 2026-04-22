@@ -8,21 +8,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type AuthHandlers interface {
-	Authorize(c *gin.Context)
-	Token(c *gin.Context)
-	Revoke(c *gin.Context)
-	Signup(c *gin.Context)
-	Login(c *gin.Context)
-	Logout(c *gin.Context)
+type AuthHandlers struct {
+	s *services.AuthService
 }
 
-type AuthHandlersImpl struct {
-	s services.AuthService
-}
-
-func NewAuthHandlers(s services.AuthService) AuthHandlers {
-	return &AuthHandlersImpl{s: s}
+func NewAuthHandlers(s *services.AuthService) *AuthHandlers {
+	return &AuthHandlers{s: s}
 }
 
 type authorizeRequest struct {
@@ -44,7 +35,7 @@ type revokeRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
-func (h *AuthHandlersImpl) Authorize(c *gin.Context) {
+func (h *AuthHandlers) Authorize(c *gin.Context) {
 	var req authorizeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
@@ -64,7 +55,7 @@ func (h *AuthHandlersImpl) Authorize(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": code, "redirect_uri": req.RedirectURI})
 }
 
-func (h *AuthHandlersImpl) Token(c *gin.Context) {
+func (h *AuthHandlers) Token(c *gin.Context) {
 	var req tokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
@@ -118,7 +109,7 @@ func (h *AuthHandlersImpl) Token(c *gin.Context) {
 	}
 }
 
-func (h *AuthHandlersImpl) Revoke(c *gin.Context) {
+func (h *AuthHandlers) Revoke(c *gin.Context) {
 	var req revokeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
@@ -131,14 +122,14 @@ func (h *AuthHandlersImpl) Revoke(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-func (h *AuthHandlersImpl) Signup(c *gin.Context) {
+func (h *AuthHandlers) Signup(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "User signed up"})
 }
 
-func (h *AuthHandlersImpl) Login(c *gin.Context) {
+func (h *AuthHandlers) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "User logged in"})
 }
 
-func (h *AuthHandlersImpl) Logout(c *gin.Context) {
+func (h *AuthHandlers) Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "User logged out"})
 }

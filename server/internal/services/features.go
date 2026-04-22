@@ -68,33 +68,17 @@ type PatchFeatureParams struct {
 	Area         *string
 }
 
-type FeaturesService interface {
-	ListFeatures(ctx context.Context, repoID int64) ([]FeatureDTO, error)
-	GetFeature(ctx context.Context, featureID int64) (*FeatureDTO, error)
-	CreateFeature(ctx context.Context, repoID int64, title, description string) (*FeatureDTO, error)
-	PatchFeature(ctx context.Context, featureID int64, p PatchFeatureParams) (*FeatureDTO, error)
-	UpdatePosition(ctx context.Context, featureID int64, x, y *float64, locked bool) (*FeatureDTO, error)
-	DeleteFeature(ctx context.Context, featureID int64) error
-	GetRoadmap(ctx context.Context, repoID int64) (*RoadmapDTO, error)
-	AddDependency(ctx context.Context, featureID, dependsOn int64) error
-	RemoveDependency(ctx context.Context, featureID, dependsOn int64) error
-	ToggleVote(ctx context.Context, featureID int64, voterToken, reason string, urgency store.NullVoteUrgencyType) (int64, error)
-	ListVoteSignals(ctx context.Context, featureID int64) ([]VoteSignalDTO, error)
-	ListComments(ctx context.Context, featureID int64) ([]FeatureCommentDTO, error)
-	CreateComment(ctx context.Context, featureID int64, body, authorName string) (*FeatureCommentDTO, error)
-}
-
-type FeaturesServiceImpl struct {
+type FeaturesService struct {
 	db *pgxpool.Pool
 	q  *store.Queries
 	h  hub.Hub
 }
 
-func NewFeaturesService(db *pgxpool.Pool, q *store.Queries, h hub.Hub) FeaturesService {
-	return &FeaturesServiceImpl{db: db, q: q, h: h}
+func NewFeaturesService(db *pgxpool.Pool, q *store.Queries, h hub.Hub) *FeaturesService {
+	return &FeaturesService{db: db, q: q, h: h}
 }
 
-func (s *FeaturesServiceImpl) ListFeatures(ctx context.Context, repoID int64) ([]FeatureDTO, error) {
+func (s *FeaturesService) ListFeatures(ctx context.Context, repoID int64) ([]FeatureDTO, error) {
 	rows, err := s.q.ListFeatures(ctx, repoID)
 	if err != nil {
 		return nil, err
@@ -110,7 +94,7 @@ func (s *FeaturesServiceImpl) ListFeatures(ctx context.Context, repoID int64) ([
 	return out, nil
 }
 
-func (s *FeaturesServiceImpl) GetFeature(ctx context.Context, featureID int64) (*FeatureDTO, error) {
+func (s *FeaturesService) GetFeature(ctx context.Context, featureID int64) (*FeatureDTO, error) {
 	f, err := s.q.GetFeature(ctx, featureID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrFeatureNotFound
@@ -125,7 +109,7 @@ func (s *FeaturesServiceImpl) GetFeature(ctx context.Context, featureID int64) (
 	return &dto, nil
 }
 
-func (s *FeaturesServiceImpl) CreateFeature(ctx context.Context, repoID int64, title, description string) (*FeatureDTO, error) {
+func (s *FeaturesService) CreateFeature(ctx context.Context, repoID int64, title, description string) (*FeatureDTO, error) {
 	f, err := s.q.CreateFeature(ctx, store.CreateFeatureParams{
 		RepositoryID: repoID,
 		Title:        title,
@@ -147,7 +131,7 @@ func (s *FeaturesServiceImpl) CreateFeature(ctx context.Context, repoID int64, t
 	return &dto, nil
 }
 
-func (s *FeaturesServiceImpl) DeleteFeature(ctx context.Context, featureID int64) error {
+func (s *FeaturesService) DeleteFeature(ctx context.Context, featureID int64) error {
 	f, err := s.q.GetFeature(ctx, featureID)
 	if err != nil {
 		return err
@@ -159,7 +143,7 @@ func (s *FeaturesServiceImpl) DeleteFeature(ctx context.Context, featureID int64
 	return nil
 }
 
-func (s *FeaturesServiceImpl) PatchFeature(ctx context.Context, featureID int64, p PatchFeatureParams) (*FeatureDTO, error) {
+func (s *FeaturesService) PatchFeature(ctx context.Context, featureID int64, p PatchFeatureParams) (*FeatureDTO, error) {
 	nullReviewStatus := store.NullReviewStatusType{}
 	if p.ReviewStatus != nil {
 		nullReviewStatus = store.NullReviewStatusType{ReviewStatusType: *p.ReviewStatus, Valid: true}
@@ -190,7 +174,7 @@ func (s *FeaturesServiceImpl) PatchFeature(ctx context.Context, featureID int64,
 	return &dto, nil
 }
 
-func (s *FeaturesServiceImpl) UpdatePosition(ctx context.Context, featureID int64, x, y *float64, locked bool) (*FeatureDTO, error) {
+func (s *FeaturesService) UpdatePosition(ctx context.Context, featureID int64, x, y *float64, locked bool) (*FeatureDTO, error) {
 	f, err := s.q.UpdateFeaturePosition(ctx, store.UpdateFeaturePositionParams{
 		ID:            featureID,
 		RoadmapX:      x,
@@ -210,7 +194,7 @@ func (s *FeaturesServiceImpl) UpdatePosition(ctx context.Context, featureID int6
 	return &dto, nil
 }
 
-func (s *FeaturesServiceImpl) GetRoadmap(ctx context.Context, repoID int64) (*RoadmapDTO, error) {
+func (s *FeaturesService) GetRoadmap(ctx context.Context, repoID int64) (*RoadmapDTO, error) {
 	features, err := s.ListFeatures(ctx, repoID)
 	if err != nil {
 		return nil, err
@@ -226,7 +210,7 @@ func (s *FeaturesServiceImpl) GetRoadmap(ctx context.Context, repoID int64) (*Ro
 	return &RoadmapDTO{Features: features, Dependencies: deps}, nil
 }
 
-func (s *FeaturesServiceImpl) AddDependency(ctx context.Context, featureID, dependsOn int64) error {
+func (s *FeaturesService) AddDependency(ctx context.Context, featureID, dependsOn int64) error {
 	if err := s.q.AddFeatureDependency(ctx, store.AddFeatureDependencyParams{
 		FeatureID: featureID,
 		DependsOn: dependsOn,
@@ -236,7 +220,7 @@ func (s *FeaturesServiceImpl) AddDependency(ctx context.Context, featureID, depe
 	return nil
 }
 
-func (s *FeaturesServiceImpl) RemoveDependency(ctx context.Context, featureID, dependsOn int64) error {
+func (s *FeaturesService) RemoveDependency(ctx context.Context, featureID, dependsOn int64) error {
 	if err := s.q.RemoveFeatureDependency(ctx, store.RemoveFeatureDependencyParams{
 		FeatureID: featureID,
 		DependsOn: dependsOn,
@@ -246,7 +230,7 @@ func (s *FeaturesServiceImpl) RemoveDependency(ctx context.Context, featureID, d
 	return nil
 }
 
-func (s *FeaturesServiceImpl) ToggleVote(ctx context.Context, featureID int64, voterToken, reason string, urgency store.NullVoteUrgencyType) (int64, error) {
+func (s *FeaturesService) ToggleVote(ctx context.Context, featureID int64, voterToken, reason string, urgency store.NullVoteUrgencyType) (int64, error) {
 	_, err := s.q.GetFeatureVote(ctx, store.GetFeatureVoteParams{
 		FeatureID:  featureID,
 		VoterToken: voterToken,
@@ -280,7 +264,7 @@ func (s *FeaturesServiceImpl) ToggleVote(ctx context.Context, featureID int64, v
 	return count, nil
 }
 
-func (s *FeaturesServiceImpl) ListVoteSignals(ctx context.Context, featureID int64) ([]VoteSignalDTO, error) {
+func (s *FeaturesService) ListVoteSignals(ctx context.Context, featureID int64) ([]VoteSignalDTO, error) {
 	rows, err := s.q.ListFeatureVotesWithSignals(ctx, featureID)
 	if err != nil {
 		return nil, err
@@ -304,7 +288,7 @@ func (s *FeaturesServiceImpl) ListVoteSignals(ctx context.Context, featureID int
 	return out, nil
 }
 
-func (s *FeaturesServiceImpl) ListComments(ctx context.Context, featureID int64) ([]FeatureCommentDTO, error) {
+func (s *FeaturesService) ListComments(ctx context.Context, featureID int64) ([]FeatureCommentDTO, error) {
 	rows, err := s.q.ListFeatureComments(ctx, featureID)
 	if err != nil {
 		return nil, err
@@ -316,7 +300,7 @@ func (s *FeaturesServiceImpl) ListComments(ctx context.Context, featureID int64)
 	return out, nil
 }
 
-func (s *FeaturesServiceImpl) CreateComment(ctx context.Context, featureID int64, body, authorName string) (*FeatureCommentDTO, error) {
+func (s *FeaturesService) CreateComment(ctx context.Context, featureID int64, body, authorName string) (*FeatureCommentDTO, error) {
 	c, err := s.q.CreateFeatureComment(ctx, store.CreateFeatureCommentParams{
 		FeatureID:  featureID,
 		Body:       body,
@@ -330,7 +314,7 @@ func (s *FeaturesServiceImpl) CreateComment(ctx context.Context, featureID int64
 	return &dto, nil
 }
 
-func (s *FeaturesServiceImpl) toDTO(ctx context.Context, f store.Feature) (FeatureDTO, error) {
+func (s *FeaturesService) toDTO(ctx context.Context, f store.Feature) (FeatureDTO, error) {
 	count, err := s.q.CountFeatureVotes(ctx, f.ID)
 	if err != nil {
 		return FeatureDTO{}, err

@@ -12,24 +12,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type RepositoryHandlers interface {
-	List(c *gin.Context)
-	Add(c *gin.Context)
-	UpdatePortalVisibility(c *gin.Context)
-	Remove(c *gin.Context)
-	GetRepoMeta(c *gin.Context)
-}
-
-type RepositoryHandlersImpl struct {
-	s services.RepositoriesService
+type RepositoryHandlers struct {
+	s *services.RepositoriesService
 	l *logger.Logger
 }
 
-func NewRepositoryHandlers(s services.RepositoriesService, l *logger.Logger) RepositoryHandlers {
-	return &RepositoryHandlersImpl{s: s, l: l}
+func NewRepositoryHandlers(s *services.RepositoriesService, l *logger.Logger) *RepositoryHandlers {
+	return &RepositoryHandlers{s: s, l: l}
 }
 
-func (h *RepositoryHandlersImpl) List(c *gin.Context) {
+func (h *RepositoryHandlers) List(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -56,7 +48,7 @@ type addRepositoryRequest struct {
 	Repo  string `json:"repo" binding:"required"`
 }
 
-func (h *RepositoryHandlersImpl) Add(c *gin.Context) {
+func (h *RepositoryHandlers) Add(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -96,7 +88,7 @@ type updatePortalVisibilityRequest struct {
 	PortalPublic bool `json:"portal_public"`
 }
 
-func (h *RepositoryHandlersImpl) UpdatePortalVisibility(c *gin.Context) {
+func (h *RepositoryHandlers) UpdatePortalVisibility(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -132,7 +124,7 @@ func (h *RepositoryHandlersImpl) UpdatePortalVisibility(c *gin.Context) {
 	c.JSON(http.StatusOK, repo)
 }
 
-func (h *RepositoryHandlersImpl) Remove(c *gin.Context) {
+func (h *RepositoryHandlers) Remove(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -162,7 +154,7 @@ func (h *RepositoryHandlersImpl) Remove(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-func (h *RepositoryHandlersImpl) GetRepoMeta(c *gin.Context) {
+func (h *RepositoryHandlers) GetRepoMeta(c *gin.Context) {
 	repoID, err := strconv.ParseInt(c.Param("repoId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid repository ID"})

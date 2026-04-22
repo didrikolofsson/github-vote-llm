@@ -10,17 +10,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type RunsHandlers interface {
-	Create(c *gin.Context)
-}
-
-type RunsHandlersImpl struct {
-	s services.RunService
+type RunsHandlers struct {
+	s *services.RunService
 	l *logger.Logger
 }
 
-func NewRunsHandlers(s services.RunService, l *logger.Logger) RunsHandlers {
-	return &RunsHandlersImpl{s: s, l: l}
+func NewRunsHandlers(s *services.RunService, l *logger.Logger) *RunsHandlers {
+	return &RunsHandlers{s: s, l: l}
 }
 
 type createRunBody struct {
@@ -30,7 +26,7 @@ type createRunBody struct {
 	Name            string `json:"name"`
 }
 
-func (h *RunsHandlersImpl) Create(c *gin.Context) {
+func (h *RunsHandlers) Create(c *gin.Context) {
 	featureID, err := strconv.ParseInt(c.Param("featureId"), 10, 64)
 	if err != nil {
 		h.l.Errorw("Invalid feature ID", "error", err, "request_id", request.GetRequestID(c))

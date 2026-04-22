@@ -15,20 +15,13 @@ import (
 
 var ErrUsernameTaken = errors.New("username already taken")
 
-type UserService interface {
-	SignupUser(ctx context.Context, params *store.CreateUserParams) (*dtos.User, error)
-	DeleteUser(ctx context.Context, requestingUserID, targetUserID int64) error
-	GetUser(ctx context.Context, userID int64) (*dtos.User, error)
-	UpdateUsername(ctx context.Context, userID int64, username string) (*dtos.User, error)
-}
-
-type UserServiceImpl struct {
+type UserService struct {
 	db *pgxpool.Pool
 	q  *store.Queries
 }
 
-func NewUserService(db *pgxpool.Pool, q *store.Queries) UserService {
-	return &UserServiceImpl{db: db, q: q}
+func NewUserService(db *pgxpool.Pool, q *store.Queries) *UserService {
+	return &UserService{db: db, q: q}
 }
 
 var (
@@ -37,7 +30,7 @@ var (
 	ErrForbiddenUserDelete = errors.New("forbidden: cannot delete this user")
 )
 
-func (s *UserServiceImpl) SignupUser(ctx context.Context, params *store.CreateUserParams) (*dtos.User, error) {
+func (s *UserService) SignupUser(ctx context.Context, params *store.CreateUserParams) (*dtos.User, error) {
 	hashedPassword, err := helpers.HashPassword(params.Password)
 	if err != nil {
 		return nil, err
@@ -62,7 +55,7 @@ func (s *UserServiceImpl) SignupUser(ctx context.Context, params *store.CreateUs
 	}, nil
 }
 
-func (s *UserServiceImpl) GetUser(ctx context.Context, userID int64) (*dtos.User, error) {
+func (s *UserService) GetUser(ctx context.Context, userID int64) (*dtos.User, error) {
 	row, err := s.q.GetUserByID(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUserNotFound
@@ -73,7 +66,7 @@ func (s *UserServiceImpl) GetUser(ctx context.Context, userID int64) (*dtos.User
 	return userRowToDTO(row), nil
 }
 
-func (s *UserServiceImpl) UpdateUsername(ctx context.Context, userID int64, username string) (*dtos.User, error) {
+func (s *UserService) UpdateUsername(ctx context.Context, userID int64, username string) (*dtos.User, error) {
 	row, err := s.q.UpdateUserUsername(ctx, store.UpdateUserUsernameParams{
 		ID:       userID,
 		Username: &username,
@@ -97,7 +90,7 @@ func (s *UserServiceImpl) UpdateUsername(ctx context.Context, userID int64, user
 // prepareAccountDeletion handles the organization_members trigger that forbids
 // removing the last owner: delete the org when the user is the only member, or
 // promote another member to owner before the user row is removed.
-func (s *UserServiceImpl) prepareAccountDeletion(ctx context.Context, qtx *store.Queries, userID int64) error {
+func (s *UserService) prepareAccountDeletion(ctx context.Context, qtx *store.Queries, userID int64) error {
 	membership, err := qtx.GetOrganizationMembershipByUserID(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
@@ -178,7 +171,7 @@ func verifyUserDeletionAllowed(ctx context.Context, qtx *store.Queries, requeste
 	return nil
 }
 
-func (s *UserServiceImpl) DeleteUser(ctx context.Context, requestingUserID, targetUserID int64) error {
+func (s *UserService) DeleteUser(ctx context.Context, requestingUserID, targetUserID int64) error {
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return err

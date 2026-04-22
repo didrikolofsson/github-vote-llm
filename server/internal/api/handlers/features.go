@@ -12,31 +12,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type FeatureHandlers interface {
-	ListFeatures(c *gin.Context)
-	GetFeature(c *gin.Context)
-	CreateFeature(c *gin.Context)
-	DeleteFeature(c *gin.Context)
-	PatchFeature(c *gin.Context)
-	UpdatePosition(c *gin.Context)
-	GetRoadmap(c *gin.Context)
-	AddDependency(c *gin.Context)
-	RemoveDependency(c *gin.Context)
-	ToggleVote(c *gin.Context)
-	ListComments(c *gin.Context)
-	CreateComment(c *gin.Context)
-}
-
-type FeatureHandlersImpl struct {
-	s services.FeaturesService
+type FeatureHandlers struct {
+	s *services.FeaturesService
 	l *logger.Logger
 }
 
-func NewFeatureHandlers(s services.FeaturesService, l *logger.Logger) FeatureHandlers {
-	return &FeatureHandlersImpl{s: s, l: l}
+func NewFeatureHandlers(s *services.FeaturesService, l *logger.Logger) *FeatureHandlers {
+	return &FeatureHandlers{s: s, l: l}
 }
 
-func (h *FeatureHandlersImpl) ListFeatures(c *gin.Context) {
+func (h *FeatureHandlers) ListFeatures(c *gin.Context) {
 	repoID, err := strconv.ParseInt(c.Param("repoId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid repository ID"})
@@ -51,7 +36,7 @@ func (h *FeatureHandlersImpl) ListFeatures(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"features": features})
 }
 
-func (h *FeatureHandlersImpl) GetFeature(c *gin.Context) {
+func (h *FeatureHandlers) GetFeature(c *gin.Context) {
 	featureID, err := strconv.ParseInt(c.Param("featureId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid feature ID"})
@@ -75,7 +60,7 @@ type createFeatureRequest struct {
 	Description string `json:"description"`
 }
 
-func (h *FeatureHandlersImpl) CreateFeature(c *gin.Context) {
+func (h *FeatureHandlers) CreateFeature(c *gin.Context) {
 	repoID, err := strconv.ParseInt(c.Param("repoId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid repository ID"})
@@ -95,7 +80,7 @@ func (h *FeatureHandlersImpl) CreateFeature(c *gin.Context) {
 	c.JSON(http.StatusCreated, feature)
 }
 
-func (h *FeatureHandlersImpl) DeleteFeature(c *gin.Context) {
+func (h *FeatureHandlers) DeleteFeature(c *gin.Context) {
 	featureID, ok := featureIDFromContext(c)
 	if !ok {
 		return
@@ -116,7 +101,7 @@ type patchFeatureRequest struct {
 	Area         *string `json:"area"`
 }
 
-func (h *FeatureHandlersImpl) PatchFeature(c *gin.Context) {
+func (h *FeatureHandlers) PatchFeature(c *gin.Context) {
 	featureID, err := strconv.ParseInt(c.Param("featureId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid feature ID"})
@@ -172,7 +157,7 @@ type updatePositionRequest struct {
 	Locked bool     `json:"locked"`
 }
 
-func (h *FeatureHandlersImpl) UpdatePosition(c *gin.Context) {
+func (h *FeatureHandlers) UpdatePosition(c *gin.Context) {
 	featureID, err := strconv.ParseInt(c.Param("featureId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid feature ID"})
@@ -196,7 +181,7 @@ func (h *FeatureHandlersImpl) UpdatePosition(c *gin.Context) {
 	c.JSON(http.StatusOK, feature)
 }
 
-func (h *FeatureHandlersImpl) GetRoadmap(c *gin.Context) {
+func (h *FeatureHandlers) GetRoadmap(c *gin.Context) {
 	repoID, err := strconv.ParseInt(c.Param("repoId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid repository ID"})
@@ -215,7 +200,7 @@ type addDependencyRequest struct {
 	DependsOn int64 `json:"depends_on" binding:"required"`
 }
 
-func (h *FeatureHandlersImpl) AddDependency(c *gin.Context) {
+func (h *FeatureHandlers) AddDependency(c *gin.Context) {
 	featureID, err := strconv.ParseInt(c.Param("featureId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid feature ID"})
@@ -234,7 +219,7 @@ func (h *FeatureHandlersImpl) AddDependency(c *gin.Context) {
 	c.Status(http.StatusCreated)
 }
 
-func (h *FeatureHandlersImpl) RemoveDependency(c *gin.Context) {
+func (h *FeatureHandlers) RemoveDependency(c *gin.Context) {
 	featureID, err := strconv.ParseInt(c.Param("featureId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid feature ID"})
@@ -259,7 +244,7 @@ type toggleVoteRequest struct {
 	Urgency    string `json:"urgency"`
 }
 
-func (h *FeatureHandlersImpl) ToggleVote(c *gin.Context) {
+func (h *FeatureHandlers) ToggleVote(c *gin.Context) {
 	featureID, err := strconv.ParseInt(c.Param("featureId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid feature ID"})
@@ -290,7 +275,7 @@ func (h *FeatureHandlersImpl) ToggleVote(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"vote_count": count})
 }
 
-func (h *FeatureHandlersImpl) ListComments(c *gin.Context) {
+func (h *FeatureHandlers) ListComments(c *gin.Context) {
 	featureID, err := strconv.ParseInt(c.Param("featureId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid feature ID"})
@@ -310,7 +295,7 @@ type createCommentRequest struct {
 	AuthorName string `json:"author_name"`
 }
 
-func (h *FeatureHandlersImpl) CreateComment(c *gin.Context) {
+func (h *FeatureHandlers) CreateComment(c *gin.Context) {
 	featureID, err := strconv.ParseInt(c.Param("featureId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid feature ID"})

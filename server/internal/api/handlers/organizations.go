@@ -12,22 +12,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type OrganizationHandlers interface {
-	CreateOrganization(c *gin.Context)
-	GetOrganization(c *gin.Context)
-	ListMyOrganizations(c *gin.Context)
-	UpdateOrganization(c *gin.Context)
-	UpdateSlug(c *gin.Context)
-	DeleteOrganization(c *gin.Context)
-}
-
-type OrganizationHandlersImpl struct {
-	s services.OrganizationService
+type OrganizationHandlers struct {
+	s *services.OrganizationService
 	l *logger.Logger
 }
 
-func NewOrganizationHandlers(s services.OrganizationService, l *logger.Logger) OrganizationHandlers {
-	return &OrganizationHandlersImpl{s: s, l: l}
+func NewOrganizationHandlers(s *services.OrganizationService, l *logger.Logger) *OrganizationHandlers {
+	return &OrganizationHandlers{s: s, l: l}
 }
 
 type createOrganizationRequest struct {
@@ -43,7 +34,7 @@ type updateOrganizationRequest struct {
 	Name string `json:"name" binding:"required"`
 }
 
-func (h *OrganizationHandlersImpl) CreateOrganization(c *gin.Context) {
+func (h *OrganizationHandlers) CreateOrganization(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -86,7 +77,7 @@ func (h *OrganizationHandlersImpl) CreateOrganization(c *gin.Context) {
 	c.JSON(http.StatusCreated, org)
 }
 
-func (h *OrganizationHandlersImpl) ListMyOrganizations(c *gin.Context) {
+func (h *OrganizationHandlers) ListMyOrganizations(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -107,7 +98,7 @@ func (h *OrganizationHandlersImpl) ListMyOrganizations(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"organizations": orgs})
 }
 
-func (h *OrganizationHandlersImpl) GetOrganization(c *gin.Context) {
+func (h *OrganizationHandlers) GetOrganization(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization ID"})
@@ -128,7 +119,7 @@ func (h *OrganizationHandlersImpl) GetOrganization(c *gin.Context) {
 	c.JSON(http.StatusOK, org)
 }
 
-func (h *OrganizationHandlersImpl) UpdateOrganization(c *gin.Context) {
+func (h *OrganizationHandlers) UpdateOrganization(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization ID"})
@@ -164,7 +155,7 @@ func (h *OrganizationHandlersImpl) UpdateOrganization(c *gin.Context) {
 	c.JSON(http.StatusOK, org)
 }
 
-func (h *OrganizationHandlersImpl) UpdateSlug(c *gin.Context) {
+func (h *OrganizationHandlers) UpdateSlug(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization ID"})
@@ -195,7 +186,7 @@ func (h *OrganizationHandlersImpl) UpdateSlug(c *gin.Context) {
 	c.JSON(http.StatusOK, org)
 }
 
-func (h *OrganizationHandlersImpl) DeleteOrganization(c *gin.Context) {
+func (h *OrganizationHandlers) DeleteOrganization(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization ID"})

@@ -7,15 +7,15 @@ import (
 )
 
 type Handlers struct {
-	User         UserHandlers
-	Auth         AuthHandlers
-	Organization OrganizationHandlers
-	Github       GithubHandlers
-	Repository   RepositoryHandlers
-	Runs         RunsHandlers
-	Members      MembersHandlers
-	Feature      FeatureHandlers
-	Portal       PortalHandlers
+	User         *UserHandlers
+	Auth         *AuthHandlers
+	Organization *OrganizationHandlers
+	Github       *GithubHandlers
+	Repository   *RepositoryHandlers
+	Runs         *RunsHandlers
+	Members      *MembersHandlers
+	Feature      *FeatureHandlers
+	Portal       *PortalHandlers
 }
 
 type NewHandlersDeps struct {

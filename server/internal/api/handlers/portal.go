@@ -13,26 +13,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type PortalHandlers interface {
-	GetPortalPage(c *gin.Context)
-	ToggleVote(c *gin.Context)
-	ListComments(c *gin.Context)
-	CreateComment(c *gin.Context)
-	Subscribe(c *gin.Context)
-}
-
-type PortalHandlersImpl struct {
-	s services.PortalService
+type PortalHandlers struct {
+	s *services.PortalService
 	l *logger.Logger
 	h hub.Hub
 }
 
-func NewPortalHandlers(s services.PortalService, l *logger.Logger, h hub.Hub) PortalHandlers {
-	return &PortalHandlersImpl{s: s, l: l, h: h}
+func NewPortalHandlers(s *services.PortalService, l *logger.Logger, h hub.Hub) *PortalHandlers {
+	return &PortalHandlers{s: s, l: l, h: h}
 }
 
 // GET /v1/portal/:orgSlug/:repoName?voter_token=<uuid>
-func (h *PortalHandlersImpl) GetPortalPage(c *gin.Context) {
+func (h *PortalHandlers) GetPortalPage(c *gin.Context) {
 	orgSlug := c.Param("orgSlug")
 	repoName := c.Param("repoName")
 	voterToken := c.Query("voter_token")
@@ -57,7 +49,7 @@ type portalToggleVoteRequest struct {
 }
 
 // POST /v1/portal/:orgSlug/:repoName/features/:featureId/vote
-func (h *PortalHandlersImpl) ToggleVote(c *gin.Context) {
+func (h *PortalHandlers) ToggleVote(c *gin.Context) {
 	orgSlug := c.Param("orgSlug")
 	repoName := c.Param("repoName")
 	featureID, err := strconv.ParseInt(c.Param("featureId"), 10, 64)
@@ -98,7 +90,7 @@ func (h *PortalHandlersImpl) ToggleVote(c *gin.Context) {
 }
 
 // GET /v1/portal/:orgSlug/:repoName/features/:featureId/comments
-func (h *PortalHandlersImpl) ListComments(c *gin.Context) {
+func (h *PortalHandlers) ListComments(c *gin.Context) {
 	orgSlug := c.Param("orgSlug")
 	repoName := c.Param("repoName")
 	featureID, err := strconv.ParseInt(c.Param("featureId"), 10, 64)
@@ -126,7 +118,7 @@ type portalCreateCommentRequest struct {
 }
 
 // POST /v1/portal/:orgSlug/:repoName/features/:featureId/comments
-func (h *PortalHandlersImpl) CreateComment(c *gin.Context) {
+func (h *PortalHandlers) CreateComment(c *gin.Context) {
 	orgSlug := c.Param("orgSlug")
 	repoName := c.Param("repoName")
 	featureID, err := strconv.ParseInt(c.Param("featureId"), 10, 64)
@@ -160,7 +152,7 @@ type SubscribeRequestParams struct {
 	RepoID int64 `form:"repo_id" binding:"required"`
 }
 
-func (h *PortalHandlersImpl) Subscribe(c *gin.Context) {
+func (h *PortalHandlers) Subscribe(c *gin.Context) {
 	var params SubscribeRequestParams
 	if err := c.ShouldBindQuery(&params); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request parameters"})

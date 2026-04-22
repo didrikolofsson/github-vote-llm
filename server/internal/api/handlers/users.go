@@ -13,26 +13,19 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type UserHandlers interface {
-	SignupUser(c *gin.Context)
-	DeleteUser(c *gin.Context)
-	GetMe(c *gin.Context)
-	UpdateUsername(c *gin.Context)
-}
-
-type UserHandlersImpl struct {
-	s services.UserService
+type UserHandlers struct {
+	s *services.UserService
 	l *logger.Logger
 }
 
-func NewUserHandlers(s services.UserService, l *logger.Logger) UserHandlers {
-	return &UserHandlersImpl{
+func NewUserHandlers(s *services.UserService, l *logger.Logger) *UserHandlers {
+	return &UserHandlers{
 		s: s,
 		l: l,
 	}
 }
 
-func (h *UserHandlersImpl) SignupUser(c *gin.Context) {
+func (h *UserHandlers) SignupUser(c *gin.Context) {
 	// Check request body
 	var params store.CreateUserParams
 	if err := c.ShouldBindJSON(&params); err != nil {
@@ -56,7 +49,7 @@ func (h *UserHandlersImpl) SignupUser(c *gin.Context) {
 	c.JSON(http.StatusOK, user)
 }
 
-func (h *UserHandlersImpl) GetMe(c *gin.Context) {
+func (h *UserHandlers) GetMe(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -74,7 +67,7 @@ type updateUsernameRequest struct {
 	Username string `json:"username" binding:"required"`
 }
 
-func (h *UserHandlersImpl) UpdateUsername(c *gin.Context) {
+func (h *UserHandlers) UpdateUsername(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -98,7 +91,7 @@ func (h *UserHandlersImpl) UpdateUsername(c *gin.Context) {
 	c.JSON(http.StatusOK, user)
 }
 
-func (h *UserHandlersImpl) DeleteUser(c *gin.Context) {
+func (h *UserHandlers) DeleteUser(c *gin.Context) {
 	requestingUserID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})

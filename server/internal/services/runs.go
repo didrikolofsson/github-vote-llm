@@ -18,18 +18,14 @@ type CreateRunParams struct {
 	UserID    int64
 }
 
-type RunService interface {
-	CreateRun(ctx context.Context, p CreateRunParams) (*dtos.RunDTO, error)
-}
-
-type RunServiceImpl struct {
+type RunService struct {
 	db *pgxpool.Pool
 	q  *store.Queries
 	jc *river.Client[pgx.Tx]
 }
 
-func NewRunService(db *pgxpool.Pool, q *store.Queries, jc *river.Client[pgx.Tx]) RunService {
-	return &RunServiceImpl{db: db, q: q, jc: jc}
+func NewRunService(db *pgxpool.Pool, q *store.Queries, jc *river.Client[pgx.Tx]) *RunService {
+	return &RunService{db: db, q: q, jc: jc}
 }
 
 func storeToRunDTO(run store.FeatureRun) *dtos.RunDTO {
@@ -41,7 +37,7 @@ func storeToRunDTO(run store.FeatureRun) *dtos.RunDTO {
 	}
 }
 
-func (s *RunServiceImpl) CreateRun(ctx context.Context, p CreateRunParams) (*dtos.RunDTO, error) {
+func (s *RunService) CreateRun(ctx context.Context, p CreateRunParams) (*dtos.RunDTO, error) {
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, err

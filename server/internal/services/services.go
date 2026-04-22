@@ -18,15 +18,15 @@ type ServicesDeps struct {
 }
 
 type Services struct {
-	UserService         UserService
-	AuthService         AuthService
-	OrganizationService OrganizationService
-	GithubService       GithubService
-	RepositoriesService RepositoriesService
-	MembersService      MembersService
-	RunService          RunService
-	FeaturesService     FeaturesService
-	PortalService       PortalService
+	UserService         *UserService
+	AuthService         *AuthService
+	OrganizationService *OrganizationService
+	GithubService       *GithubService
+	RepositoriesService *RepositoriesService
+	MembersService      *MembersService
+	RunService          *RunService
+	FeaturesService     *FeaturesService
+	PortalService       *PortalService
 }
 
 func New(

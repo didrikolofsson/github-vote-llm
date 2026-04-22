@@ -17,26 +17,16 @@ var (
 	ErrNotOrgMember           = errors.New("not a member of this organization")
 )
 
-type RepositoriesService interface {
-	ListForOrganization(ctx context.Context, orgID, userID int64) ([]dtos.Repository, error)
-	GetRepositoryByID(ctx context.Context, repoID, userID int64) (*dtos.Repository, error)
-	GetRepositoryByOwnerAndName(ctx context.Context, orgID int64, owner, name string) (*dtos.Repository, error)
-	GetRepositoryMeta(ctx context.Context, repoId int64) (*dtos.RepoMeta, error)
-	AddRepository(ctx context.Context, orgID, userID int64, owner, name string) (*dtos.Repository, error)
-	UpdatePortalPublic(ctx context.Context, repoID, userID int64, public bool) (*dtos.Repository, error)
-	RemoveRepository(ctx context.Context, repoID, userID int64) error
-}
-
-type RepositoriesServiceImpl struct {
+type RepositoriesService struct {
 	db *pgxpool.Pool
 	q  *store.Queries
 }
 
-func NewRepositoriesService(db *pgxpool.Pool, q *store.Queries) RepositoriesService {
-	return &RepositoriesServiceImpl{db: db, q: q}
+func NewRepositoriesService(db *pgxpool.Pool, q *store.Queries) *RepositoriesService {
+	return &RepositoriesService{db: db, q: q}
 }
 
-func (s *RepositoriesServiceImpl) ListForOrganization(ctx context.Context, orgID, userID int64) ([]dtos.Repository, error) {
+func (s *RepositoriesService) ListForOrganization(ctx context.Context, orgID, userID int64) ([]dtos.Repository, error) {
 	if err := s.verifyOrgMember(ctx, orgID, userID); err != nil {
 		return nil, err
 	}
@@ -51,7 +41,7 @@ func (s *RepositoriesServiceImpl) ListForOrganization(ctx context.Context, orgID
 	return out, nil
 }
 
-func (s *RepositoriesServiceImpl) GetRepositoryByID(ctx context.Context, repoID, userID int64) (*dtos.Repository, error) {
+func (s *RepositoriesService) GetRepositoryByID(ctx context.Context, repoID, userID int64) (*dtos.Repository, error) {
 	r, err := s.q.GetRepository(ctx, repoID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrRepositoryNotFound
@@ -66,7 +56,7 @@ func (s *RepositoriesServiceImpl) GetRepositoryByID(ctx context.Context, repoID,
 	return &dto, nil
 }
 
-func (s *RepositoriesServiceImpl) GetRepositoryByOwnerAndName(ctx context.Context, orgID int64, owner, name string) (*dtos.Repository, error) {
+func (s *RepositoriesService) GetRepositoryByOwnerAndName(ctx context.Context, orgID int64, owner, name string) (*dtos.Repository, error) {
 	r, err := s.q.GetRepositoryByOwnerAndName(ctx, store.GetRepositoryByOwnerAndNameParams{
 		OrganizationID: orgID,
 		Owner:          owner,
@@ -82,7 +72,7 @@ func (s *RepositoriesServiceImpl) GetRepositoryByOwnerAndName(ctx context.Contex
 	return &dto, nil
 }
 
-func (s *RepositoriesServiceImpl) GetRepositoryMeta(ctx context.Context, repoID int64) (*dtos.RepoMeta, error) {
+func (s *RepositoriesService) GetRepositoryMeta(ctx context.Context, repoID int64) (*dtos.RepoMeta, error) {
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, err
@@ -114,7 +104,7 @@ func (s *RepositoriesServiceImpl) GetRepositoryMeta(ctx context.Context, repoID 
 
 }
 
-func (s *RepositoriesServiceImpl) AddRepository(ctx context.Context, orgID, userID int64, owner, name string) (*dtos.Repository, error) {
+func (s *RepositoriesService) AddRepository(ctx context.Context, orgID, userID int64, owner, name string) (*dtos.Repository, error) {
 	if err := s.verifyOrgMember(ctx, orgID, userID); err != nil {
 		return nil, err
 	}
@@ -134,7 +124,7 @@ func (s *RepositoriesServiceImpl) AddRepository(ctx context.Context, orgID, user
 	return &dto, nil
 }
 
-func (s *RepositoriesServiceImpl) UpdatePortalPublic(ctx context.Context, repoID, userID int64, public bool) (*dtos.Repository, error) {
+func (s *RepositoriesService) UpdatePortalPublic(ctx context.Context, repoID, userID int64, public bool) (*dtos.Repository, error) {
 	r, err := s.q.GetRepository(ctx, repoID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrRepositoryNotFound
@@ -156,7 +146,7 @@ func (s *RepositoriesServiceImpl) UpdatePortalPublic(ctx context.Context, repoID
 	return &dto, nil
 }
 
-func (s *RepositoriesServiceImpl) RemoveRepository(ctx context.Context, repoID, userID int64) error {
+func (s *RepositoriesService) RemoveRepository(ctx context.Context, repoID, userID int64) error {
 	r, err := s.q.GetRepository(ctx, repoID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrRepositoryNotFound
@@ -170,7 +160,7 @@ func (s *RepositoriesServiceImpl) RemoveRepository(ctx context.Context, repoID, 
 	return s.q.RemoveRepository(ctx, repoID)
 }
 
-func (s *RepositoriesServiceImpl) verifyOrgMember(ctx context.Context, orgID, userID int64) error {
+func (s *RepositoriesService) verifyOrgMember(ctx context.Context, orgID, userID int64) error {
 	members, err := s.q.GetOrganizationMembers(ctx, orgID)
 	if err != nil {
 		return err
