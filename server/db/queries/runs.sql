@@ -3,15 +3,15 @@ INSERT INTO feature_runs (
         prompt,
         feature_id,
         status,
-        created_by_user_id
+        created_by_user_id,
+        workspace
     )
-VALUES ($1, $2, $3, $4)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 -- name: GetRunByID :one
 SELECT *
 FROM feature_runs
 WHERE id = $1;
-
 -- name: UpdateRunStatus :exec
 UPDATE feature_runs
 SET status = $1

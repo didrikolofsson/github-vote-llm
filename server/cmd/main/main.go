@@ -60,7 +60,9 @@ func main() {
 
 	q := store.New(db)
 	eventHub := hub.NewHub()
-	s := services.New(services.ServicesDeps{DB: db, Queries: q, Env: env, JobClient: jc, Hub: eventHub})
+	s := services.New(services.ServicesDeps{
+		DB: db, Queries: q, Env: env, JobClient: jc, Hub: eventHub,
+	})
 
 	workers.Register(w, workers.RegisterWorkersDeps{Services: s, Env: env})
 	if err := jc.Start(ctx); err != nil {

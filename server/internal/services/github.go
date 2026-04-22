@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
@@ -233,11 +235,34 @@ func (s *GithubService) ListReposByAuthenticatedUser(ctx context.Context, userID
 
 var (
 	ErrInvalidCloneURL = errors.New("github: invalid or missing clone URL")
+	ErrRunNotFound     = errors.New("github: run not found")
 )
 
 func (s *GithubService) CloneRepoToWorkspace(
-	ctx context.Context, userID int64, owner, name, workspace string,
+	ctx context.Context, userID, runID int64,
 ) error {
+	run, err := s.q.GetRunByID(ctx, runID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrRunNotFound
+		}
+		return err
+	}
+
+	repo, err := s.q.GetRepositoryByFeatureID(ctx, run.FeatureID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrRepositoryNotFound
+		}
+		return err
+	}
+
+	// Workspace is created before job is enqueued.
+	repoPath := filepath.Join(run.Workspace, repo.Name)
+	if _, err := os.Stat(repoPath); err == nil {
+		return nil
+	}
+
 	conn, err := s.q.GetGitHubConnectionByUserID(ctx, userID)
 	if err != nil {
 		return err
@@ -263,15 +288,15 @@ func (s *GithubService) CloneRepoToWorkspace(
 
 	client := gh.NewGithubClientByUserID(ctx, ts)
 
-	repo, _, err := client.Repositories.Get(ctx, owner, name)
+	ghRepo, _, err := client.Repositories.Get(ctx, repo.Owner, repo.Name)
 	if err != nil {
 		return err
 	}
-	if repo.CloneURL == nil || *repo.CloneURL == "" {
+	if ghRepo.CloneURL == nil || *ghRepo.CloneURL == "" {
 		return ErrInvalidCloneURL
 	}
 
-	u, err := url.Parse(*repo.CloneURL)
+	u, err := url.Parse(*ghRepo.CloneURL)
 	if err != nil {
 		return err
 	}
@@ -279,7 +304,7 @@ func (s *GithubService) CloneRepoToWorkspace(
 	authCloneURL := u.String()
 
 	cmd := exec.CommandContext(ctx, "git", "clone", authCloneURL)
-	cmd.Dir = workspace
+	cmd.Dir = run.Workspace
 	if err := cmd.Run(); err != nil {
 		return err
 	}

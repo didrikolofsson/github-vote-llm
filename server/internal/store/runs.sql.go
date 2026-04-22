@@ -14,10 +14,11 @@ INSERT INTO feature_runs (
         prompt,
         feature_id,
         status,
-        created_by_user_id
+        created_by_user_id,
+        workspace
     )
-VALUES ($1, $2, $3, $4)
-RETURNING id, prompt, feature_id, status, created_by_user_id, created_at, completed_at
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, prompt, feature_id, status, created_by_user_id, created_at, completed_at, workspace
 `
 
 type CreateRunParams struct {
@@ -25,6 +26,7 @@ type CreateRunParams struct {
 	FeatureID       int64
 	Status          FeatureRunStatus
 	CreatedByUserID int64
+	Workspace       string
 }
 
 func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (FeatureRun, error) {
@@ -33,6 +35,7 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (FeatureRu
 		arg.FeatureID,
 		arg.Status,
 		arg.CreatedByUserID,
+		arg.Workspace,
 	)
 	var i FeatureRun
 	err := row.Scan(
@@ -43,12 +46,13 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (FeatureRu
 		&i.CreatedByUserID,
 		&i.CreatedAt,
 		&i.CompletedAt,
+		&i.Workspace,
 	)
 	return i, err
 }
 
 const getRunByID = `-- name: GetRunByID :one
-SELECT id, prompt, feature_id, status, created_by_user_id, created_at, completed_at
+SELECT id, prompt, feature_id, status, created_by_user_id, created_at, completed_at, workspace
 FROM feature_runs
 WHERE id = $1
 `
@@ -64,6 +68,7 @@ func (q *Queries) GetRunByID(ctx context.Context, id int64) (FeatureRun, error) 
 		&i.CreatedByUserID,
 		&i.CreatedAt,
 		&i.CompletedAt,
+		&i.Workspace,
 	)
 	return i, err
 }

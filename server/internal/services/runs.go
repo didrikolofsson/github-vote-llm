@@ -2,7 +2,13 @@ package services
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
+	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/dtos"
 	api_errors "github.com/didrikolofsson/github-vote-llm/internal/errors"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs/args"
@@ -19,13 +25,14 @@ type CreateRunParams struct {
 }
 
 type RunService struct {
-	db *pgxpool.Pool
-	q  *store.Queries
-	jc *river.Client[pgx.Tx]
+	db  *pgxpool.Pool
+	q   *store.Queries
+	jc  *river.Client[pgx.Tx]
+	env *config.Environment
 }
 
-func NewRunService(db *pgxpool.Pool, q *store.Queries, jc *river.Client[pgx.Tx]) *RunService {
-	return &RunService{db: db, q: q, jc: jc}
+func NewRunService(db *pgxpool.Pool, q *store.Queries, env *config.Environment, jc *river.Client[pgx.Tx]) *RunService {
+	return &RunService{db: db, q: q, env: env, jc: jc}
 }
 
 func storeToRunDTO(run store.FeatureRun) *dtos.RunDTO {
@@ -37,6 +44,15 @@ func storeToRunDTO(run store.FeatureRun) *dtos.RunDTO {
 	}
 }
 
+func CreateSandboxDir(workspace string, organizationID int64, repositoryID int64) (string, error) {
+	workspaceTrimmed := strings.TrimSuffix(workspace, "/")
+	dir := filepath.Join(workspaceTrimmed, fmt.Sprintf("%d/%d", organizationID, repositoryID))
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
 func (s *RunService) CreateRun(ctx context.Context, p CreateRunParams) (*dtos.RunDTO, error) {
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -45,11 +61,24 @@ func (s *RunService) CreateRun(ctx context.Context, p CreateRunParams) (*dtos.Ru
 	defer tx.Rollback(ctx)
 	qtx := s.q.WithTx(tx)
 
+	repo, err := qtx.GetRepositoryByFeatureID(ctx, p.FeatureID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrRepositoryNotFound
+		}
+		return nil, err
+	}
+	workspace, err := CreateSandboxDir(s.env.WORKSPACE_DIR, repo.OrganizationID, repo.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	run, err := qtx.CreateRun(ctx, store.CreateRunParams{
 		Prompt:          p.Prompt,
 		FeatureID:       p.FeatureID,
 		Status:          store.FeatureRunStatusPending,
 		CreatedByUserID: p.UserID,
+		Workspace:       workspace,
 	})
 	if err != nil {
 		if api_errors.IsForeignKeyViolationErr(err) {
@@ -57,16 +86,10 @@ func (s *RunService) CreateRun(ctx context.Context, p CreateRunParams) (*dtos.Ru
 		}
 		return nil, err
 	}
-	repo, err := qtx.GetRepositoryByFeatureID(ctx, p.FeatureID)
-	if err != nil {
-		return nil, err
-	}
 
 	if _, err := s.jc.InsertTx(ctx, tx, args.CloneRepoArgs{
 		UserID: p.UserID,
 		RunID:  run.ID,
-		Owner:  repo.Owner,
-		Name:   repo.Name,
 	}, nil); err != nil {
 		return nil, err
 	}

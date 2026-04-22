@@ -323,6 +323,7 @@ type FeatureRun struct {
 	CreatedByUserID int64
 	CreatedAt       pgtype.Timestamptz
 	CompletedAt     pgtype.Timestamptz
+	Workspace       string
 }
 
 type FeatureVote struct {

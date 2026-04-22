@@ -46,6 +46,11 @@ func (h *RunsHandlers) Create(c *gin.Context) {
 		FeatureID: featureID,
 		UserID:    body.CreatedByUserID,
 	})
+	if err != nil {
+		h.l.Errorw("Failed to create run", "error", err, "request_id", request.GetRequestID(c))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create run"})
+		return
+	}
 
 	c.JSON(http.StatusCreated, run)
 }

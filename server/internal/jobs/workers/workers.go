@@ -13,6 +13,6 @@ type RegisterWorkersDeps struct {
 
 func Register(w *river.Workers, deps RegisterWorkersDeps) {
 	river.AddWorker(w, &CloneRepoWorker{
-		svc: deps.Services.GithubService, workspace: deps.Env.WORKSPACE_DIR,
+		svc: deps.Services.GithubService,
 	})
 }

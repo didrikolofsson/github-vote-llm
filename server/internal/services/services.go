@@ -39,7 +39,7 @@ func New(
 		GithubService:       NewGithubService(deps.DB, deps.Queries, deps.Env),
 		RepositoriesService: NewRepositoriesService(deps.DB, deps.Queries),
 		MembersService:      NewMembersService(deps.Queries),
-		RunService:          NewRunService(deps.DB, deps.Queries, deps.JobClient),
+		RunService:          NewRunService(deps.DB, deps.Queries, deps.Env, deps.JobClient),
 		FeaturesService:     NewFeaturesService(deps.DB, deps.Queries, deps.Hub),
 		PortalService:       NewPortalService(deps.DB, deps.Queries),
 	}
