@@ -17,12 +17,14 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/dtos"
 	"github.com/didrikolofsson/github-vote-llm/internal/encryption"
 	gh "github.com/didrikolofsson/github-vote-llm/internal/github"
+	"github.com/didrikolofsson/github-vote-llm/internal/jobs/args"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/go-github/v84/github"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
 	"golang.org/x/oauth2"
 	gha "golang.org/x/oauth2/github"
 )
@@ -37,15 +39,16 @@ type GithubService struct {
 	q   *store.Queries
 	cfg *oauth2.Config
 	env *config.Environment
+	jc  *river.Client[pgx.Tx]
 }
 
-func NewGithubService(db *pgxpool.Pool, q *store.Queries, env *config.Environment) *GithubService {
+func NewGithubService(db *pgxpool.Pool, q *store.Queries, env *config.Environment, jc *river.Client[pgx.Tx]) *GithubService {
 	cfg := gh.NewGithubOAuthConfig(
 		env.GITHUB_CLIENT_ID,
 		env.GITHUB_CLIENT_SECRET,
 		env.SERVER_URL+"/v1/github/callback",
 	)
-	return &GithubService{db: db, q: q, cfg: cfg, env: env}
+	return &GithubService{db: db, q: q, cfg: cfg, env: env, jc: jc}
 }
 
 // oauthStateClaims is signed into the GitHub `state` query param so /callback can bind the code to a user.
@@ -300,6 +303,14 @@ func (s *GithubService) CloneRepoToWorkspace(
 	if err := cmd.Run(); err != nil {
 		return err
 	}
+
+	if _, err := s.jc.Insert(ctx, args.RunAgentArgs{
+		UserID: userID,
+		RunID:  runID,
+	}, nil); err != nil {
+		return err
+	}
+
 	return nil
 }
 

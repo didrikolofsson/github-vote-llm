@@ -15,4 +15,7 @@ func Register(w *river.Workers, deps RegisterWorkersDeps) {
 	river.AddWorker(w, &CloneRepoWorker{
 		svc: deps.Services.GithubService,
 	})
+	river.AddWorker(w, &RunAgentWorker{
+		svc: deps.Services.RunService,
+	})
 }
