@@ -133,6 +133,34 @@ func prepareWorktree(ctx context.Context, repoDir, worktreeDir, branch string) e
 	return nil
 }
 
+func commitWorktreeChanges(ctx context.Context, worktreeDir, prompt string) error {
+	add := exec.CommandContext(ctx, "git", "-C", worktreeDir, "add", "-A")
+	if out, err := add.CombinedOutput(); err != nil {
+		return fmt.Errorf("git add: %w: %s", err, out)
+	}
+
+	// Check if there is anything to commit before attempting the commit.
+	diff := exec.CommandContext(ctx, "git", "-C", worktreeDir, "diff", "--cached", "--quiet")
+	if err := diff.Run(); err == nil {
+		// Exit 0 means no staged changes — nothing to commit.
+		return nil
+	}
+
+	msg := prompt
+	if len(msg) > 72 {
+		msg = msg[:72]
+	}
+	commit := exec.CommandContext(ctx, "git", "-C", worktreeDir,
+		"-c", "user.name=vote-llm agent",
+		"-c", "user.email=agent@vote-llm",
+		"commit", "-m", msg,
+	)
+	if out, err := commit.CombinedOutput(); err != nil {
+		return fmt.Errorf("git commit: %w: %s", err, out)
+	}
+	return nil
+}
+
 func (s *RunService) updateRunStatus(ctx context.Context, runID int64, status store.FeatureRunStatus) error {
 	// Job contexts can be cancelled/timed out; status updates should still be attempted.
 	// Detach cancellation but keep values from the caller context.
@@ -174,6 +202,25 @@ func (s *RunService) RunAgent(ctx context.Context, userID, runID int64) error {
 			return statusErr
 		}
 		return fmt.Errorf("failed to run agent: %w", err)
+	}
+
+	if err := commitWorktreeChanges(ctx, worktreeDir, run.Prompt); err != nil {
+		if statusErr := s.updateRunStatus(ctx, runID, store.FeatureRunStatusFailed); statusErr != nil {
+			return statusErr
+		}
+		return fmt.Errorf("failed to commit agent changes: %w", err)
+	}
+
+	if _, err := s.jc.Insert(ctx, args.OpenRepoPullRequestArgs{
+		UserID:      userID,
+		RunID:       runID,
+		Owner:       run.RepositoryOwner,
+		Name:        run.RepositoryName,
+		BranchName:  branch,
+		WorktreeDir: worktreeDir,
+		Prompt:      run.Prompt,
+	}, nil); err != nil {
+		return fmt.Errorf("failed to enqueue open PR job: %w", err)
 	}
 
 	if err := s.updateRunStatus(ctx, runID, store.FeatureRunStatusCompleted); err != nil {

@@ -18,7 +18,7 @@ func NewGithubOAuthConfig(clientID, clientSecret, redirectURL string) *oauth2.Co
 		ClientSecret: clientSecret,
 		Endpoint:     gh.Endpoint,
 		RedirectURL:  redirectURL,
-		Scopes:       []string{"user:email"},
+		Scopes:       []string{"repo", "read:org", "user:email"},
 	}
 }
 

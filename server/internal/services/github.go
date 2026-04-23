@@ -320,6 +320,24 @@ func (s *GithubService) CloneRepoToWorkspace(
 	return nil
 }
 
+// PushBranch pushes the given branch from worktreeDir to GitHub using a fresh token.
+// owner and name are used to build a clean push URL with no stale credentials embedded.
+func (s *GithubService) PushBranch(ctx context.Context, userID int64, worktreeDir, owner, name, branch string) error {
+	ts := gh.NewGithubTokenSource(ctx, s.q, s.cfg, userID, s.env.TOKEN_ENCRYPTION_KEY)
+	tok, err := ts.Token()
+	if err != nil {
+		return fmt.Errorf("get github token: %w", err)
+	}
+
+	// Build a clean authenticated URL (no stale credentials from the clone URL).
+	pushURL := fmt.Sprintf("https://x-access-token:%s@github.com/%s/%s.git", tok.AccessToken, owner, name)
+	push := exec.CommandContext(ctx, "git", "-C", worktreeDir, "push", pushURL, branch)
+	if combined, err := push.CombinedOutput(); err != nil {
+		return fmt.Errorf("git push: %w: %s", err, combined)
+	}
+	return nil
+}
+
 func (s *GithubService) OpenPR(
 	ctx context.Context, userID int64, owner, name, branch, title, body string,
 ) (string, error) {
