@@ -14,35 +14,51 @@ A community-driven roadmap platform with integrated AI-powered feature implement
 ```
 client/                     React SPA (Vite + TypeScript + Tailwind + shadcn/ui)
   src/
-    pages/                  LoginPage, SettingsPage, OrganizationDashboardPage, CreateOrganizationPage
-    components/             Layout, shadcn/ui primitives
+    pages/                  LoginPage, SettingsPage, OrganizationDashboardPage, CreateOrganizationPage,
+                            RepositoriesPage, RepositoryDetailPage, portal/
+    components/             Layout, roadmap/ (React Flow canvas), shadcn/ui primitives
     lib/
       api.ts                API client (fetch + Bearer JWT + Zod validation)
       api-schemas.ts        Zod schemas for API responses
       auth-schemas.ts       Zod schemas for auth responses
       auth.tsx              OAuth2 PKCE auth context + token management
+      portal-api.ts         API client for public portal
       pkce.ts               PKCE code challenge/verifier helpers
-    board.tsx               Separate entrypoint for the public community board
+    hooks/
+      use-mobile.ts         Mobile breakpoint hook
+      use-portal-sse.ts     SSE subscription hook for portal events
+    portal.tsx              Separate entrypoint for the public community board
 
-server/                     Go backend (Gin + pgx/v5 + sqlc)
-  cmd/main/main.go          Entry point: env config, DB connection, Gin router
+server/                     Go backend (Gin + pgx/v5 + sqlc + River)
+  cmd/main/main.go          Entry point: env config, DB connection, job client, Gin router
   db/
     migrations/             SQL migration files (apply with migrate CLI)
     queries/                sqlc query definitions
     sqlc.yaml               sqlc config
   internal/
+    agents/
+      agents.go             Runner interface
+      claude/claude.go      ClaudeRunner: spawns `claude -p` CLI with streaming output
     api/
       api.go                Router setup (Gin)
-      handlers/             auth.go, users.go, organizations.go, github.go, repositories.go, members.go
-      services/             auth.go, users.go, organizations.go, github.go, repositories.go, members.go
-      dtos/                 auth.go, users.go, organizations.go, github.go
-      middleware/           JWT auth, API key validation, request ID, request logging
+      handlers/             handlers.go (factory), auth, users, organizations, github,
+                            repositories, members, features, runs, portal
+      middleware/            JWT auth, request ID, request logging, CORS
       request/              Context helpers (request ID extraction)
     config/                 Env var parsing (caarlos0/env) + token TTL constants
+    dtos/                   Request/response types (auth, users, orgs, repos, runs, portal)
     encryption/             AES-256-GCM token encryption/decryption
-    oauth2/                 GitHub OAuth2 config + per-user token source (auto-refresh)
+    errors/                 Shared error helpers
+    github/                 GitHub OAuth2 config + per-user token source (auto-refresh)
     helpers/                Shared utilities (password hashing, numeric conversion)
+    hub/                    In-memory pub/sub for real-time SSE events
+    jobs/
+      client.go             River job client setup (PostgreSQL-backed queue)
+      args/                 Job argument types (CloneRepoArgs, RunAgentArgs)
+      workers/              workers.go (registry), clonerepo.go, runagent.go
     logger/                 Structured logging with colored output (zap)
+    services/               services.go (factory), auth, users, organizations, github,
+                            repositories, members, features, runs, portal
     store/                  PostgreSQL store (pgx/v5 + sqlc generated code)
   Makefile
 ```
@@ -99,13 +115,23 @@ make migrate-down
 | `refresh_tokens`            | Long-lived refresh tokens (stored as SHA-256 hash)                  |
 | `organizations`             | Tenant organizations                                                |
 | `organization_members`      | Many-to-many: users in organizations with roles (owner, member)     |
-| `organization_repositories` | Junction: orgs link to repos (owner/repo)                           |
+| `repositories`              | Repos linked to organizations (owner/repo, portal settings)         |
 | `github_connections`        | Encrypted GitHub OAuth tokens per user (AES-256-GCM + base64)      |
-| `proposals`                 | Community feature proposals with vote counts and status             |
-| `proposal_comments`         | Comments on proposals                                               |
-| `repo_config`               | Per-repo overrides for labels, timeout, budget, and API key         |
-| `executions`                | Tracks every agent run — status, branch, PR URL, error, timestamps  |
-| `issue_votes`               | Vote tracking per GitHub issue                                      |
+| `features`                  | Feature proposals with review/build status, votes, position         |
+| `feature_comments`          | Comments on features                                                |
+| `feature_votes`             | Vote tracking per feature per user                                  |
+| `feature_dependencies`      | Dependency edges between features                                   |
+| `feature_runs`              | Agent execution runs — status, prompt, workspace, timestamps        |
+| `river_*`                   | River job queue tables (jobs, clients, queues, leaders)              |
+
+## Agent execution pipeline
+
+When a run is created (`POST /v1/features/:featureId/runs`), the system chains two background jobs via the River job queue:
+
+1. **CloneRepoWorker** — clones the target repository into a workspace directory using an authenticated GitHub URL (skips if already cloned)
+2. **RunAgentWorker** — creates a git worktree, runs `claude -p "<prompt>" --verbose` inside it (30-minute timeout), and updates the run status
+
+Workspace layout: `{WORKSPACE_DIR}/{orgID}/{repoID}/` for the clone, with worktrees in `worktrees/run-{runID}/`. Each run gets its own branch: `feature-{featureID}-run-{runID}`.
 
 ## Running
 
@@ -125,7 +151,7 @@ pnpm dev
 
 # Server (dev with live reload)
 cd server
-make dev    # starts ngrok + air
+make dev    # starts air
 ```
 
 ## API
@@ -148,46 +174,85 @@ All endpoints are prefixed with `/v1`.
 
 ### Users
 
-| Method   | Path               | Auth   | Description    |
-| -------- | ------------------ | ------ | -------------- |
-| `POST`   | `/v1/users/signup` | none   | Create account |
-| `DELETE` | `/v1/users/:id`    | Bearer | Delete account |
+| Method   | Path                     | Auth   | Description      |
+| -------- | ------------------------ | ------ | ---------------- |
+| `POST`   | `/v1/users/signup`       | none   | Create account   |
+| `GET`    | `/v1/users/me`           | Bearer | Get profile      |
+| `PATCH`  | `/v1/users/me/username`  | Bearer | Update username  |
+| `DELETE` | `/v1/users/:id`          | Bearer | Delete account   |
 
 ### GitHub (connect GitHub account)
 
-| Method | Path                        | Auth   | Description                                    |
-| ------ | --------------------------- | ------ | ---------------------------------------------- |
-| `GET`  | `/v1/github/callback`       | none   | OAuth callback — GitHub redirects here         |
-| `GET`  | `/v1/github/authorize`      | Bearer | Get GitHub OAuth authorization URL             |
-| `GET`  | `/v1/github/status`         | Bearer | Check if GitHub is connected (`{connected, login}`) |
-| `GET`  | `/v1/github/repositories`   | Bearer | List authenticated user's GitHub repos (`?page=N`) |
+| Method   | Path                        | Auth   | Description                                    |
+| -------- | --------------------------- | ------ | ---------------------------------------------- |
+| `GET`    | `/v1/github/callback`       | none   | OAuth callback — GitHub redirects here         |
+| `GET`    | `/v1/github/authorize`      | Bearer | Get GitHub OAuth authorization URL             |
+| `GET`    | `/v1/github/status`         | Bearer | Check if GitHub is connected                   |
+| `GET`    | `/v1/github/repositories`   | Bearer | List authenticated user's GitHub repos         |
+| `DELETE` | `/v1/github/connection`     | Bearer | Disconnect GitHub account                      |
 
 ### Organizations
 
-| Method   | Path                    | Auth   | Description           |
-| -------- | ----------------------- | ------ | --------------------- |
-| `GET`    | `/v1/organizations`     | Bearer | List my organizations |
-| `POST`   | `/v1/organizations`     | Bearer | Create organization   |
-| `GET`    | `/v1/organizations/:id` | Bearer | Get organization      |
-| `PUT`    | `/v1/organizations/:id` | Bearer | Update organization   |
-| `DELETE` | `/v1/organizations/:id` | Bearer | Delete organization   |
+| Method   | Path                          | Auth   | Description           |
+| -------- | ----------------------------- | ------ | --------------------- |
+| `GET`    | `/v1/organizations`           | Bearer | List my organizations |
+| `POST`   | `/v1/organizations`           | Bearer | Create organization   |
+| `GET`    | `/v1/organizations/:id`       | Bearer | Get organization      |
+| `PUT`    | `/v1/organizations/:id`       | Bearer | Update organization   |
+| `PATCH`  | `/v1/organizations/:id/slug`  | Bearer | Update slug           |
+| `DELETE` | `/v1/organizations/:id`       | Bearer | Delete organization   |
 
 ### Organization repositories
 
 | Method   | Path                                              | Auth   | Description                          |
 | -------- | ------------------------------------------------- | ------ | ------------------------------------ |
 | `GET`    | `/v1/organizations/:id/repositories`              | Bearer | List repos connected to org          |
-| `POST`   | `/v1/organizations/:id/repositories`              | Bearer | Add repo (body: `{owner, repo}`)     |
-| `DELETE` | `/v1/organizations/:id/repositories/:owner/:repo` | Bearer | Remove repo from org                 |
+| `POST`   | `/v1/organizations/:id/repositories`              | Bearer | Add repo                             |
+| `DELETE` | `/v1/organizations/:id/repositories/:repoId`      | Bearer | Remove repo from org                 |
 
 ### Organization members
 
 | Method   | Path                                        | Auth   | Description                        |
 | -------- | ------------------------------------------- | ------ | ---------------------------------- |
-| `GET`    | `/v1/organizations/:id/members`             | Bearer | List members (with email)          |
-| `POST`   | `/v1/organizations/:id/members`             | Bearer | Invite by email (`{email}`)        |
+| `GET`    | `/v1/organizations/:id/members`             | Bearer | List members                       |
+| `POST`   | `/v1/organizations/:id/members`             | Bearer | Invite by email                    |
 | `DELETE` | `/v1/organizations/:id/members/:user_id`    | Bearer | Remove member                      |
-| `PATCH`  | `/v1/organizations/:id/members/:user_id`    | Bearer | Update role (`{role}`)             |
+| `PATCH`  | `/v1/organizations/:id/members/:user_id`    | Bearer | Update role                        |
+
+### Repository features
+
+| Method   | Path                                                                       | Auth   | Description         |
+| -------- | -------------------------------------------------------------------------- | ------ | ------------------- |
+| `GET`    | `/v1/repositories/:repoId/roadmap`                                         | Bearer | Get roadmap         |
+| `GET`    | `/v1/repositories/:repoId/meta`                                            | Bearer | Get repo metadata   |
+| `GET`    | `/v1/repositories/:repoId/features`                                        | Bearer | List features       |
+| `POST`   | `/v1/repositories/:repoId/features`                                        | Bearer | Create feature      |
+| `GET`    | `/v1/repositories/:repoId/features/:featureId`                             | Bearer | Get feature         |
+| `PATCH`  | `/v1/repositories/:repoId/features/:featureId`                             | Bearer | Update feature      |
+| `DELETE` | `/v1/repositories/:repoId/features/:featureId`                             | Bearer | Delete feature      |
+| `PATCH`  | `/v1/repositories/:repoId/features/:featureId/position`                    | Bearer | Update position     |
+| `GET`    | `/v1/repositories/:repoId/features/:featureId/comments`                    | Bearer | List comments       |
+| `POST`   | `/v1/repositories/:repoId/features/:featureId/comments`                    | Bearer | Create comment      |
+| `POST`   | `/v1/repositories/:repoId/features/:featureId/vote`                        | Bearer | Toggle vote         |
+| `POST`   | `/v1/repositories/:repoId/features/:featureId/dependencies`                | Bearer | Add dependency      |
+| `DELETE` | `/v1/repositories/:repoId/features/:featureId/dependencies/:dependsOn`     | Bearer | Remove dependency   |
+| `PATCH`  | `/v1/repositories/:repoId/portal`                                          | Bearer | Update portal visibility |
+
+### Feature runs
+
+| Method | Path                               | Auth   | Description                          |
+| ------ | ---------------------------------- | ------ | ------------------------------------ |
+| `POST` | `/v1/features/:featureId/runs`     | Bearer | Create run (triggers agent pipeline) |
+
+### Public portal
+
+| Method | Path                                                              | Auth | Description       |
+| ------ | ----------------------------------------------------------------- | ---- | ----------------- |
+| `GET`  | `/v1/portal/:orgSlug/:repoName`                                   | none | Get portal page   |
+| `GET`  | `/v1/portal/:orgSlug/:repoName/events`                            | none | SSE event stream  |
+| `POST` | `/v1/portal/:orgSlug/:repoName/features/:featureId/vote`          | none | Toggle vote       |
+| `GET`  | `/v1/portal/:orgSlug/:repoName/features/:featureId/comments`      | none | List comments     |
+| `POST` | `/v1/portal/:orgSlug/:repoName/features/:featureId/comments`      | none | Create comment    |
 
 ## Auth flow
 

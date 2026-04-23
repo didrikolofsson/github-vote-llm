@@ -189,10 +189,15 @@ export function FeatureDrawer({
     prompt: string;
     featureId: number;
     createdByUserId: number;
-  }
+  };
   const createRun = useMutation({
-    mutationFn: ({ prompt, featureId, createdByUserId }: CreateFeatureRunParams) => createFeatureRun(prompt, featureId, createdByUserId),
-  })
+    mutationFn: ({
+      prompt,
+      featureId,
+      createdByUserId,
+    }: CreateFeatureRunParams) =>
+      createFeatureRun(prompt, featureId, createdByUserId),
+  });
 
   function handleDescriptionBlur() {
     if (descriptionDraft !== description) {
@@ -313,11 +318,17 @@ export function FeatureDrawer({
             </div>
 
             <DrawerFooter>
-              <Button onClick={() => createRun.mutate({
-                prompt: "Create a new implementation for the feature",
-                featureId: feature.id,
-                createdByUserId: user?.id!,
-              })}>Create run</Button>
+              <Button
+                onClick={() =>
+                  createRun.mutate({
+                    prompt: feature.description,
+                    featureId: feature.id,
+                    createdByUserId: user?.id!,
+                  })
+                }
+              >
+                Create run
+              </Button>
               <Button
                 variant="destructive"
                 size="sm"

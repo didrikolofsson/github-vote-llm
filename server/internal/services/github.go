@@ -255,6 +255,12 @@ func (s *GithubService) CloneRepoToWorkspace(
 	// Workspace is created before job is enqueued.
 	repoPath := filepath.Join(run.Workspace, run.RepositoryName)
 	if _, err := os.Stat(repoPath); err == nil {
+		if _, err := s.jc.Insert(ctx, args.RunAgentArgs{
+			UserID: userID,
+			RunID:  runID,
+		}, nil); err != nil {
+			return err
+		}
 		return nil
 	}
 

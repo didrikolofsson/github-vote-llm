@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/agents/claude"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
@@ -113,9 +114,36 @@ func prepareWorktree(ctx context.Context, repoDir, worktreeDir, branch string) e
 		return err
 	}
 
-	add := exec.CommandContext(ctx, "git", "-C", repoDir, "worktree", "add", "-b", branch, worktreeDir, "origin/main")
+	// Make this idempotent across job retries:
+	// - If an earlier attempt created the worktree or branch, remove/reset and recreate.
+	_ = exec.CommandContext(ctx, "git", "-C", repoDir, "worktree", "remove", "--force", worktreeDir).Run()
+	_ = os.RemoveAll(worktreeDir)
+
+	// Ensure the branch points at the expected base (origin/main). This avoids failures when a
+	// retry sees an existing local branch name.
+	resetBranch := exec.CommandContext(ctx, "git", "-C", repoDir, "branch", "-f", branch, "origin/main")
+	if out, err := resetBranch.CombinedOutput(); err != nil {
+		return fmt.Errorf("git branch -f: %w: %s", err, out)
+	}
+
+	add := exec.CommandContext(ctx, "git", "-C", repoDir, "worktree", "add", worktreeDir, branch)
 	if out, err := add.CombinedOutput(); err != nil {
 		return fmt.Errorf("git worktree add: %w: %s", err, out)
+	}
+	return nil
+}
+
+func (s *RunService) updateRunStatus(ctx context.Context, runID int64, status store.FeatureRunStatus) error {
+	// Job contexts can be cancelled/timed out; status updates should still be attempted.
+	// Detach cancellation but keep values from the caller context.
+	statusCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+
+	if err := s.q.UpdateRunStatus(statusCtx, store.UpdateRunStatusParams{
+		Status: status,
+		ID:     runID,
+	}); err != nil {
+		return fmt.Errorf("failed to update run status: %w", err)
 	}
 	return nil
 }
@@ -126,11 +154,8 @@ func (s *RunService) RunAgent(ctx context.Context, userID, runID int64) error {
 		return err
 	}
 
-	if err := s.q.UpdateRunStatus(ctx, store.UpdateRunStatusParams{
-		Status: store.FeatureRunStatusRunning,
-		ID:     runID,
-	}); err != nil {
-		return fmt.Errorf("failed to update run status: %w", err)
+	if err := s.updateRunStatus(ctx, runID, store.FeatureRunStatusRunning); err != nil {
+		return err
 	}
 
 	repoDir := filepath.Join(run.Workspace, run.RepositoryName)
@@ -138,30 +163,21 @@ func (s *RunService) RunAgent(ctx context.Context, userID, runID int64) error {
 	branch := fmt.Sprintf("feature-%d-run-%d", run.FeatureID, run.ID)
 
 	if err := prepareWorktree(ctx, repoDir, worktreeDir, branch); err != nil {
-		if err := s.q.UpdateRunStatus(ctx, store.UpdateRunStatusParams{
-			Status: store.FeatureRunStatusFailed,
-			ID:     runID,
-		}); err != nil {
-			return fmt.Errorf("failed to update run status: %w", err)
+		if statusErr := s.updateRunStatus(ctx, runID, store.FeatureRunStatusFailed); statusErr != nil {
+			return statusErr
 		}
 		return fmt.Errorf("failed to prepare worktree: %w", err)
 	}
 
 	if err := s.runner.Run(ctx, run.Prompt, worktreeDir); err != nil {
-		if err := s.q.UpdateRunStatus(ctx, store.UpdateRunStatusParams{
-			Status: store.FeatureRunStatusFailed,
-			ID:     runID,
-		}); err != nil {
-			return fmt.Errorf("failed to update run status: %w", err)
+		if statusErr := s.updateRunStatus(ctx, runID, store.FeatureRunStatusFailed); statusErr != nil {
+			return statusErr
 		}
 		return fmt.Errorf("failed to run agent: %w", err)
 	}
 
-	if err := s.q.UpdateRunStatus(ctx, store.UpdateRunStatusParams{
-		Status: store.FeatureRunStatusCompleted,
-		ID:     runID,
-	}); err != nil {
-		return fmt.Errorf("failed to update run status: %w", err)
+	if err := s.updateRunStatus(ctx, runID, store.FeatureRunStatusCompleted); err != nil {
+		return err
 	}
 
 	return nil

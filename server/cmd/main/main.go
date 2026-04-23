@@ -60,6 +60,7 @@ func main() {
 	}
 	claudeRunner := claude.NewClaudeRunner(claude.NewClaudeRunnerParams{
 		ApiKey: env.ANTHROPIC_API_KEY,
+		Logger: appLogger,
 	})
 
 	q := store.New(db)

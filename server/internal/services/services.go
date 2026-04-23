@@ -38,7 +38,7 @@ func New(
 		UserService:         NewUserService(deps.DB, deps.Queries),
 		AuthService:         NewAuthService(deps.DB, deps.Queries, deps.Env.JWT_SECRET),
 		OrganizationService: NewOrganizationService(deps.DB, deps.Queries),
-		GithubService:       NewGithubService(deps.DB, deps.Queries, deps.Env),
+		GithubService:       NewGithubService(deps.DB, deps.Queries, deps.Env, deps.JobClient),
 		RepositoriesService: NewRepositoriesService(deps.DB, deps.Queries),
 		MembersService:      NewMembersService(deps.Queries),
 		RunService:          NewRunService(deps.DB, deps.Queries, deps.Env, deps.JobClient, deps.AgentRunner),
