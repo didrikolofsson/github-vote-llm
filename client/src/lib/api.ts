@@ -282,28 +282,30 @@ export async function updateOrganizationSlug(orgId: number, slug: string) {
   });
 }
 
-// ─── GitHub ───────────────────────────────────────────────────────────────────
+// ─── GitHub App ───────────────────────────────────────────────────────────────
 
 export const GitHubStatusSchema = z.object({
-  connected: z.boolean(),
+  installed: z.boolean(),
   login: z.string().nullable().optional(),
+  account_type: z.string().nullable().optional(),
+  repository_selection: z.string().nullable().optional(),
+  suspended: z.boolean().nullable().optional(),
 });
 export async function getGitHubStatus() {
   return requestWithRefresh("/github/status", { schema: GitHubStatusSchema });
 }
 
-export const GitHubAuthorizeUrlSchema = z.object({
-  authorize_url: z.string(),
+export const GitHubInstallUrlSchema = z.object({
+  install_url: z.string(),
 });
-export async function getGitHubAuthorizeUrl() {
-  return requestWithRefresh("/github/authorize", {
-    schema: GitHubAuthorizeUrlSchema,
-    credentials: "include",
+export async function getGitHubInstallUrl() {
+  return requestWithRefresh("/github/install", {
+    schema: GitHubInstallUrlSchema,
   });
 }
 
 export async function disconnectGitHub(): Promise<void> {
-  return requestWithRefresh("/github/connection", {
+  return requestWithRefresh("/github/installation", {
     method: "DELETE",
     schema: z.void(),
   });

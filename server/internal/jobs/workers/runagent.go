@@ -21,5 +21,5 @@ func (w *RunAgentWorker) Timeout(*river.Job[args.RunAgentArgs]) time.Duration {
 }
 
 func (w *RunAgentWorker) Work(ctx context.Context, job *river.Job[args.RunAgentArgs]) error {
-	return w.svc.RunAgent(ctx, job.Args.UserID, job.Args.RunID)
+	return w.svc.RunAgent(ctx, job.Args.RunID)
 }

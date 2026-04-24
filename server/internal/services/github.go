@@ -1,12 +1,9 @@
 package services
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -15,235 +12,171 @@ import (
 
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/dtos"
-	"github.com/didrikolofsson/github-vote-llm/internal/encryption"
-	gh "github.com/didrikolofsson/github-vote-llm/internal/github"
+	"github.com/didrikolofsson/github-vote-llm/internal/githubapp"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs/args"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/go-github/v84/github"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
-	"golang.org/x/oauth2"
-	gha "golang.org/x/oauth2/github"
 )
 
 var (
-	ErrGitHubNotConnected     = errors.New("github: no connection found for user")
-	ErrGitHubTokenUnavailable = errors.New("github: token unavailable or refresh failed")
+	ErrGitHubNotInstalled  = errors.New("github: no installation found for organization")
+	ErrGitHubTokenFailed   = errors.New("github: failed to mint installation token")
+	ErrInvalidCloneURL     = errors.New("github: invalid or missing clone URL")
+	ErrRunNotFound         = errors.New("github: run not found")
+	ErrUserHasNoOrg        = errors.New("github: user has no organization")
+	ErrInstallationSuspended = errors.New("github: installation is suspended")
 )
 
 type GithubService struct {
 	db  *pgxpool.Pool
 	q   *store.Queries
-	cfg *oauth2.Config
+	app *githubapp.Client
 	env *config.Environment
 	jc  *river.Client[pgx.Tx]
 }
 
-func NewGithubService(db *pgxpool.Pool, q *store.Queries, env *config.Environment, jc *river.Client[pgx.Tx]) *GithubService {
-	cfg := gh.NewGithubOAuthConfig(
-		env.GITHUB_CLIENT_ID,
-		env.GITHUB_CLIENT_SECRET,
-		env.SERVER_URL+"/v1/github/callback",
-	)
-	return &GithubService{db: db, q: q, cfg: cfg, env: env, jc: jc}
+func NewGithubService(db *pgxpool.Pool, q *store.Queries, app *githubapp.Client, env *config.Environment, jc *river.Client[pgx.Tx]) *GithubService {
+	return &GithubService{db: db, q: q, app: app, env: env, jc: jc}
 }
 
-// oauthStateClaims is signed into the GitHub `state` query param so /callback can bind the code to a user.
-type oauthStateClaims struct {
-	UserID int64 `json:"uid"`
-	jwt.RegisteredClaims
-}
-
-var (
-	ErrFailedToBuildOAuthState    = errors.New("github: failed to build oauth state")
-	ErrInvalidOrExpiredOAuthState = errors.New("github: invalid or expired oauth state")
-)
-
-// Authorize lets the client initiate the OAuth2 flow by returning the GitHub authorization URL.
-// Requires JWT (see api router). Response matches client: { "authorize_url": "..." }.
-func (s *GithubService) CreateOAuthState(ctx context.Context, userID int64) (string, error) {
-	stateTok := jwt.NewWithClaims(jwt.SigningMethodHS256, oauthStateClaims{
-		UserID: userID,
-		RegisteredClaims: jwt.RegisteredClaims{
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
-		},
-	})
-	stateStr, err := stateTok.SignedString([]byte(s.env.JWT_SECRET))
+// CreateInstallURL returns the github.com URL where the user will install the app,
+// with a signed single-use state token bound to the user's session.
+func (s *GithubService) CreateInstallURL(ctx context.Context, userID int64) (string, error) {
+	nonce, err := githubapp.CreateInstallState(ctx, s.q, userID)
 	if err != nil {
-		return "", ErrFailedToBuildOAuthState
+		return "", err
 	}
-
 	v := url.Values{}
-	v.Set("client_id", s.env.GITHUB_CLIENT_ID)
-	v.Set("redirect_uri", s.env.SERVER_URL+"/v1/github/callback")
-	v.Set("scope", "repo read:org")
-	v.Set("state", stateStr)
-	v.Set("prompt", "select_account")
-
-	authorizeURL := gha.Endpoint.AuthURL + "?" + v.Encode()
-	return authorizeURL, nil
+	v.Set("state", nonce)
+	return fmt.Sprintf("https://github.com/apps/%s/installations/new?%s", s.env.GITHUB_APP_SLUG, v.Encode()), nil
 }
 
-func (s *GithubService) ReadOAuthStateClaims(ctx context.Context, state string) (*oauthStateClaims, error) {
-	var claims oauthStateClaims
-	tok, err := jwt.ParseWithClaims(state, &claims, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
-		return []byte(s.env.JWT_SECRET), nil
-	})
-	if err != nil || tok == nil || !tok.Valid {
-		return nil, ErrInvalidOrExpiredOAuthState
-	}
-	return &claims, nil
+type InstallationStatus struct {
+	Installed           bool
+	Login               string
+	AccountType         string
+	RepositorySelection string
+	Suspended           bool
 }
 
-func (s *GithubService) ExchangeCodeForAccessToken(ctx context.Context, code string, userID int64) error {
-	token, err := s.cfg.Exchange(ctx, code)
+// GetInstallationStatus returns the current install status for the user's organization.
+func (s *GithubService) GetInstallationStatus(ctx context.Context, userID int64) (*InstallationStatus, error) {
+	orgID, err := s.orgIDForUser(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	encryptedAccessToken, err := encryption.Encrypt([]byte(token.AccessToken), s.env.TOKEN_ENCRYPTION_KEY)
+	inst, err := s.q.GetInstallationByOrgID(ctx, orgID)
 	if err != nil {
-		return err
-	}
-	var encryptedRefreshToken *string
-	if token.RefreshToken != "" {
-		encoded, encErr := encryption.Encrypt([]byte(token.RefreshToken), s.env.TOKEN_ENCRYPTION_KEY)
-		if encErr != nil {
-			return encErr
-		}
-		encryptedRefreshToken = &encoded
-	}
-	var expiresAt pgtype.Timestamptz
-	if !token.Expiry.IsZero() {
-		expiresAt = pgtype.Timestamptz{Time: token.Expiry, Valid: true}
-	}
-	_, err = s.q.UpsertGitHubConnection(ctx, store.UpsertGitHubConnectionParams{
-		UserID:               userID,
-		AccessTokenEncrypted: encryptedAccessToken,
-		RefreshToken:         encryptedRefreshToken,
-		TokenExpiresAt:       expiresAt,
-	})
-	return err
-}
-
-type GithubUserResponse struct {
-	ID    int64  `json:"id"`
-	Login string `json:"login"`
-}
-
-func (s *GithubService) GetGitHubConnectionStatus(ctx context.Context, userID int64) (*GithubUserResponse, error) {
-	if _, err := s.q.GetGitHubConnectionByUserID(ctx, userID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrGitHubNotConnected
+			return &InstallationStatus{Installed: false}, nil
 		}
 		return nil, err
 	}
-	ts := gh.NewGithubTokenSource(
-		ctx,
-		s.q,
-		s.cfg,
-		userID,
-		s.env.TOKEN_ENCRYPTION_KEY,
-	)
-	client := gh.NewGithubClientByUserID(ctx, ts)
-	user, _, err := client.Users.Get(ctx, "")
-	if err != nil {
-		return nil, err
-	}
-	return &GithubUserResponse{
-		ID:    *user.ID,
-		Login: *user.Login,
+	return &InstallationStatus{
+		Installed:           true,
+		Login:               inst.GithubAccountLogin,
+		AccountType:         inst.GithubAccountType,
+		RepositorySelection: inst.RepositorySelection,
+		Suspended:           inst.SuspendedAt.Valid,
 	}, nil
 }
 
-func (s *GithubService) DeleteGitHubConnection(ctx context.Context, userID int64) error {
-	conn, err := s.q.GetGitHubConnectionByUserID(ctx, userID)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return err
-	}
-
-	// Best-effort: revoke the token on GitHub so the OAuth consent screen
-	// appears again on the next connect attempt.
-	if err == nil {
-		if decrypted, decErr := encryption.Decrypt(conn.AccessTokenEncrypted, s.env.TOKEN_ENCRYPTION_KEY); decErr == nil {
-			_ = s.revokeGitHubToken(ctx, string(decrypted))
-		}
-	}
-
-	return s.q.DeleteGitHubConnection(ctx, userID)
-}
-
-func (s *GithubService) revokeGitHubToken(ctx context.Context, accessToken string) error {
-	body, err := json.Marshal(map[string]string{"access_token": accessToken})
+// CompleteInstall validates the state token, fetches installation details from GitHub,
+// and persists the installation against the user's organization.
+func (s *GithubService) CompleteInstall(ctx context.Context, installationID int64, state, setupAction string) error {
+	userID, err := githubapp.ConsumeInstallState(ctx, s.q, state)
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete,
-		"https://api.github.com/applications/"+s.cfg.ClientID+"/token",
-		bytes.NewReader(body))
+
+	orgID, err := s.orgIDForUser(ctx, userID)
 	if err != nil {
 		return err
 	}
-	req.SetBasicAuth(s.cfg.ClientID, s.cfg.ClientSecret)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/vnd.github+json")
-	resp, err := http.DefaultClient.Do(req)
+
+	inst, err := s.app.GetInstallation(ctx, installationID)
+	if err != nil {
+		return fmt.Errorf("fetch installation: %w", err)
+	}
+	if inst == nil || inst.Account == nil {
+		return fmt.Errorf("github: installation %d returned empty metadata", installationID)
+	}
+
+	var suspendedAt pgtype.Timestamptz
+	if inst.SuspendedAt != nil {
+		suspendedAt = pgtype.Timestamptz{Time: inst.SuspendedAt.Time, Valid: true}
+	}
+
+	saved, err := s.q.UpsertInstallation(ctx, store.UpsertInstallationParams{
+		OrganizationID:       orgID,
+		GithubInstallationID: installationID,
+		GithubAccountLogin:   inst.Account.GetLogin(),
+		GithubAccountID:      inst.Account.GetID(),
+		GithubAccountType:    inst.Account.GetType(),
+		RepositorySelection:  inst.GetRepositorySelection(),
+		SuspendedAt:          suspendedAt,
+		InstalledByUserID:    &userID,
+	})
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+
+	if err := s.syncInstallationRepositories(ctx, saved); err != nil {
+		return fmt.Errorf("sync repos: %w", err)
+	}
 	return nil
 }
 
-func (s *GithubService) ListReposByAuthenticatedUser(ctx context.Context, userID int64, page int) ([]dtos.GitHubRepository, bool, error) {
-	if _, err := s.q.GetGitHubConnectionByUserID(ctx, userID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, false, ErrGitHubNotConnected
-		}
-		return nil, false, err
+// DeleteInstallation removes the installation row for the user's organization.
+// Does not uninstall on GitHub — if the user wants to revoke, they must do so on github.com;
+// the webhook will then reconcile. This call is DB-only.
+func (s *GithubService) DeleteInstallation(ctx context.Context, userID int64) error {
+	orgID, err := s.orgIDForUser(ctx, userID)
+	if err != nil {
+		return err
 	}
+	return s.q.DeleteInstallationByOrgID(ctx, orgID)
+}
 
-	ts := gh.NewGithubTokenSource(
-		ctx,
-		s.q,
-		s.cfg,
-		userID,
-		s.env.TOKEN_ENCRYPTION_KEY,
-	)
-	client := gh.NewGithubClientByUserID(ctx, ts)
-
-	repos, resp, err := client.Repositories.ListByAuthenticatedUser(ctx, &github.RepositoryListByAuthenticatedUserOptions{
-		ListOptions: github.ListOptions{Page: page, PerPage: 30},
-	})
+// ListInstallationRepositories lists repos accessible to the installation.
+func (s *GithubService) ListInstallationRepositories(ctx context.Context, userID int64, page int) ([]dtos.GitHubRepository, bool, error) {
+	orgID, err := s.orgIDForUser(ctx, userID)
 	if err != nil {
 		return nil, false, err
 	}
+	inst, err := s.q.GetInstallationByOrgID(ctx, orgID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, false, ErrGitHubNotInstalled
+		}
+		return nil, false, err
+	}
+	if inst.SuspendedAt.Valid {
+		return nil, false, ErrInstallationSuspended
+	}
 
-	out := make([]dtos.GitHubRepository, len(repos))
-	for i, r := range repos {
-		out[i] = dtos.GitHubRepository{
+	client := s.app.InstallationGithubClient(ctx, inst.GithubInstallationID)
+	repos, resp, err := client.Apps.ListRepos(ctx, &github.ListOptions{Page: page, PerPage: 30})
+	if err != nil {
+		return nil, false, err
+	}
+	out := make([]dtos.GitHubRepository, 0, len(repos.Repositories))
+	for _, r := range repos.Repositories {
+		out = append(out, dtos.GitHubRepository{
 			Owner: r.Owner.GetLogin(),
 			Repo:  r.GetName(),
-		}
+		})
 	}
 	return out, resp.NextPage > 0, nil
 }
 
-var (
-	ErrInvalidCloneURL = errors.New("github: invalid or missing clone URL")
-	ErrRunNotFound     = errors.New("github: run not found")
-)
-
-func (s *GithubService) CloneRepoToWorkspace(
-	ctx context.Context, userID, runID int64,
-) error {
+// CloneRepoToWorkspace clones the repo for a run, authenticating as the installation
+// attached to the run's organization.
+func (s *GithubService) CloneRepoToWorkspace(ctx context.Context, runID int64) error {
 	run, err := s.q.GetRunByID(ctx, runID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -252,103 +185,60 @@ func (s *GithubService) CloneRepoToWorkspace(
 		return err
 	}
 
-	// Workspace is created before job is enqueued.
 	repoPath := filepath.Join(run.Workspace, run.RepositoryName)
 	if _, err := os.Stat(repoPath); err == nil {
-		if _, err := s.jc.Insert(ctx, args.RunAgentArgs{
-			UserID: userID,
-			RunID:  runID,
-		}, nil); err != nil {
+		if _, err := s.jc.Insert(ctx, args.RunAgentArgs{RunID: runID}, nil); err != nil {
 			return err
 		}
 		return nil
 	}
 
-	conn, err := s.q.GetGitHubConnectionByUserID(ctx, userID)
+	token, err := s.installationTokenForOrg(ctx, run.OrganizationID)
 	if err != nil {
 		return err
 	}
-	if conn.AccessTokenEncrypted == "" {
-		return ErrGitHubNotConnected
-	}
 
-	ts := gh.NewGithubTokenSource(
-		ctx,
-		s.q,
-		s.cfg,
-		userID,
-		s.env.TOKEN_ENCRYPTION_KEY,
-	)
-	tok, err := ts.Token()
-	if err != nil {
-		return err
-	}
-	if tok.AccessToken == "" {
-		return ErrGitHubTokenUnavailable
-	}
+	cloneURL := fmt.Sprintf("https://x-access-token:%s@github.com/%s/%s.git",
+		token, run.RepositoryOwner, run.RepositoryName)
 
-	client := gh.NewGithubClientByUserID(ctx, ts)
-
-	ghRepo, _, err := client.Repositories.Get(ctx, run.RepositoryOwner, run.RepositoryName)
-	if err != nil {
-		return err
-	}
-	if ghRepo.CloneURL == nil || *ghRepo.CloneURL == "" {
-		return ErrInvalidCloneURL
-	}
-
-	u, err := url.Parse(*ghRepo.CloneURL)
-	if err != nil {
-		return err
-	}
-	u.User = url.UserPassword("x-access-token", tok.AccessToken)
-	authCloneURL := u.String()
-
-	cmd := exec.CommandContext(ctx, "git", "clone", authCloneURL)
+	cmd := exec.CommandContext(ctx, "git", "clone", cloneURL)
 	cmd.Dir = run.Workspace
-	if err := cmd.Run(); err != nil {
-		return err
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git clone: %w: %s", err, redactToken(string(out), token))
 	}
 
-	if _, err := s.jc.Insert(ctx, args.RunAgentArgs{
-		UserID: userID,
-		RunID:  runID,
-	}, nil); err != nil {
+	if _, err := s.jc.Insert(ctx, args.RunAgentArgs{RunID: runID}, nil); err != nil {
 		return err
 	}
-
 	return nil
 }
 
-// PushBranch pushes the given branch from worktreeDir to GitHub using a fresh token.
-// owner and name are used to build a clean push URL with no stale credentials embedded.
-func (s *GithubService) PushBranch(ctx context.Context, userID int64, worktreeDir, owner, name, branch string) error {
-	ts := gh.NewGithubTokenSource(ctx, s.q, s.cfg, userID, s.env.TOKEN_ENCRYPTION_KEY)
-	tok, err := ts.Token()
+// PushBranch pushes the given branch from worktreeDir to GitHub using a fresh installation token.
+func (s *GithubService) PushBranch(ctx context.Context, orgID int64, worktreeDir, owner, name, branch string) error {
+	token, err := s.installationTokenForOrg(ctx, orgID)
 	if err != nil {
-		return fmt.Errorf("get github token: %w", err)
+		return err
 	}
-
-	// Build a clean authenticated URL (no stale credentials from the clone URL).
-	pushURL := fmt.Sprintf("https://x-access-token:%s@github.com/%s/%s.git", tok.AccessToken, owner, name)
+	pushURL := fmt.Sprintf("https://x-access-token:%s@github.com/%s/%s.git", token, owner, name)
 	push := exec.CommandContext(ctx, "git", "-C", worktreeDir, "push", pushURL, branch)
 	if combined, err := push.CombinedOutput(); err != nil {
-		return fmt.Errorf("git push: %w: %s", err, combined)
+		return fmt.Errorf("git push: %w: %s", err, redactToken(string(combined), token))
 	}
 	return nil
 }
 
-func (s *GithubService) OpenPR(
-	ctx context.Context, userID int64, owner, name, branch, title, body string,
-) (string, error) {
-	ts := gh.NewGithubTokenSource(ctx, s.q, s.cfg, userID, s.env.TOKEN_ENCRYPTION_KEY)
-	client := gh.NewGithubClientByUserID(ctx, ts)
+// OpenPR opens a pull request as the GitHub App installation.
+func (s *GithubService) OpenPR(ctx context.Context, orgID int64, owner, name, branch, title, body string) (string, error) {
+	inst, err := s.q.GetInstallationByOrgID(ctx, orgID)
+	if err != nil {
+		return "", err
+	}
+	client := s.app.InstallationGithubClient(ctx, inst.GithubInstallationID)
 
 	repo, _, err := client.Repositories.Get(ctx, owner, name)
 	if err != nil {
 		return "", err
 	}
-
 	defaultBranch := repo.GetDefaultBranch()
 	pr, _, err := client.PullRequests.Create(ctx, owner, name, &github.NewPullRequest{
 		Title: &title,
@@ -359,6 +249,170 @@ func (s *GithubService) OpenPR(
 	if err != nil {
 		return "", err
 	}
-
 	return pr.GetHTMLURL(), nil
+}
+
+// installationTokenForOrg resolves orgID -> installation -> fresh installation access token.
+func (s *GithubService) installationTokenForOrg(ctx context.Context, orgID int64) (string, error) {
+	inst, err := s.q.GetInstallationByOrgID(ctx, orgID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrGitHubNotInstalled
+		}
+		return "", err
+	}
+	if inst.SuspendedAt.Valid {
+		return "", ErrInstallationSuspended
+	}
+	tok, _, err := s.app.InstallationToken(ctx, inst.GithubInstallationID)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrGitHubTokenFailed, err)
+	}
+	return tok, nil
+}
+
+func (s *GithubService) orgIDForUser(ctx context.Context, userID int64) (int64, error) {
+	m, err := s.q.GetOrganizationMembershipByUserID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, ErrUserHasNoOrg
+		}
+		return 0, err
+	}
+	return m.OrganizationID, nil
+}
+
+// syncInstallationRepositories refreshes the cached repo list for a given installation row.
+// For repository_selection="all" we still cache the visible list on install.
+func (s *GithubService) syncInstallationRepositories(ctx context.Context, inst store.GithubInstallation) error {
+	client := s.app.InstallationGithubClient(ctx, inst.GithubInstallationID)
+
+	if err := s.q.ClearInstallationRepositories(ctx, inst.ID); err != nil {
+		return err
+	}
+
+	page := 1
+	for {
+		resp, httpResp, err := client.Apps.ListRepos(ctx, &github.ListOptions{Page: page, PerPage: 100})
+		if err != nil {
+			return err
+		}
+		for _, r := range resp.Repositories {
+			if err := s.q.AddInstallationRepository(ctx, store.AddInstallationRepositoryParams{
+				InstallationID:     inst.ID,
+				GithubRepositoryID: r.GetID(),
+				RepositoryName:     r.GetName(),
+				RepositoryFullName: r.GetFullName(),
+			}); err != nil {
+				return err
+			}
+		}
+		if httpResp.NextPage == 0 {
+			break
+		}
+		page = httpResp.NextPage
+	}
+	return nil
+}
+
+// redactToken scrubs a token value from a string, useful before logging git output.
+func redactToken(s, token string) string {
+	if token == "" {
+		return s
+	}
+	// Avoid allocating a replacer for short strings.
+	return replaceAll(s, token, "***")
+}
+
+func replaceAll(s, old, new string) string {
+	if old == "" {
+		return s
+	}
+	out := make([]byte, 0, len(s))
+	for i := 0; i < len(s); {
+		if i+len(old) <= len(s) && s[i:i+len(old)] == old {
+			out = append(out, new...)
+			i += len(old)
+			continue
+		}
+		out = append(out, s[i])
+		i++
+	}
+	return string(out)
+}
+
+// Webhook handlers — called by the webhook handler.
+
+// HandleInstallationEvent updates DB state based on `installation` webhook events.
+func (s *GithubService) HandleInstallationEvent(ctx context.Context, event *github.InstallationEvent) error {
+	if event.Installation == nil {
+		return fmt.Errorf("installation event missing installation")
+	}
+	id := event.Installation.GetID()
+	action := event.GetAction()
+
+	switch action {
+	case "created":
+		// Idempotent with the callback: if the row exists (callback beat us), do nothing.
+		if _, err := s.q.GetInstallationByGithubID(ctx, id); err == nil {
+			return nil
+		}
+		// Otherwise: webhook arrived first (rare); we still need orgID to attach it.
+		// Without a user session we can't determine the org. Skip — the callback will upsert.
+		return nil
+
+	case "deleted":
+		return s.q.DeleteInstallationByGithubID(ctx, id)
+
+	case "suspend":
+		ts := pgtype.Timestamptz{Time: time.Now(), Valid: true}
+		if event.Installation.SuspendedAt != nil {
+			ts.Time = event.Installation.SuspendedAt.Time
+		}
+		return s.q.SetInstallationSuspendedByGithubID(ctx, store.SetInstallationSuspendedByGithubIDParams{
+			GithubInstallationID: id,
+			SuspendedAt:          ts,
+		})
+
+	case "unsuspend":
+		return s.q.SetInstallationSuspendedByGithubID(ctx, store.SetInstallationSuspendedByGithubIDParams{
+			GithubInstallationID: id,
+			SuspendedAt:          pgtype.Timestamptz{Valid: false},
+		})
+	}
+	return nil
+}
+
+// HandleInstallationRepositoriesEvent keeps the repo cache in sync.
+func (s *GithubService) HandleInstallationRepositoriesEvent(ctx context.Context, event *github.InstallationRepositoriesEvent) error {
+	if event.Installation == nil {
+		return fmt.Errorf("installation_repositories event missing installation")
+	}
+	inst, err := s.q.GetInstallationByGithubID(ctx, event.Installation.GetID())
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+
+	for _, r := range event.RepositoriesAdded {
+		if err := s.q.AddInstallationRepository(ctx, store.AddInstallationRepositoryParams{
+			InstallationID:     inst.ID,
+			GithubRepositoryID: r.GetID(),
+			RepositoryName:     r.GetName(),
+			RepositoryFullName: r.GetFullName(),
+		}); err != nil {
+			return err
+		}
+	}
+	for _, r := range event.RepositoriesRemoved {
+		if err := s.q.RemoveInstallationRepository(ctx, store.RemoveInstallationRepositoryParams{
+			InstallationID:     inst.ID,
+			GithubRepositoryID: r.GetID(),
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

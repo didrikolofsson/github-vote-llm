@@ -96,7 +96,7 @@ export default function RepositoriesPage() {
           variant="outline"
           size="sm"
           onClick={() => setAddRepoOpen(true)}
-          disabled={!ghStatus?.connected}
+          disabled={!ghStatus?.installed}
           className="shrink-0 mt-1"
         >
           <Plus data-icon="inline-start" />
@@ -104,17 +104,17 @@ export default function RepositoriesPage() {
         </Button>
       </div>
 
-      {!ghStatus?.connected && !ghStatusLoading && repos.length > 0 && (
+      {!ghStatus?.installed && !ghStatusLoading && repos.length > 0 && (
         <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-400">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <span>
-            GitHub account disconnected. Repositories are preserved but you
+            GitHub App not installed. Repositories are preserved but you
             can't add new ones until you{" "}
             <Link
               to="/settings"
               className="font-medium underline underline-offset-2"
             >
-              reconnect
+              install the app
             </Link>
             .
           </span>
@@ -135,11 +135,11 @@ export default function RepositoriesPage() {
             No repositories yet
           </p>
           <p className="text-xs text-muted-foreground/70 mt-1">
-            {ghStatus?.connected ? (
+            {ghStatus?.installed ? (
               "Click Add to connect your first repository."
             ) : (
               <>
-                Connect GitHub in{" "}
+                Install the GitHub App in{" "}
                 <Link to="/settings" className="underline underline-offset-2">
                   Settings
                 </Link>{" "}

@@ -3,109 +3,78 @@ package handlers
 import (
 	"errors"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api/middleware"
-	"github.com/didrikolofsson/github-vote-llm/internal/helpers"
+	"github.com/didrikolofsson/github-vote-llm/internal/githubapp"
 	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/gin-gonic/gin"
-	"golang.org/x/oauth2/github"
-)
-
-var (
-	GitHubAuthURL = github.Endpoint.AuthURL
 )
 
 type GithubHandlers struct {
-	s *services.GithubService
+	s            *services.GithubService
+	frontendURL  string
 }
 
-func NewGithubHandlers(s *services.GithubService) *GithubHandlers {
-	return &GithubHandlers{s: s}
+func NewGithubHandlers(s *services.GithubService, frontendURL string) *GithubHandlers {
+	return &GithubHandlers{s: s, frontendURL: frontendURL}
 }
 
-var (
-	REQUEST_ORIGIN_COOKIE_NAME = "gvllm_request_origin"
-)
-
-// Authorize lets the client initiate the OAuth2 flow by returning the GitHub authorization URL.
-func (h *GithubHandlers) Authorize(c *gin.Context) {
+// Install returns the github.com URL where the user will install the GitHub App.
+// The URL includes a single-use state token bound to the user's session.
+func (h *GithubHandlers) Install(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	origin := c.Request.Referer()
-	cookie, err := helpers.BuildRequestOriginCookie(
-		REQUEST_ORIGIN_COOKIE_NAME, origin, true,
-	)
+	installURL, err := h.s.CreateInstallURL(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to build install url"})
 		return
 	}
-
-	http.SetCookie(c.Writer, cookie)
-
-	authorizeURL, err := h.s.CreateOAuthState(c.Request.Context(), userID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"authorize_url": authorizeURL})
+	c.JSON(http.StatusOK, gin.H{"install_url": installURL})
 }
 
+// Callback is the GitHub App "Setup URL". GitHub sends the user here as a top-level
+// browser redirect after they pick which repos to grant access to. The state nonce
+// (DB-backed, bound to the user who initiated the install) authenticates the request —
+// we can't require a Bearer token here since GitHub's redirect is cross-site.
 func (h *GithubHandlers) Callback(c *gin.Context) {
-	redirectBase, ok := helpers.ReadRequestOriginCookie(REQUEST_ORIGIN_COOKIE_NAME, c.Request)
-	if !ok || redirectBase == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing or invalid request origin"})
+	installationIDStr := c.Query("installation_id")
+	if installationIDStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "installation_id is required"})
 		return
 	}
-
-	if ghErr := c.Query("error"); ghErr != "" {
-		desc := c.Query("error_description")
-		q := url.Values{}
-		q.Set("github_error", "1")
-		if desc != "" {
-			q.Set("error_description", desc)
-		}
-		helpers.DeleteRequestOriginCookie(REQUEST_ORIGIN_COOKIE_NAME, c.Writer)
-		loc := strings.TrimSuffix(redirectBase, "/") + "?" + q.Encode()
-		c.Redirect(http.StatusTemporaryRedirect, loc)
-		return
-	}
-
-	code := c.Query("code")
-	if code == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "code is required"})
+	installationID, err := strconv.ParseInt(installationIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "installation_id must be a number"})
 		return
 	}
 
 	state := c.Query("state")
-	if state == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "state is required"})
+	setupAction := c.Query("setup_action") // "install" | "update"
+
+	if err := h.s.CompleteInstall(c.Request.Context(), installationID, state, setupAction); err != nil {
+		if errors.Is(err, githubapp.ErrInvalidState) || errors.Is(err, githubapp.ErrStateUserMismatch) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid install state"})
+			return
+		}
+		if errors.Is(err, services.ErrUserHasNoOrg) {
+			c.JSON(http.StatusPreconditionFailed, gin.H{"error": "user has no organization"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to complete install"})
 		return
 	}
 
-	claims, err := h.s.ReadOAuthStateClaims(c.Request.Context(), state)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
-
-	userID := claims.UserID
-	if err := h.s.ExchangeCodeForAccessToken(c.Request.Context(), code, userID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to complete github oauth"})
-		return
-	}
-
-	helpers.DeleteRequestOriginCookie(REQUEST_ORIGIN_COOKIE_NAME, c.Writer)
-	successUrl := strings.TrimSuffix(redirectBase, "/") + "?github_connected=1"
-	c.Redirect(http.StatusTemporaryRedirect, successUrl)
+	loc := strings.TrimSuffix(h.frontendURL, "/") + "/settings?github_installed=1"
+	c.Redirect(http.StatusTemporaryRedirect, loc)
 }
 
+// Status reports whether the user's organization has an active GitHub App installation.
 func (h *GithubHandlers) Status(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
@@ -113,10 +82,10 @@ func (h *GithubHandlers) Status(c *gin.Context) {
 		return
 	}
 
-	status, err := h.s.GetGitHubConnectionStatus(c.Request.Context(), userID)
+	status, err := h.s.GetInstallationStatus(c.Request.Context(), userID)
 	if err != nil {
-		if errors.Is(err, services.ErrGitHubNotConnected) {
-			c.JSON(http.StatusOK, gin.H{"connected": false})
+		if errors.Is(err, services.ErrUserHasNoOrg) {
+			c.JSON(http.StatusOK, gin.H{"installed": false})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check github status"})
@@ -124,11 +93,16 @@ func (h *GithubHandlers) Status(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"connected": true,
-		"login":     status.Login,
+		"installed":            status.Installed,
+		"login":                status.Login,
+		"account_type":         status.AccountType,
+		"repository_selection": status.RepositorySelection,
+		"suspended":            status.Suspended,
 	})
 }
 
+// Disconnect removes the installation row from our DB. This does NOT uninstall the
+// app on GitHub — the user must do that from github.com. The webhook will reconcile.
 func (h *GithubHandlers) Disconnect(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
@@ -136,15 +110,14 @@ func (h *GithubHandlers) Disconnect(c *gin.Context) {
 		return
 	}
 
-	if err := h.s.DeleteGitHubConnection(c.Request.Context(), userID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to disconnect github account"})
+	if err := h.s.DeleteInstallation(c.Request.Context(), userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to disconnect github installation"})
 		return
 	}
-
 	c.Status(http.StatusNoContent)
 }
 
-func (h *GithubHandlers) ListReposByAuthenticatedUser(c *gin.Context) {
+func (h *GithubHandlers) ListRepositories(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -158,10 +131,14 @@ func (h *GithubHandlers) ListReposByAuthenticatedUser(c *gin.Context) {
 		}
 	}
 
-	repos, hasMore, err := h.s.ListReposByAuthenticatedUser(c.Request.Context(), userID, page)
+	repos, hasMore, err := h.s.ListInstallationRepositories(c.Request.Context(), userID, page)
 	if err != nil {
-		if errors.Is(err, services.ErrGitHubNotConnected) {
-			c.JSON(http.StatusPreconditionFailed, gin.H{"connected": false})
+		if errors.Is(err, services.ErrGitHubNotInstalled) {
+			c.JSON(http.StatusPreconditionFailed, gin.H{"installed": false})
+			return
+		}
+		if errors.Is(err, services.ErrInstallationSuspended) {
+			c.JSON(http.StatusPreconditionFailed, gin.H{"installed": true, "suspended": true})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})

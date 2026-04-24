@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  getGitHubAuthorizeUrl,
+  getGitHubInstallUrl,
   getGitHubStatus,
   listMyOrganizations,
   listOrgMembers,
@@ -61,8 +61,8 @@ export default function OrganizationDashboardPage() {
 
   const connectGitHub = useMutation({
     mutationFn: async () => {
-      const { authorize_url } = await getGitHubAuthorizeUrl();
-      window.location.href = authorize_url;
+      const { install_url } = await getGitHubInstallUrl();
+      window.location.href = install_url;
     },
   });
 
@@ -148,17 +148,17 @@ export default function OrganizationDashboardPage() {
                   <Skeleton className="h-6 w-24 mb-1" />
                   <Skeleton className="h-4 w-16 mt-1" />
                 </>
-              ) : ghStatus?.connected ? (
+              ) : ghStatus?.installed ? (
                 <>
-                  <Badge color="lime">Connected</Badge>
+                  <Badge color="lime">Installed</Badge>
                   {ghStatus.login && (
-                    <p className="text-sm text-muted-foreground mt-1.5">as @{ghStatus.login}</p>
+                    <p className="text-sm text-muted-foreground mt-1.5">on @{ghStatus.login}</p>
                   )}
                 </>
               ) : (
                 <>
-                  <Badge color="red">Not connected</Badge>
-                  <p className="text-sm text-muted-foreground mt-1.5">GitHub</p>
+                  <Badge color="red">Not installed</Badge>
+                  <p className="text-sm text-muted-foreground mt-1.5">GitHub App</p>
                 </>
               )}
             </CardContent>
@@ -190,7 +190,7 @@ export default function OrganizationDashboardPage() {
               Settings
             </Link>
           </Button>
-          {!ghStatus?.connected && !ghStatusLoading && (
+          {!ghStatus?.installed && !ghStatusLoading && (
             <Button
               variant="outline"
               size="sm"
@@ -198,7 +198,7 @@ export default function OrganizationDashboardPage() {
               disabled={connectGitHub.isPending}
             >
               <Github />
-              Connect GitHub
+              Install GitHub App
             </Button>
           )}
         </div>

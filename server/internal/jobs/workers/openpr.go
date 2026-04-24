@@ -19,7 +19,7 @@ type OpenPRWorker struct {
 func (w *OpenPRWorker) Work(ctx context.Context, job *river.Job[args.OpenRepoPullRequestArgs]) error {
 	a := job.Args
 
-	if err := w.svc.PushBranch(ctx, a.UserID, a.WorktreeDir, a.Owner, a.Name, a.BranchName); err != nil {
+	if err := w.svc.PushBranch(ctx, a.OrganizationID, a.WorktreeDir, a.Owner, a.Name, a.BranchName); err != nil {
 		return fmt.Errorf("push branch: %w", err)
 	}
 
@@ -29,7 +29,7 @@ func (w *OpenPRWorker) Work(ctx context.Context, job *river.Job[args.OpenRepoPul
 	}
 	body := fmt.Sprintf("Automated PR opened by the vote-llm agent.\n\n**Prompt:**\n%s", a.Prompt)
 
-	prURL, err := w.svc.OpenPR(ctx, a.UserID, a.Owner, a.Name, a.BranchName, title, body)
+	prURL, err := w.svc.OpenPR(ctx, a.OrganizationID, a.Owner, a.Name, a.BranchName, title, body)
 	if err != nil {
 		return fmt.Errorf("open PR: %w", err)
 	}

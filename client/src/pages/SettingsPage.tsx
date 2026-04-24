@@ -31,7 +31,7 @@ import {
   deleteUser,
   disconnectGitHub,
   formatApiError,
-  getGitHubAuthorizeUrl,
+  getGitHubInstallUrl,
   getGitHubStatus,
   getMe,
   listMyOrganizations,
@@ -53,12 +53,12 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const connected = params.get("github_connected");
+    const installed = params.get("github_installed");
     const error = params.get("github_error");
-    if (connected === "1" || error) {
+    if (installed === "1" || error) {
       queryClient.invalidateQueries({ queryKey: ["github-status"] });
       const url = new URL(window.location.href);
-      url.searchParams.delete("github_connected");
+      url.searchParams.delete("github_installed");
       url.searchParams.delete("github_error");
       window.history.replaceState({}, "", url.pathname);
     }
@@ -126,8 +126,8 @@ function OrganizationTab() {
 
   const connectGitHub = useMutation({
     mutationFn: async () => {
-      const { authorize_url } = await getGitHubAuthorizeUrl();
-      window.location.href = authorize_url;
+      const { install_url } = await getGitHubInstallUrl();
+      window.location.href = install_url;
     },
   });
 
@@ -272,28 +272,45 @@ function OrganizationTab() {
 
       {/* Right: GitHub + Members */}
       <div className="flex flex-col gap-4">
-        {/* GitHub connection */}
+        {/* GitHub App installation */}
         <Card>
           <CardHeader>
             <CardTitle className="text-[15px] flex items-center gap-2">
-              GitHub connection
+              GitHub App
             </CardTitle>
             <CardDescription>
-              Connect your GitHub account to enable repository management.
+              Install the GitHub App to grant repository access for automated
+              PRs.
             </CardDescription>
           </CardHeader>
           <CardContent>
             {ghLoading ? (
               <Skeleton className="h-4 w-48" />
-            ) : ghStatus?.connected ? (
+            ) : ghStatus?.installed ? (
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="size-2 rounded-full bg-lime-400 shrink-0" />
+                  <span
+                    className={`size-2 rounded-full shrink-0 ${
+                      ghStatus.suspended ? "bg-amber-400" : "bg-lime-400"
+                    }`}
+                  />
                   <span className="text-sm text-muted-foreground">
-                    Connected as{" "}
+                    Installed on{" "}
                     <span className="font-medium text-foreground">
                       @{ghStatus.login}
                     </span>
+                    {ghStatus.repository_selection && (
+                      <span className="ml-1.5 text-xs">
+                        ({ghStatus.repository_selection === "all"
+                          ? "all repos"
+                          : "selected repos"})
+                      </span>
+                    )}
+                    {ghStatus.suspended && (
+                      <span className="ml-1.5 text-xs text-amber-600">
+                        suspended
+                      </span>
+                    )}
                   </span>
                 </div>
                 <Button
@@ -303,7 +320,7 @@ function OrganizationTab() {
                   disabled={disconnectGitHubMutation.isPending}
                 >
                   {disconnectGitHubMutation.isPending
-                    ? "Disconnecting..."
+                    ? "Removing..."
                     : "Disconnect"}
                 </Button>
               </div>
@@ -312,7 +329,7 @@ function OrganizationTab() {
                 <div className="flex items-center gap-2">
                   <span className="size-2 rounded-full bg-muted-foreground/40 shrink-0" />
                   <span className="text-sm text-muted-foreground">
-                    No account connected
+                    Not installed
                   </span>
                 </div>
                 <Button
@@ -321,7 +338,7 @@ function OrganizationTab() {
                   disabled={connectGitHub.isPending}
                 >
                   <Github data-icon="inline-start" />
-                  {connectGitHub.isPending ? "Connecting..." : "Connect"}
+                  {connectGitHub.isPending ? "Redirecting..." : "Install"}
                 </Button>
               </div>
             )}

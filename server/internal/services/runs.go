@@ -91,10 +91,7 @@ func (s *RunService) CreateRun(ctx context.Context, p CreateRunParams) (*dtos.Ru
 		return nil, err
 	}
 
-	if _, err := s.jc.InsertTx(ctx, tx, args.CloneRepoArgs{
-		UserID: p.UserID,
-		RunID:  run.ID,
-	}, nil); err != nil {
+	if _, err := s.jc.InsertTx(ctx, tx, args.CloneRepoArgs{RunID: run.ID}, nil); err != nil {
 		return nil, err
 	}
 
@@ -176,7 +173,7 @@ func (s *RunService) updateRunStatus(ctx context.Context, runID int64, status st
 	return nil
 }
 
-func (s *RunService) RunAgent(ctx context.Context, userID, runID int64) error {
+func (s *RunService) RunAgent(ctx context.Context, runID int64) error {
 	run, err := s.q.GetRunByID(ctx, runID)
 	if err != nil {
 		return err
@@ -212,13 +209,13 @@ func (s *RunService) RunAgent(ctx context.Context, userID, runID int64) error {
 	}
 
 	if _, err := s.jc.Insert(ctx, args.OpenRepoPullRequestArgs{
-		UserID:      userID,
-		RunID:       runID,
-		Owner:       run.RepositoryOwner,
-		Name:        run.RepositoryName,
-		BranchName:  branch,
-		WorktreeDir: worktreeDir,
-		Prompt:      run.Prompt,
+		OrganizationID: run.OrganizationID,
+		RunID:          runID,
+		Owner:          run.RepositoryOwner,
+		Name:           run.RepositoryName,
+		BranchName:     branch,
+		WorktreeDir:    worktreeDir,
+		Prompt:         run.Prompt,
 	}, nil); err != nil {
 		return fmt.Errorf("failed to enqueue open PR job: %w", err)
 	}

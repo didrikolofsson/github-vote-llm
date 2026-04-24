@@ -335,15 +335,34 @@ type FeatureVote struct {
 	Urgency    NullVoteUrgencyType
 }
 
-type GithubConnection struct {
-	UserID               int64
-	AccessTokenEncrypted string
-	RefreshToken         *string
-	TokenExpiresAt       pgtype.Timestamptz
-	GithubUserID         *int64
-	GithubLogin          *string
+type GithubInstallState struct {
+	Nonce      string
+	UserID     int64
+	ExpiresAt  pgtype.Timestamptz
+	ConsumedAt pgtype.Timestamptz
+	CreatedAt  pgtype.Timestamptz
+}
+
+type GithubInstallation struct {
+	ID                   int64
+	OrganizationID       int64
+	GithubInstallationID int64
+	GithubAccountLogin   string
+	GithubAccountID      int64
+	GithubAccountType    string
+	RepositorySelection  string
+	SuspendedAt          pgtype.Timestamptz
+	InstalledByUserID    *int64
 	CreatedAt            pgtype.Timestamptz
 	UpdatedAt            pgtype.Timestamptz
+}
+
+type GithubInstallationRepository struct {
+	InstallationID     int64
+	GithubRepositoryID int64
+	RepositoryName     string
+	RepositoryFullName string
+	CreatedAt          pgtype.Timestamptz
 }
 
 type Organization struct {

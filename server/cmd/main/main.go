@@ -13,6 +13,7 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
+	"github.com/didrikolofsson/github-vote-llm/internal/githubapp"
 	"github.com/didrikolofsson/github-vote-llm/internal/hub"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs/workers"
@@ -65,9 +66,16 @@ func main() {
 
 	q := store.New(db)
 	eventHub := hub.NewHub()
+
+	ghKey, err := githubapp.ParsePrivateKey(env.GITHUB_APP_PRIVATE_KEY)
+	if err != nil {
+		appLogger.Fatalf("failed to parse GitHub App private key: %v", err)
+	}
+	ghApp := githubapp.NewClient(env.GITHUB_APP_ID, ghKey)
+
 	s := services.New(services.ServicesDeps{
 		DB: db, Queries: q, Env: env, JobClient: jc, Hub: eventHub,
-		AgentRunner: claudeRunner,
+		AgentRunner: claudeRunner, GithubApp: ghApp,
 	})
 
 	workers.Register(w, workers.RegisterWorkersDeps{Services: s, Env: env, Logger: appLogger})
@@ -78,7 +86,7 @@ func main() {
 	apiLogger := logger.New().Named("api")
 	defer apiLogger.Sync()
 
-	h := handlers.New(handlers.NewHandlersDeps{Services: s, Logger: apiLogger, Hub: eventHub})
+	h := handlers.New(handlers.NewHandlersDeps{Services: s, Logger: apiLogger, Hub: eventHub, Env: env})
 	router := api.New(h, apiLogger, env)
 
 	srv := &http.Server{

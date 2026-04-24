@@ -32,13 +32,19 @@ func New(
 	auth.POST("/token", h.Auth.Token)
 	auth.POST("/revoke", h.Auth.Revoke)
 
+	// Callback is public: GitHub's Setup URL redirect is a top-level browser
+	// navigation with no Bearer token. Auth is carried by the state nonce.
+	api.GET("/github/callback", h.Github.Callback)
+
 	github := api.Group("/github")
-	github.GET("/callback", h.Github.Callback)
 	github.Use(middleware.RequireAuth(env.JWT_SECRET))
-	github.GET("/authorize", h.Github.Authorize)
+	github.GET("/install", h.Github.Install)
 	github.GET("/status", h.Github.Status)
-	github.GET("/repositories", h.Github.ListReposByAuthenticatedUser)
-	github.DELETE("/connection", h.Github.Disconnect)
+	github.GET("/repositories", h.Github.ListRepositories)
+	github.DELETE("/installation", h.Github.Disconnect)
+
+	// GitHub App webhooks (public; signature-verified).
+	router.POST("/webhooks/github", h.Webhooks.Github)
 
 	users := api.Group("/users")
 	users.POST("/signup", h.User.SignupUser)
