@@ -87,7 +87,7 @@ func main() {
 	defer apiLogger.Sync()
 
 	h := handlers.New(handlers.NewHandlersDeps{Services: s, Logger: apiLogger, Hub: eventHub, Env: env})
-	router := api.New(h, apiLogger, env)
+	router := api.New(h, apiLogger, env.JWT_SECRET)
 
 	srv := &http.Server{
 		Addr:    ":" + env.PORT,

@@ -23,11 +23,11 @@ import (
 )
 
 var (
-	ErrGitHubNotInstalled  = errors.New("github: no installation found for organization")
-	ErrGitHubTokenFailed   = errors.New("github: failed to mint installation token")
-	ErrInvalidCloneURL     = errors.New("github: invalid or missing clone URL")
-	ErrRunNotFound         = errors.New("github: run not found")
-	ErrUserHasNoOrg        = errors.New("github: user has no organization")
+	ErrGitHubNotInstalled    = errors.New("github: no installation found for organization")
+	ErrGitHubTokenFailed     = errors.New("github: failed to mint installation token")
+	ErrInvalidCloneURL       = errors.New("github: invalid or missing clone URL")
+	ErrRunNotFound           = errors.New("github: run not found")
+	ErrUserHasNoOrg          = errors.New("github: user has no organization")
 	ErrInstallationSuspended = errors.New("github: installation is suspended")
 )
 
@@ -46,12 +46,38 @@ func NewGithubService(db *pgxpool.Pool, q *store.Queries, app *githubapp.Client,
 // CreateInstallURL returns the github.com URL where the user will install the app,
 // with a signed single-use state token bound to the user's session.
 func (s *GithubService) CreateInstallURL(ctx context.Context, userID int64) (string, error) {
-	nonce, err := githubapp.CreateInstallState(ctx, s.q, userID)
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return "", err
 	}
+	defer tx.Rollback(ctx)
+
+	qtx := s.q.WithTx(tx)
+	org, err := qtx.GetOrganizationMembershipByUserID(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	state, err := githubapp.CreateInstallStateToken(
+		ctx, org.OrganizationID, userID, s.env.JWT_SECRET,
+	)
+	if err != nil {
+		return "", err
+	}
+	_, err = qtx.UpsertInstallation(ctx, store.UpsertInstallationParams{
+		OrganizationID:    org.OrganizationID,
+		InstalledByUserID: &userID,
+		State:             store.GithubInstallationStatePending,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return "", err
+	}
+
 	v := url.Values{}
-	v.Set("state", nonce)
+	v.Set("state", state)
 	return fmt.Sprintf("https://github.com/apps/%s/installations/new?%s", s.env.GITHUB_APP_SLUG, v.Encode()), nil
 }
 
@@ -61,6 +87,7 @@ type InstallationStatus struct {
 	AccountType         string
 	RepositorySelection string
 	Suspended           bool
+	InstallationID      int64
 }
 
 // GetInstallationStatus returns the current install status for the user's organization.
@@ -82,12 +109,13 @@ func (s *GithubService) GetInstallationStatus(ctx context.Context, userID int64)
 		AccountType:         inst.GithubAccountType,
 		RepositorySelection: inst.RepositorySelection,
 		Suspended:           inst.SuspendedAt.Valid,
+		InstallationID:      inst.GithubInstallationID,
 	}, nil
 }
 
 // CompleteInstall validates the state token, fetches installation details from GitHub,
 // and persists the installation against the user's organization.
-func (s *GithubService) CompleteInstall(ctx context.Context, installationID int64, state, setupAction string) error {
+func (s *GithubService) CompleteInstall(ctx context.Context, installationID int64, state githubapp.InstallStateClaims) error {
 	userID, err := githubapp.ConsumeInstallState(ctx, s.q, state)
 	if err != nil {
 		return err

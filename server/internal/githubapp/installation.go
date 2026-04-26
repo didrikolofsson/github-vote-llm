@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rsa"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,8 @@ import (
 	"github.com/google/go-github/v84/github"
 	"golang.org/x/oauth2"
 )
+
+var ErrInstallationNotFound = errors.New("github: installation not found")
 
 // Client authenticates as the GitHub App and mints installation access tokens.
 // Tokens are cached in-memory per installation until ~1 minute before expiry.

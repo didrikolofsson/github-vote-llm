@@ -1,20 +1,42 @@
 package githubapp
 
-import "testing"
+import (
+	"context"
+	"errors"
+	"testing"
+)
 
-func TestGenerateNonce_Unique(t *testing.T) {
-	seen := make(map[string]struct{}, 100)
-	for i := 0; i < 100; i++ {
-		n, err := GenerateNonce()
-		if err != nil {
-			t.Fatalf("generate nonce: %v", err)
-		}
-		if len(n) < 32 {
-			t.Fatalf("nonce too short: %d", len(n))
-		}
-		if _, dup := seen[n]; dup {
-			t.Fatalf("duplicate nonce: %q", n)
-		}
-		seen[n] = struct{}{}
+func TestInstallStateToken_RoundTrip(t *testing.T) {
+	ctx := context.Background()
+	token, err := CreateInstallStateToken(ctx, 123, 456, "secret")
+	if err != nil {
+		t.Fatalf("create install state token: %v", err)
+	}
+
+	claims, err := VerifyInstallStateToken(ctx, token, "secret")
+	if err != nil {
+		t.Fatalf("verify install state token: %v", err)
+	}
+	if claims.OrgID != 123 {
+		t.Fatalf("org id = %d, want 123", claims.OrgID)
+	}
+	if claims.UserID != 456 {
+		t.Fatalf("user id = %d, want 456", claims.UserID)
+	}
+	if claims.ExpiresAt == nil {
+		t.Fatal("expires at is nil")
+	}
+}
+
+func TestInstallStateToken_InvalidSecret(t *testing.T) {
+	ctx := context.Background()
+	token, err := CreateInstallStateToken(ctx, 123, 456, "secret")
+	if err != nil {
+		t.Fatalf("create install state token: %v", err)
+	}
+
+	_, err = VerifyInstallStateToken(ctx, token, "other-secret")
+	if !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("verify error = %v, want %v", err, ErrInvalidState)
 	}
 }

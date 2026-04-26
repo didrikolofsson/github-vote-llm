@@ -5,7 +5,6 @@ import (
 
 	handlers "github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/middleware"
-	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/gin-gonic/gin"
 )
@@ -13,7 +12,7 @@ import (
 func New(
 	h handlers.Handlers,
 	logger *logger.Logger,
-	env *config.Environment,
+	jwtSecret string,
 ) *gin.Engine {
 	router := gin.New()
 
@@ -32,12 +31,11 @@ func New(
 	auth.POST("/token", h.Auth.Token)
 	auth.POST("/revoke", h.Auth.Revoke)
 
+	github := api.Group("/github")
 	// Callback is public: GitHub's Setup URL redirect is a top-level browser
 	// navigation with no Bearer token. Auth is carried by the state nonce.
-	api.GET("/github/callback", h.Github.Callback)
-
-	github := api.Group("/github")
-	github.Use(middleware.RequireAuth(env.JWT_SECRET))
+	github.GET("/callback", h.Github.Callback)
+	github.Use(middleware.RequireAuth(jwtSecret))
 	github.GET("/install", h.Github.Install)
 	github.GET("/status", h.Github.Status)
 	github.GET("/repositories", h.Github.ListRepositories)
@@ -48,7 +46,7 @@ func New(
 
 	users := api.Group("/users")
 	users.POST("/signup", h.User.SignupUser)
-	users.Use(middleware.RequireAuth(env.JWT_SECRET))
+	users.Use(middleware.RequireAuth(jwtSecret))
 	users.GET("/me", h.User.GetMe)
 	users.PATCH("/me/username", h.User.UpdateUsername)
 	users.DELETE("/:id", h.User.DeleteUser)
@@ -63,7 +61,7 @@ func New(
 
 	// Organization endpoints
 	organizations := api.Group("/organizations")
-	organizations.Use(middleware.RequireAuth(env.JWT_SECRET))
+	organizations.Use(middleware.RequireAuth(jwtSecret))
 	organizations.GET("", h.Organization.ListMyOrganizations)
 	organizations.POST("", h.Organization.CreateOrganization)
 	organizations.GET("/:id", h.Organization.GetOrganization)
@@ -84,7 +82,7 @@ func New(
 
 	// Repository features (all private for now)
 	repos := api.Group("/repositories/:repoId")
-	repos.Use(middleware.RequireAuth(env.JWT_SECRET))
+	repos.Use(middleware.RequireAuth(jwtSecret))
 	repos.GET("/roadmap", h.Feature.GetRoadmap)
 	repos.GET("/meta", h.Repository.GetRepoMeta)
 	repos.GET("/features", h.Feature.ListFeatures)

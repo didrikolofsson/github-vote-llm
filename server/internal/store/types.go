@@ -100,6 +100,49 @@ func (ns NullFeatureRunStatus) Value() (driver.Value, error) {
 	return string(ns.FeatureRunStatus), nil
 }
 
+type GithubInstallationState string
+
+const (
+	GithubInstallationStatePending   GithubInstallationState = "pending"
+	GithubInstallationStateActive    GithubInstallationState = "active"
+	GithubInstallationStateSuspended GithubInstallationState = "suspended"
+)
+
+func (e *GithubInstallationState) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = GithubInstallationState(s)
+	case string:
+		*e = GithubInstallationState(s)
+	default:
+		return fmt.Errorf("unsupported scan type for GithubInstallationState: %T", src)
+	}
+	return nil
+}
+
+type NullGithubInstallationState struct {
+	GithubInstallationState GithubInstallationState
+	Valid                   bool // Valid is true if GithubInstallationState is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullGithubInstallationState) Scan(value interface{}) error {
+	if value == nil {
+		ns.GithubInstallationState, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.GithubInstallationState.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullGithubInstallationState) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.GithubInstallationState), nil
+}
+
 type OrganizationMemberRole string
 
 const (
@@ -355,6 +398,7 @@ type GithubInstallation struct {
 	InstalledByUserID    *int64
 	CreatedAt            pgtype.Timestamptz
 	UpdatedAt            pgtype.Timestamptz
+	State                GithubInstallationState
 }
 
 type GithubInstallationRepository struct {

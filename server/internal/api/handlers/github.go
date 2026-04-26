@@ -13,12 +13,13 @@ import (
 )
 
 type GithubHandlers struct {
-	s            *services.GithubService
-	frontendURL  string
+	s           *services.GithubService
+	frontendURL string
+	jwtSecret   string
 }
 
-func NewGithubHandlers(s *services.GithubService, frontendURL string) *GithubHandlers {
-	return &GithubHandlers{s: s, frontendURL: frontendURL}
+func NewGithubHandlers(s *services.GithubService, frontendURL string, jwtSecret string) *GithubHandlers {
+	return &GithubHandlers{s: s, frontendURL: frontendURL, jwtSecret: jwtSecret}
 }
 
 // Install returns the github.com URL where the user will install the GitHub App.
@@ -55,20 +56,13 @@ func (h *GithubHandlers) Callback(c *gin.Context) {
 	}
 
 	state := c.Query("state")
-	setupAction := c.Query("setup_action") // "install" | "update"
-
-	if err := h.s.CompleteInstall(c.Request.Context(), installationID, state, setupAction); err != nil {
-		if errors.Is(err, githubapp.ErrInvalidState) || errors.Is(err, githubapp.ErrStateUserMismatch) {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid install state"})
-			return
-		}
-		if errors.Is(err, services.ErrUserHasNoOrg) {
-			c.JSON(http.StatusPreconditionFailed, gin.H{"error": "user has no organization"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to complete install"})
+	claims, err := githubapp.VerifyInstallStateToken(c.Request.Context(), state, h.jwtSecret)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid install state token"})
 		return
 	}
+
+	_, err = h.s.CompleteInstall()
 
 	loc := strings.TrimSuffix(h.frontendURL, "/") + "/settings?github_installed=1"
 	c.Redirect(http.StatusTemporaryRedirect, loc)

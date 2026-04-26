@@ -2,61 +2,52 @@ package githubapp
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"time"
 
-	"github.com/didrikolofsson/github-vote-llm/internal/store"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 const StateTTL = 10 * time.Minute
 
 var (
-	ErrInvalidState     = errors.New("githubapp: invalid or expired install state")
+	ErrInvalidState      = errors.New("githubapp: invalid or expired install state")
 	ErrStateUserMismatch = errors.New("githubapp: install state user mismatch")
 )
 
-// GenerateNonce returns a cryptographically random, URL-safe token.
-func GenerateNonce() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
+type InstallStateClaims struct {
+	OrgID  int64 `json:"org_id"`
+	UserID int64 `json:"user_id"`
+	jwt.RegisteredClaims
 }
 
-// CreateInstallState persists a single-use nonce bound to userID.
-func CreateInstallState(ctx context.Context, q *store.Queries, userID int64) (string, error) {
-	nonce, err := GenerateNonce()
-	if err != nil {
-		return "", err
+// CreateInstallState creates a state token for a given organization ID.
+func CreateInstallStateToken(ctx context.Context, orgID, userID int64, jwtSecret string) (*jwt.Token, error) {
+	now := time.Now()
+	claims := InstallStateClaims{
+		OrgID:  orgID,
+		UserID: userID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(StateTTL)),
+		},
 	}
-	_, err = q.CreateInstallState(ctx, store.CreateInstallStateParams{
-		Nonce:     nonce,
-		UserID:    userID,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(StateTTL), Valid: true},
-	})
-	if err != nil {
-		return "", err
-	}
-	return nonce, nil
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token, nil
 }
 
-// ConsumeInstallState atomically marks the state consumed and returns the bound userID.
-// Fails if the nonce is missing, expired, or already consumed.
-func ConsumeInstallState(ctx context.Context, q *store.Queries, nonce string) (int64, error) {
-	if nonce == "" {
-		return 0, ErrInvalidState
+func VerifyInstallStateToken(ctx context.Context, token string, jwtSecret string) (*InstallStateClaims, error) {
+	claims := &InstallStateClaims{}
+	parsedToken, err := jwt.ParseWithClaims(
+		token,
+		claims,
+		func(token *jwt.Token) (interface{}, error) {
+			return []byte(jwtSecret), nil
+		},
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+	)
+	if err != nil || !parsedToken.Valid {
+		return nil, ErrInvalidState
 	}
-	row, err := q.ConsumeInstallState(ctx, nonce)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, ErrInvalidState
-		}
-		return 0, err
-	}
-	return row.UserID, nil
+	return claims, nil
 }
