@@ -24,13 +24,13 @@ func NewPortalService(db *pgxpool.Pool, q *store.Queries) *PortalService {
 }
 
 // resolvePublicRepo looks up a repository by org slug + repo name and ensures it is public.
-func (s *PortalService) resolvePublicRepo(ctx context.Context, orgSlug, repoName string) (store.Repository, error) {
+func (s *PortalService) resolvePublicRepo(ctx context.Context, orgSlug, repoName string) (store.OrganizationRepository, error) {
 	repo, err := s.q.GetPublicRepositoryByOrgAndName(ctx, store.GetPublicRepositoryByOrgAndNameParams{
 		Slug: orgSlug,
 		Name: repoName,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return store.Repository{}, ErrPortalNotFound
+		return store.OrganizationRepository{}, ErrPortalNotFound
 	}
 	return repo, err
 }

@@ -319,17 +319,6 @@ func (ns NullVoteUrgencyType) Value() (driver.Value, error) {
 	return string(ns.VoteUrgencyType), nil
 }
 
-type AuthorizationCode struct {
-	ID            int64
-	Code          string
-	UserID        int64
-	CodeChallenge string
-	RedirectUri   string
-	Used          bool
-	ExpiresAt     pgtype.Timestamptz
-	CreatedAt     pgtype.Timestamptz
-}
-
 type Feature struct {
 	ID            int64
 	RepositoryID  int64
@@ -378,14 +367,6 @@ type FeatureVote struct {
 	Urgency    NullVoteUrgencyType
 }
 
-type GithubInstallState struct {
-	Nonce      string
-	UserID     int64
-	ExpiresAt  pgtype.Timestamptz
-	ConsumedAt pgtype.Timestamptz
-	CreatedAt  pgtype.Timestamptz
-}
-
 type GithubInstallation struct {
 	ID                   int64
 	OrganizationID       int64
@@ -399,14 +380,6 @@ type GithubInstallation struct {
 	CreatedAt            pgtype.Timestamptz
 	UpdatedAt            pgtype.Timestamptz
 	State                GithubInstallationState
-}
-
-type GithubInstallationRepository struct {
-	InstallationID     int64
-	GithubRepositoryID int64
-	RepositoryName     string
-	RepositoryFullName string
-	CreatedAt          pgtype.Timestamptz
 }
 
 type Organization struct {
@@ -424,15 +397,7 @@ type OrganizationMember struct {
 	CreatedAt      pgtype.Timestamptz
 }
 
-type RefreshToken struct {
-	ID        int64
-	TokenHash string
-	UserID    int64
-	ExpiresAt pgtype.Timestamptz
-	CreatedAt pgtype.Timestamptz
-}
-
-type Repository struct {
+type OrganizationRepository struct {
 	ID             int64
 	OrganizationID int64
 	Owner          string
@@ -505,4 +470,23 @@ type User struct {
 	Username  *string
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
+}
+
+type UserAuthorizationCode struct {
+	ID            int64
+	Code          string
+	UserID        int64
+	CodeChallenge string
+	RedirectUri   string
+	Used          bool
+	ExpiresAt     pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamptz
+}
+
+type UserRefreshToken struct {
+	ID        int64
+	TokenHash string
+	UserID    int64
+	ExpiresAt pgtype.Timestamptz
+	CreatedAt pgtype.Timestamptz
 }

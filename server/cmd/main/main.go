@@ -13,10 +13,9 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
-	"github.com/didrikolofsson/github-vote-llm/internal/githubapp"
+	"github.com/didrikolofsson/github-vote-llm/internal/gitauth"
 	"github.com/didrikolofsson/github-vote-llm/internal/hub"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs"
-	"github.com/didrikolofsson/github-vote-llm/internal/jobs/workers"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
@@ -66,19 +65,14 @@ func main() {
 
 	q := store.New(db)
 	eventHub := hub.NewHub()
-
-	ghKey, err := githubapp.ParsePrivateKey(env.GITHUB_APP_PRIVATE_KEY)
-	if err != nil {
-		appLogger.Fatalf("failed to parse GitHub App private key: %v", err)
-	}
-	ghApp := githubapp.NewClient(env.GITHUB_APP_ID, ghKey)
+	gitAuth := gitauth.New(q, env.GITHUB_APP_ID, env.JWT_SECRET)
 
 	s := services.New(services.ServicesDeps{
 		DB: db, Queries: q, Env: env, JobClient: jc, Hub: eventHub,
-		AgentRunner: claudeRunner, GithubApp: ghApp,
+		AgentRunner: claudeRunner, GitAuth: gitAuth,
 	})
 
-	workers.Register(w, workers.RegisterWorkersDeps{Services: s, Env: env, Logger: appLogger})
+	// workers.Register(w, workers.RegisterWorkersDeps{Services: s, Env: env, Logger: appLogger})
 	if err := jc.Start(ctx); err != nil {
 		appLogger.Fatalf("failed to start job client: %v", err)
 	}

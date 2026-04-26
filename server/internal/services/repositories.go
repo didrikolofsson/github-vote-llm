@@ -173,7 +173,7 @@ func (s *RepositoriesService) verifyOrgMember(ctx context.Context, orgID, userID
 	return ErrNotOrgMember
 }
 
-func storeRepoToDTO(r store.Repository) dtos.Repository {
+func storeRepoToDTO(r store.OrganizationRepository) dtos.Repository {
 	return dtos.Repository{
 		ID:           r.ID,
 		Owner:        r.Owner,
