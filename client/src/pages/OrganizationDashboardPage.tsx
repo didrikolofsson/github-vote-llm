@@ -71,7 +71,7 @@ function ActivationBanner({ status }: { status: AccountStatus }) {
   const isStep1Done = status === "github_connected" || status === "active";
 
   return (
-    <Card>
+    <Card variant="cta">
       <CardHeader className="flex flex-row items-start gap-4">
         <div className="size-8 rounded-md bg-primary/8 text-primary flex items-center justify-center shrink-0 mt-0.5">
           <Zap className="size-4" />
@@ -172,11 +172,12 @@ export default function OrganizationDashboardPage() {
 
       {(status === "inactive" || status === "github_connected") && (
         <div className="flex flex-col gap-4">
-          <Alert variant="info">
+          <Alert variant="warning">
             <Info />
             <AlertDescription>
-              Complete the account setup workflow to allow the agent to perform
-              github operations on your behalf.
+              Your organization is not fully active. Complete the steps below to
+              connect GitHub and install the app before you can add repositories
+              or run the AI agent.
             </AlertDescription>
           </Alert>
           <ActivationBanner status={status} />

@@ -83,8 +83,8 @@ body {
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
   /* Status colors: soft/muted (green on mint, orange on peach, blue on light blue) */
-  --success: #16a34a;
-  --success-muted: #dcfce7;
+  --success: oklch(76.5% 0.177 163.223);
+  --success-muted: oklch(95% 0.052 163.051);
   --warning: #ea580c;
   --warning-muted: #ffedd5;
   --info: oklch(58.5% 0.233 277.117);

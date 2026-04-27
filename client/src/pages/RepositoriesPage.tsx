@@ -309,7 +309,7 @@ function AddRepoDialog({
         </DialogHeader>
         <div className="max-h-[320px] overflow-y-auto mt-4">
           {isError && error && (
-            <Alert variant="destructive" className="mb-4">
+            <Alert variant="danger" className="mb-4">
               <AlertDescription>{formatApiError(error)}</AlertDescription>
             </Alert>
           )}
