@@ -73,9 +73,9 @@ func main() {
 	})
 
 	// workers.Register(w, workers.RegisterWorkersDeps{Services: s, Env: env, Logger: appLogger})
-	if err := jc.Start(ctx); err != nil {
-		appLogger.Fatalf("failed to start job client: %v", err)
-	}
+	// if err := jc.Start(ctx); err != nil {
+	// 	appLogger.Fatalf("failed to start job client: %v", err)
+	// }
 
 	apiLogger := logger.New().Named("api")
 	defer apiLogger.Sync()
@@ -106,9 +106,9 @@ func main() {
 		appLogger.Errorf("HTTP shutdown error: %v", err)
 	}
 
-	if err := jc.Stop(shutdownCtx); err != nil {
-		appLogger.Errorf("job client shutdown error: %v", err)
-	}
+	// if err := jc.Stop(shutdownCtx); err != nil {
+	// 	appLogger.Errorf("job client shutdown error: %v", err)
+	// }
 
 	appLogger.Info("shutdown complete")
 }

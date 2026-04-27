@@ -13,7 +13,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   addRepository,
   formatApiError,
-  getGitHubStatus,
   getRepoMeta,
   listAvailableRepositories,
   listMyOrganizations,
@@ -21,9 +20,15 @@ import {
   type Repository,
 } from "@/lib/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, GitFork, Plus } from "lucide-react";
+import { useAccount } from "@/lib/account";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { AlertTriangle, GitFork, Plus, Zap } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -35,7 +40,10 @@ function formatDate(dateStr: string) {
 
 export default function RepositoriesPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [addRepoOpen, setAddRepoOpen] = useState(false);
+  const { status } = useAccount();
+  const isActivated = status === "active";
 
   const { data: orgs = [], isLoading: orgsLoading } = useQuery({
     queryKey: ["organizations"],
@@ -45,11 +53,6 @@ export default function RepositoriesPage() {
   const org = orgs[0];
   const orgId = org?.id;
 
-  const { data: ghStatus, isLoading: ghStatusLoading } = useQuery({
-    queryKey: ["github-status"],
-    queryFn: () => getGitHubStatus(),
-    enabled: !!orgId,
-  });
 
   const { data: repos = [], isLoading: reposLoading } = useQuery({
     queryKey: ["organizations", orgId, "repositories"],
@@ -92,29 +95,46 @@ export default function RepositoriesPage() {
             Manage repositories connected to your organization
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setAddRepoOpen(true)}
-          disabled={!ghStatus?.installed}
-          className="shrink-0 mt-1"
-        >
-          <Plus data-icon="inline-start" />
-          Add
-        </Button>
+        {isActivated ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAddRepoOpen(true)}
+            className="shrink-0 mt-1"
+          >
+            <Plus data-icon="inline-start" />
+            Add
+          </Button>
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="shrink-0 mt-1">
+                <Button variant="outline" size="sm" disabled>
+                  <Plus data-icon="inline-start" />
+                  Add
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {status === "inactive"
+                ? "Connect your GitHub account first"
+                : "Install the GitHub App to add repositories"}
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
-      {!ghStatus?.installed && !ghStatusLoading && repos.length > 0 && (
+      {!isActivated && repos.length > 0 && (
         <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-400">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <span>
             GitHub App not installed. Repositories are preserved but you
             can't add new ones until you{" "}
             <Link
-              to="/settings"
+              to={status === "inactive" ? "/setup/connect-github" : "/setup/install-app"}
               className="font-medium underline underline-offset-2"
             >
-              install the app
+              complete setup
             </Link>
             .
           </span>
@@ -129,25 +149,42 @@ export default function RepositoriesPage() {
           <Skeleton className="h-[140px] w-full" />
         </div>
       ) : repos.length === 0 ? (
+        !isActivated ? (
+          <div className="py-16 text-center rounded-lg bg-muted/50 flex flex-col items-center">
+            <Zap className="size-7 mx-auto text-muted-foreground/40 mb-3" />
+            <p className="text-sm font-medium text-muted-foreground">
+              Activate your organization to add repositories
+            </p>
+            <p className="text-xs text-muted-foreground/70 mt-1 mb-4">
+              {status === "inactive"
+                ? "Start by connecting your GitHub account."
+                : "Install the GitHub App to connect your first repository."}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                navigate(
+                  status === "inactive"
+                    ? "/setup/connect-github"
+                    : "/setup/install-app",
+                )
+              }
+            >
+              {status === "inactive" ? "Connect GitHub" : "Install GitHub App"}
+            </Button>
+          </div>
+        ) : (
         <div className="py-16 text-center rounded-lg bg-muted/50">
           <GitFork className="size-8 mx-auto text-muted-foreground/40 mb-3" />
           <p className="text-sm font-medium text-muted-foreground">
             No repositories yet
           </p>
           <p className="text-xs text-muted-foreground/70 mt-1">
-            {ghStatus?.installed ? (
-              "Click Add to connect your first repository."
-            ) : (
-              <>
-                Install the GitHub App in{" "}
-                <Link to="/settings" className="underline underline-offset-2">
-                  Settings
-                </Link>{" "}
-                to add repositories.
-              </>
-            )}
+            Click Add to connect your first repository.
           </p>
         </div>
+        )
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {repos.map((r) => (

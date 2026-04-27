@@ -43,12 +43,121 @@ import {
   updateUsername,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useAccount } from "@/lib/account";
+import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Github, MoreHorizontal } from "lucide-react";
+import { Check, Github, MoreHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
 import { userRoleToBadgeColor } from "@/lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+function StepRow({
+  step,
+  done,
+  title,
+  description,
+  action,
+}: {
+  step: number;
+  done: boolean;
+  title: string;
+  description: string;
+  action: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-4 py-4">
+      <div
+        className={cn(
+          "w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0",
+          done
+            ? "bg-primary text-primary-foreground"
+            : "bg-muted text-muted-foreground",
+        )}
+      >
+        {done ? (
+          <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
+        ) : (
+          step
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p
+          className={cn(
+            "text-sm font-medium",
+            done && "line-through text-muted-foreground",
+          )}
+        >
+          {title}
+        </p>
+        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+      </div>
+      {!done && <div className="shrink-0">{action}</div>}
+    </div>
+  );
+}
+
+function ActivationSection() {
+  const { status, connectGitHub, installApp } = useAccount();
+  const isStep1Done = status === "github_connected" || status === "active";
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-[15px]">Activate your organization</CardTitle>
+        <CardDescription>
+          Complete these two steps before you can add repositories and run the
+          AI agent.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col px-6 py-0 pb-2">
+        <StepRow
+          step={1}
+          done={isStep1Done}
+          title="Connect your GitHub account"
+          description="Links your GitHub identity so installations can be reliably matched back to your organization."
+          action={
+            <Button size="xs" onClick={connectGitHub}>
+              <Github data-icon="inline-start" />
+              Connect GitHub
+            </Button>
+          }
+        />
+        <Separator />
+        <StepRow
+          step={2}
+          done={status === "active"}
+          title="Install the GitHub App"
+          description="Grants the agent permission to read repositories and open pull requests."
+          action={
+            isStep1Done ? (
+              <Button size="xs" onClick={installApp}>
+                Install App
+              </Button>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button size="xs" disabled>
+                      Install App
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Connect GitHub first</TooltipContent>
+              </Tooltip>
+            )
+          }
+        />
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function SettingsPage() {
+  const { status } = useAccount();
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -72,6 +181,8 @@ export default function SettingsPage() {
           Manage your account and organization preferences
         </p>
       </div>
+
+      {status !== "active" && status !== "suspended" && <ActivationSection />}
 
       <Tabs defaultValue="organization">
         <TabsList>
