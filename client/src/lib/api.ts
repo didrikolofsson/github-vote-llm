@@ -168,7 +168,6 @@ import {
   FeatureCommentSchema,
   FeatureListResponseSchema,
   FeatureSchema,
-  GithubAuthorizeResponseSchema,
   OrganizationListResponseSchema,
   OrganizationMemberRoleSchema,
   OrganizationSchema,
@@ -280,22 +279,6 @@ export async function updateOrganizationSlug(orgId: number, slug: string) {
     method: "PATCH",
     body: JSON.stringify({ slug }),
     schema: OrganizationSchema,
-  });
-}
-
-// ─── GitHub Authentication ─────────────────────────────────────────────────────
-
-export async function connectGithubAccount() {
-  return requestWithRefresh("/github/authorize", {
-    method: "GET",
-    schema: GithubAuthorizeResponseSchema,
-  });
-}
-
-export async function getGitHubInstallUrl() {
-  return requestWithRefresh("/github/install", {
-    method: "GET",
-    schema: GithubInstallResponseSchema,
   });
 }
 

@@ -6,7 +6,6 @@ import {
   Navigate,
 } from "react-router-dom";
 import { useAuth } from "./lib/auth";
-import { GitAuthProvider } from "./lib/github-auth";
 import { listMyOrganizations } from "./lib/api";
 import LoginPage from "./pages/LoginPage";
 import CreateOrganizationPage from "./pages/CreateOrganizationPage";
@@ -14,10 +13,7 @@ import OrganizationDashboardPage from "./pages/OrganizationDashboardPage";
 import RepositoriesPage from "./pages/RepositoriesPage";
 import RepositoryDetailPage from "./pages/RepositoryDetailPage";
 import SettingsPage from "./pages/SettingsPage";
-import AccountSuspendedPage from "./pages/AccountSuspendedPage";
 import CompletePage from "./pages/setup/CompletePage";
-import PendingPage from "./pages/setup/PendingPage";
-import ErrorPage from "./pages/setup/ErrorPage";
 import Layout from "./components/Layout";
 
 function AppRoutes() {
@@ -25,9 +21,6 @@ function AppRoutes() {
     <Routes>
       {/* Callback landing pages */}
       <Route path="setup/complete" element={<CompletePage />} />
-      <Route path="setup/pending" element={<PendingPage />} />
-      <Route path="setup/error" element={<ErrorPage />} />
-      <Route path="account/suspended" element={<AccountSuspendedPage />} />
 
       <Route element={<Layout />}>
         <Route index element={<Navigate to="/dashboard" replace />} />
@@ -118,10 +111,8 @@ export default function App() {
   }
 
   return (
-    <GitAuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
-    </GitAuthProvider>
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
   );
 }

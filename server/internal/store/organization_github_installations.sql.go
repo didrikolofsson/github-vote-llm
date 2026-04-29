@@ -11,21 +11,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const addInstallationRepository = `-- name: AddInstallationRepository :exec
-DELETE FROM github_installations WHERE id = $1
-`
-
-func (q *Queries) AddInstallationRepository(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, addInstallationRepository, id)
-	return err
-}
-
 const deleteInstallationByGithubID = `-- name: DeleteInstallationByGithubID :exec
 DELETE FROM github_installations WHERE github_installation_id = $1
 `
 
 func (q *Queries) DeleteInstallationByGithubID(ctx context.Context, githubInstallationID int64) error {
 	_, err := q.db.Exec(ctx, deleteInstallationByGithubID, githubInstallationID)
+	return err
+}
+
+const deleteInstallationByID = `-- name: DeleteInstallationByID :exec
+DELETE FROM github_installations WHERE id = $1
+`
+
+func (q *Queries) DeleteInstallationByID(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteInstallationByID, id)
 	return err
 }
 

@@ -13,7 +13,8 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
-	"github.com/didrikolofsson/github-vote-llm/internal/gitauth"
+	gitauth_account "github.com/didrikolofsson/github-vote-llm/internal/gitauth/account"
+	gitauth_client "github.com/didrikolofsson/github-vote-llm/internal/gitauth/client"
 	"github.com/didrikolofsson/github-vote-llm/internal/hub"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
@@ -65,11 +66,18 @@ func main() {
 
 	q := store.New(db)
 	eventHub := hub.NewHub()
-	gitAuth := gitauth.New(q, env.GITHUB_APP_ID, env.JWT_SECRET)
+
+	oauthConfig := gitauth_client.NewOauthConfig(gitauth_client.OauthConfigParams{
+		ClientID:     env.GITHUB_CLIENT_ID,
+		ClientSecret: env.GITHUB_CLIENT_SECRET,
+		Scopes:       []string{"user:email", "read:org"},
+		RedirectURL:  env.SERVER_URL + "/github/auth/callback",
+	})
+	accountClient := gitauth_account.New(q, env.GITHUB_CLIENT_ID, env.JWT_SECRET)
 
 	s := services.New(services.ServicesDeps{
 		DB: db, Queries: q, Env: env, JobClient: jc, Hub: eventHub,
-		AgentRunner: claudeRunner, GitAuth: gitAuth,
+		AgentRunner: claudeRunner, AccountClient: accountClient, OAuthConfig: oauthConfig,
 	})
 
 	// workers.Register(w, workers.RegisterWorkersDeps{Services: s, Env: env, Logger: appLogger})

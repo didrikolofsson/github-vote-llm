@@ -51,6 +51,5 @@ WHERE
 DELETE FROM github_installations WHERE github_installation_id = $1;
 -- name: DeleteInstallationByOrgID :exec
 DELETE FROM github_installations WHERE organization_id = $1;
--- name: AddInstallationRepository :exec
 -- name: DeleteInstallationByID :exec
 DELETE FROM github_installations WHERE id = $1;

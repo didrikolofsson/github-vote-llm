@@ -40,155 +40,10 @@ import {
   updateUsername,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { useGitAuth } from "@/lib/github-auth";
-import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Check, Github, MoreHorizontal, TriangleAlert } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
 import { userRoleToBadgeColor } from "@/lib/utils";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-
-function StatusDot({ tone }: { tone: "success" | "warning" | "muted" }) {
-  return (
-    <span
-      className={cn(
-        "mt-1.5 size-2 rounded-full shrink-0",
-        tone === "success" && "bg-success",
-        tone === "warning" && "bg-warning",
-        tone === "muted" && "bg-muted",
-      )}
-    />
-  );
-}
-
-function GitHubSettingsRow({
-  title,
-  description,
-  dotTone,
-  action,
-}: {
-  title: string;
-  description: React.ReactNode;
-  dotTone: "success" | "warning" | "muted";
-  action: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-3">
-      <div className="flex min-w-0 items-start gap-2">
-        <StatusDot tone={dotTone} />
-        <div className="min-w-0">
-          <p className="text-sm font-medium">{title}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-        </div>
-      </div>
-      <div className="shrink-0">{action}</div>
-    </div>
-  );
-}
-
-function StepRow({
-  step,
-  done,
-  title,
-  description,
-  action,
-}: {
-  step: number;
-  done: boolean;
-  title: string;
-  description: string;
-  action: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-4 py-4">
-      <div
-        className={cn(
-          "w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0",
-          done
-            ? "bg-primary text-primary-foreground"
-            : "bg-muted text-muted-foreground",
-        )}
-      >
-        {done ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> : step}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p
-          className={cn(
-            "text-sm font-medium",
-            done && "line-through text-muted-foreground",
-          )}
-        >
-          {title}
-        </p>
-        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-      </div>
-      {!done && <div className="shrink-0">{action}</div>}
-    </div>
-  );
-}
-
-function ActivationSection() {
-  const { status, connectAccount, installApp } = useGitAuth();
-  const isStep1Done = status === "github_connected" || status === "active";
-
-  return (
-    <Card variant="cta">
-      <CardHeader>
-        <CardTitle className="text-[15px]">
-          Activate your organization
-        </CardTitle>
-        <CardDescription>
-          Complete these two steps before you can add repositories and run the
-          AI agent.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col px-6 py-0 pb-2">
-        <StepRow
-          step={1}
-          done={isStep1Done}
-          title="Connect your GitHub account"
-          description="Links your GitHub identity so installations can be reliably matched back to your organization."
-          action={
-            <Button size="xs" onClick={connectAccount}>
-              <Github data-icon="inline-start" />
-              Connect GitHub
-            </Button>
-          }
-        />
-        <Separator />
-        <StepRow
-          step={2}
-          done={status === "active"}
-          title="Install the GitHub App"
-          description="Grants the agent permission to read repositories and open pull requests."
-          action={
-            isStep1Done ? (
-              <Button size="xs" onClick={installApp}>
-                Install App
-              </Button>
-            ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span>
-                    <Button size="xs" disabled>
-                      Install App
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>Connect your GitHub account first</TooltipContent>
-              </Tooltip>
-            )
-          }
-        />
-      </CardContent>
-    </Card>
-  );
-}
 
 export default function SettingsPage() {
   return (
@@ -220,7 +75,6 @@ export default function SettingsPage() {
 
 function OrganizationTab() {
   const queryClient = useQueryClient();
-  const { status, connectAccount } = useGitAuth();
 
   const { data: orgs = [], isLoading: orgsLoading } = useQuery({
     queryKey: ["organizations"],
@@ -301,237 +155,173 @@ function OrganizationTab() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {status !== "active" && (
-        <>
-          <Alert variant="warning">
-            <TriangleAlert />
-            <AlertDescription>
-              Your organization is not fully active. Complete the steps below to
-              connect GitHub and install the app before you can add repositories
-              or run the AI agent.
-            </AlertDescription>
-          </Alert>
-          <ActivationSection />
-        </>
-      )}
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 items-start">
+      {/* Left: org info form */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-[15px] flex items-center gap-2">
+            Organization
+          </CardTitle>
+          <CardDescription>Edit your organization details.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="org-name">Name</Label>
+            <Input
+              id="org-name"
+              value={orgName}
+              onChange={(e) => setOrgName(e.target.value)}
+              placeholder="Organization name"
+            />
+          </div>
+          {saveError && (
+            <p className="text-sm text-destructive">{saveError}</p>
+          )}
+          <div>
+            <Button
+              onClick={() => updateOrgMutation.mutate()}
+              disabled={
+                updateOrgMutation.isPending ||
+                !orgName.trim() ||
+                orgName.trim() === org?.name
+              }
+              size="sm"
+            >
+              {updateOrgMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 items-start">
-        {/* Left: org info form */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-[15px] flex items-center gap-2">
-              Organization
-            </CardTitle>
-            <CardDescription>Edit your organization details.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="org-name">Name</Label>
-              <Input
-                id="org-name"
-                value={orgName}
-                onChange={(e) => setOrgName(e.target.value)}
-                placeholder="Organization name"
-              />
-            </div>
-            {saveError && (
-              <p className="text-sm text-destructive">{saveError}</p>
-            )}
-            <div>
-              <Button
-                onClick={() => updateOrgMutation.mutate()}
-                disabled={
-                  updateOrgMutation.isPending ||
-                  !orgName.trim() ||
-                  orgName.trim() === org?.name
-                }
-                size="sm"
-              >
-                {updateOrgMutation.isPending ? "Saving..." : "Save"}
-              </Button>
-            </div>
+          <Separator />
 
-            <Separator />
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="org-slug">
-                Portal URL slug
-                <span className="ml-1.5 text-xs text-muted-foreground font-normal">
-                  Used in your community portal URL
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="org-slug">
+              Portal URL slug
+              <span className="ml-1.5 text-xs text-muted-foreground font-normal">
+                Used in your community portal URL
+              </span>
+            </Label>
+            <Input
+              id="org-slug"
+              value={orgSlug}
+              onChange={(e) => setOrgSlug(e.target.value)}
+              placeholder="my-organization"
+              className="font-mono text-sm"
+            />
+            {org?.slug && (
+              <p className="text-xs text-muted-foreground">
+                Portal URL:{" "}
+                <span className="font-mono">
+                  {window.location.origin}/portal/{orgSlug}/…
                 </span>
-              </Label>
-              <Input
-                id="org-slug"
-                value={orgSlug}
-                onChange={(e) => setOrgSlug(e.target.value)}
-                placeholder="my-organization"
-                className="font-mono text-sm"
-              />
-              {org?.slug && (
-                <p className="text-xs text-muted-foreground">
-                  Portal URL:{" "}
-                  <span className="font-mono">
-                    {window.location.origin}/portal/{orgSlug}/…
-                  </span>
-                </p>
-              )}
-            </div>
-            {slugError && (
-              <p className="text-sm text-destructive">{slugError}</p>
+              </p>
             )}
-            <div>
-              <Button
-                onClick={() => updateSlugMutation.mutate()}
-                disabled={
-                  updateSlugMutation.isPending ||
-                  !orgSlug.trim() ||
-                  orgSlug.trim() === org?.slug
-                }
-                size="sm"
-                variant="outline"
-              >
-                {updateSlugMutation.isPending ? "Saving..." : "Update slug"}
-              </Button>
+          </div>
+          {slugError && (
+            <p className="text-sm text-destructive">{slugError}</p>
+          )}
+          <div>
+            <Button
+              onClick={() => updateSlugMutation.mutate()}
+              disabled={
+                updateSlugMutation.isPending ||
+                !orgSlug.trim() ||
+                orgSlug.trim() === org?.slug
+              }
+              size="sm"
+              variant="outline"
+            >
+              {updateSlugMutation.isPending ? "Saving..." : "Update slug"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Right: Members */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-[15px] flex items-center gap-2">
+            Members
+          </CardTitle>
+          <CardDescription>
+            Manage who has access to this organization.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {membersLoading ? (
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Right: GitHub + Members */}
-        <div className="flex flex-col gap-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-[15px] flex items-center gap-2">
-                GitHub
-              </CardTitle>
-              <CardDescription>
-                Manage your GitHub account connection and app installation.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col py-0">
-              <GitHubSettingsRow
-                title="GitHub account"
-                dotTone="muted"
-                description="Connection status will appear here once the backend exposes it."
-                action={
-                  <Button
-                    size="xs"
-                    onClick={connectAccount}
-                  >
-                    <Github data-icon="inline-start" />
-                    Connect
-                  </Button>
-                }
-              />
-              <Separator />
-              <GitHubSettingsRow
-                title="GitHub App"
-                dotTone="muted"
-                description="Installation is disabled until the backend endpoint is implemented."
-                action={
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span>
-                        <Button size="xs" disabled>
-                          Install
-                        </Button>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>GitHub App installation is not wired yet</TooltipContent>
-                  </Tooltip>
-                }
-              />
-            </CardContent>
-          </Card>
-
-          {/* Members */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-[15px] flex items-center gap-2">
-                Members
-              </CardTitle>
-              <CardDescription>
-                Manage who has access to this organization.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {membersLoading ? (
-                <div className="flex flex-col gap-2">
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              ) : members.length === 0 ? (
-                <div className="py-8 text-center rounded-lg bg-muted/50">
-                  <p className="text-sm text-muted-foreground">
-                    No members yet.
-                  </p>
-                </div>
-              ) : (
-                <ul className="flex flex-col">
-                  {members.map((m, i) => (
-                    <li key={m.user_id}>
-                      {i > 0 && <Separator className="my-1" />}
-                      <div className="flex items-center justify-between py-2">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="size-8 shrink-0">
-                            <AvatarFallback className="text-xs">
-                              {m.email.charAt(0).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex flex-col">
-                            <span className="text-sm text-foreground">
-                              {m.email}
-                            </span>
-                            <Badge color={userRoleToBadgeColor(m.role)} small>
-                              {m.role}
-                            </Badge>
-                          </div>
-                        </div>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-8 text-muted-foreground"
-                            >
-                              <MoreHorizontal />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() =>
-                                updateRoleMutation.mutate({
-                                  userId: m.user_id,
-                                  role:
-                                    m.role === "member" ? "owner" : "member",
-                                })
-                              }
-                              disabled={updateRoleMutation.isPending}
-                            >
-                              {m.role === "member"
-                                ? "Make owner"
-                                : "Make member"}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-danger focus:text-danger"
-                              onClick={() =>
-                                removeMemberMutation.mutate(m.user_id)
-                              }
-                              disabled={removeMemberMutation.isPending}
-                            >
-                              Remove
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+          ) : members.length === 0 ? (
+            <div className="py-8 text-center rounded-lg bg-muted/50">
+              <p className="text-sm text-muted-foreground">
+                No members yet.
+              </p>
+            </div>
+          ) : (
+            <ul className="flex flex-col">
+              {members.map((m, i) => (
+                <li key={m.user_id}>
+                  {i > 0 && <Separator className="my-1" />}
+                  <div className="flex items-center justify-between py-2">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="size-8 shrink-0">
+                        <AvatarFallback className="text-xs">
+                          {m.email.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col">
+                        <span className="text-sm text-foreground">
+                          {m.email}
+                        </span>
+                        <Badge color={userRoleToBadgeColor(m.role)} small>
+                          {m.role}
+                        </Badge>
                       </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-muted-foreground"
+                        >
+                          <MoreHorizontal />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() =>
+                            updateRoleMutation.mutate({
+                              userId: m.user_id,
+                              role:
+                                m.role === "member" ? "owner" : "member",
+                            })
+                          }
+                          disabled={updateRoleMutation.isPending}
+                        >
+                          {m.role === "member"
+                            ? "Make owner"
+                            : "Make member"}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-danger focus:text-danger"
+                          onClick={() =>
+                            removeMemberMutation.mutate(m.user_id)
+                          }
+                          disabled={removeMemberMutation.isPending}
+                        >
+                          Remove
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

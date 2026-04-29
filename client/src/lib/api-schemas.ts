@@ -26,15 +26,6 @@ export const OrganizationListResponseSchema = z.object({
   organizations: z.array(OrganizationSchema),
 });
 
-// ─── GitHub Authentication ─────────────────────────────────────────────────────
-export const GithubAuthorizeResponseSchema = z.object({
-  authorize_url: z.string(),
-});
-
-export const GithubInstallResponseSchema = z.object({
-  install_url: z.string(),
-});
-
 // ─── Repository ───────────────────────────────────────────────────────────────
 
 export const RepositorySchema = z.object({

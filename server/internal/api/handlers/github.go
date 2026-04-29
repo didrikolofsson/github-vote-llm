@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api/middleware"
@@ -34,46 +33,6 @@ func (h *GithubHandlers) Authorize(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"authorize_url": authUrl})
-}
-
-func (h *GithubHandlers) Install(c *gin.Context) {
-	userID, ok := middleware.GetUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
-	installURL, err := h.s.CreateInstallURL(c.Request.Context(), userID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"install_url": installURL})
-}
-
-func (h *GithubHandlers) AppCallback(c *gin.Context) {
-	installationID := c.Query("installation_id")
-	state := c.Query("state")
-
-	if installationID == "" || state == "" {
-		c.Redirect(http.StatusFound, h.s.FrontendURL()+"?github_error=missing_params")
-		return
-	}
-
-	var id int64
-	if _, err := fmt.Sscanf(installationID, "%d", &id); err != nil {
-		c.Redirect(http.StatusFound, h.s.FrontendURL()+"?github_error=invalid_installation_id")
-		return
-	}
-
-	if err := h.s.CompleteInstall(c.Request.Context(), id, state); err != nil {
-		h.l.Errorw("Failed to complete GitHub App install", "error", err, "installation_id", id, "request_id", request.GetRequestID(c))
-		c.Redirect(http.StatusFound, h.s.FrontendURL()+"?github_error=install_failed")
-		return
-	}
-
-	c.Redirect(http.StatusFound, h.s.FrontendURL()+"?github_installed=1")
 }
 
 func (h *GithubHandlers) Callback(c *gin.Context) {
