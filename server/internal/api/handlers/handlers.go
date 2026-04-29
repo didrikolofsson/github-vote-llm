@@ -33,7 +33,7 @@ func New(
 		User:         NewUserHandlers(deps.Services.UserService, deps.Logger),
 		Auth:         NewAuthHandlers(deps.Services.AuthService),
 		Organization: NewOrganizationHandlers(deps.Services.OrganizationService, deps.Logger),
-		Github:       NewGithubHandlers(deps.Services.GithubService),
+		Github:       NewGithubHandlers(deps.Services.GithubService, deps.Logger, deps.Env.GITHUB_APP_WEBHOOK_SECRET),
 		Repository:   NewRepositoryHandlers(deps.Services.RepositoriesService, deps.Logger),
 		Runs:         NewRunsHandlers(deps.Services.RunService, deps.Logger),
 		Members:      NewMembersHandlers(deps.Services.MembersService, deps.Logger),

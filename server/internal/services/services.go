@@ -3,13 +3,14 @@ package services
 import (
 	"github.com/didrikolofsson/github-vote-llm/internal/agents/claude"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
+	appgithub "github.com/didrikolofsson/github-vote-llm/internal/github"
 	gitauth_account "github.com/didrikolofsson/github-vote-llm/internal/gitauth/account"
 	"github.com/didrikolofsson/github-vote-llm/internal/hub"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/oauth2"
 	"github.com/riverqueue/river"
+	"golang.org/x/oauth2"
 )
 
 type ServicesDeps struct {
@@ -21,6 +22,7 @@ type ServicesDeps struct {
 	AgentRunner   *claude.ClaudeRunner
 	AccountClient *gitauth_account.GithubAccountClient
 	OAuthConfig   *oauth2.Config
+	AppClient     *appgithub.AppClient
 }
 
 type Services struct {
@@ -48,6 +50,7 @@ func New(
 			AccountClient: deps.AccountClient,
 			Env:           deps.Env,
 			Config:        deps.OAuthConfig,
+			AppClient:     deps.AppClient,
 		}),
 		RepositoriesService: NewRepositoriesService(deps.DB, deps.Queries),
 		MembersService:      NewMembersService(deps.Queries),

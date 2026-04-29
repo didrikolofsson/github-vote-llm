@@ -1,3 +1,4 @@
+import { SetupBanner } from "@/components/setup/SetupBanner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,6 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useOrgSetup } from "@/hooks/use-org-setup";
 import {
   listMyOrganizations,
   listOrgMembers,
@@ -59,6 +61,7 @@ export default function OrganizationDashboardPage() {
   });
 
   const recentRepos = repos.slice(0, 3);
+  const { isReady: appReady, isSuspended: appSuspended, targetLogin, isLoading: appLoading } = useOrgSetup(orgId);
 
   if (orgsLoading) {
     return (
@@ -76,6 +79,8 @@ export default function OrganizationDashboardPage() {
 
   return (
     <div className={cn("animate-slide-up flex flex-col gap-8 p-8 max-w-[1280px] mx-auto w-full")}>
+      <SetupBanner orgId={orgId} />
+
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -133,7 +138,7 @@ export default function OrganizationDashboardPage() {
           </Card>
         </Link>
 
-        {/* GitHub stat */}
+        {/* GitHub App stat */}
         <Link to="/settings" tabIndex={-1}>
           <Card className="group hover:bg-muted/30 transition-colors cursor-pointer h-full">
             <CardContent className="p-5">
@@ -143,9 +148,17 @@ export default function OrganizationDashboardPage() {
                 </div>
                 <ArrowUpRight className="size-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
               </div>
-              <Badge color="zinc">Not connected</Badge>
+              {appLoading ? (
+                <Skeleton className="h-5 w-20 mb-1" />
+              ) : appReady ? (
+                <Badge color="green">Connected</Badge>
+              ) : appSuspended ? (
+                <Badge color="yellow">Suspended</Badge>
+              ) : (
+                <Badge color="red">Not installed</Badge>
+              )}
               <p className="text-sm text-muted-foreground mt-1.5">
-                GitHub App
+                {appReady && targetLogin ? targetLogin : "GitHub App"}
               </p>
             </CardContent>
           </Card>

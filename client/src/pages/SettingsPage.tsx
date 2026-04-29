@@ -30,6 +30,7 @@ import {
 import {
   deleteUser,
   formatApiError,
+  getGithubAppInstallURL,
   getMe,
   listMyOrganizations,
   listOrgMembers,
@@ -40,8 +41,9 @@ import {
   updateUsername,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useOrgSetup } from "@/hooks/use-org-setup";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MoreHorizontal } from "lucide-react";
+import { ExternalLink, Github, MoreHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
 import { userRoleToBadgeColor } from "@/lib/utils";
 
@@ -156,7 +158,8 @@ function OrganizationTab() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 items-start">
-      {/* Left: org info form */}
+      {/* Left: org info form + GitHub App */}
+      <div className="flex flex-col gap-4">
       <Card>
         <CardHeader>
           <CardTitle className="text-[15px] flex items-center gap-2">
@@ -235,6 +238,9 @@ function OrganizationTab() {
           </div>
         </CardContent>
       </Card>
+
+      <GithubAppCard orgId={orgId} />
+      </div>
 
       {/* Right: Members */}
       <Card>
@@ -323,6 +329,101 @@ function OrganizationTab() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function GithubAppCard({ orgId }: { orgId: number | undefined }) {
+  const { isReady, isSuspended, targetLogin, isLoading } = useOrgSetup(orgId);
+  const [installing, setInstalling] = useState(false);
+
+  async function handleInstall() {
+    if (!orgId) return;
+    setInstalling(true);
+    try {
+      const { install_url } = await getGithubAppInstallURL(orgId);
+      window.open(install_url, "_blank", "noopener,noreferrer");
+    } finally {
+      setInstalling(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-[15px] flex items-center gap-2">
+          <Github className="size-4" />
+          GitHub App
+        </CardTitle>
+        <CardDescription>
+          Required to run AI agents on your repositories.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <Skeleton className="h-9 w-40" />
+        ) : isReady ? (
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Badge color="green">Connected</Badge>
+              {targetLogin && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Connected as{" "}
+                  <span className="font-mono font-medium text-foreground">
+                    {targetLogin}
+                  </span>
+                </p>
+              )}
+            </div>
+            {targetLogin && (
+              <Button variant="outline" size="sm" asChild>
+                <a
+                  href={`https://github.com/organizations/${targetLogin}/settings/installations`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Manage on GitHub
+                  <ExternalLink className="size-3.5" />
+                </a>
+              </Button>
+            )}
+          </div>
+        ) : isSuspended ? (
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Badge color="yellow">Suspended</Badge>
+              <p className="text-sm text-muted-foreground mt-1">
+                The GitHub App is suspended. Re-enable it on GitHub.
+              </p>
+            </div>
+            {targetLogin && (
+              <Button variant="outline" size="sm" asChild>
+                <a
+                  href={`https://github.com/organizations/${targetLogin}/settings/installations`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Manage on GitHub
+                  <ExternalLink className="size-3.5" />
+                </a>
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Badge color="red">Not installed</Badge>
+              <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                Install the GitHub App to allow the AI agent to push branches
+                and open pull requests on your behalf.
+              </p>
+            </div>
+            <Button size="sm" onClick={handleInstall} disabled={installing || !orgId}>
+              {installing ? "Opening…" : "Install GitHub App"}
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

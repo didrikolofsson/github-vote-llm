@@ -113,6 +113,17 @@ export const RunSchema = z.object({
   completed_at: z.string().datetime().nullable(),
 });
 
+// ─── GitHub App ───────────────────────────────────────────────────────────────
+export const AppInstallURLResponseSchema = z.object({
+  install_url: z.string(),
+});
+
+export const AppInstallationStatusSchema = z.object({
+  installed: z.boolean(),
+  target_login: z.string().optional(),
+  suspended_at: z.string().datetime().nullable().optional(),
+});
+
 // ─── Exported types ───────────────────────────────────────────────────────────
 
 export type Organization = z.infer<typeof OrganizationSchema>;
@@ -130,3 +141,4 @@ export type FeatureBuildStatus = z.infer<typeof FeatureBuildStatusSchema>;
 export type FeatureComment = z.infer<typeof FeatureCommentSchema>;
 export type FeatureDependency = z.infer<typeof FeatureDependencySchema>;
 export type Roadmap = z.infer<typeof RoadmapSchema>;
+export type AppInstallationStatus = z.infer<typeof AppInstallationStatusSchema>;

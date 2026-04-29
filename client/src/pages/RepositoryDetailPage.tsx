@@ -1,3 +1,4 @@
+import { SetupGuard } from "@/components/setup/SetupGuard";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -183,17 +184,19 @@ export default function RepositoryDetailPage() {
           value="runs"
           className="px-8 pb-8 mt-6 w-full max-w-[1280px] mx-auto"
         >
-          <Button
-            onClick={() =>
-              createRun.mutate({
-                prompt: "Create a new implementation for the feature",
-                featureId: 1,
-                createdByUserId: 1,
-              })
-            }
-          >
-            Create run
-          </Button>
+          <SetupGuard orgId={orgId}>
+            <Button
+              onClick={() =>
+                createRun.mutate({
+                  prompt: "Create a new implementation for the feature",
+                  featureId: 1,
+                  createdByUserId: 1,
+                })
+              }
+            >
+              Create run
+            </Button>
+          </SetupGuard>
           <div className="py-16 text-center rounded-lg bg-muted/50">
             <p className="text-sm font-medium text-muted-foreground">
               No implementations yet

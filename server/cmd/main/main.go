@@ -13,10 +13,12 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
+	appgithub "github.com/didrikolofsson/github-vote-llm/internal/github"
 	gitauth_account "github.com/didrikolofsson/github-vote-llm/internal/gitauth/account"
 	gitauth_client "github.com/didrikolofsson/github-vote-llm/internal/gitauth/client"
 	"github.com/didrikolofsson/github-vote-llm/internal/hub"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs"
+	"github.com/didrikolofsson/github-vote-llm/internal/jobs/workers"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
@@ -75,15 +77,21 @@ func main() {
 	})
 	accountClient := gitauth_account.New(q, env.GITHUB_CLIENT_ID, env.JWT_SECRET)
 
+	appClient, err := appgithub.NewAppClient(env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY)
+	if err != nil {
+		appLogger.Fatalf("failed to create github app client: %v", err)
+	}
+
 	s := services.New(services.ServicesDeps{
 		DB: db, Queries: q, Env: env, JobClient: jc, Hub: eventHub,
 		AgentRunner: claudeRunner, AccountClient: accountClient, OAuthConfig: oauthConfig,
+		AppClient: appClient,
 	})
 
-	// workers.Register(w, workers.RegisterWorkersDeps{Services: s, Env: env, Logger: appLogger})
-	// if err := jc.Start(ctx); err != nil {
-	// 	appLogger.Fatalf("failed to start job client: %v", err)
-	// }
+	workers.Register(w, workers.RegisterWorkersDeps{Services: s, Env: env, Logger: appLogger})
+	if err := jc.Start(ctx); err != nil {
+		appLogger.Fatalf("failed to start job client: %v", err)
+	}
 
 	apiLogger := logger.New().Named("api")
 	defer apiLogger.Sync()
@@ -114,9 +122,9 @@ func main() {
 		appLogger.Errorf("HTTP shutdown error: %v", err)
 	}
 
-	// if err := jc.Stop(shutdownCtx); err != nil {
-	// 	appLogger.Errorf("job client shutdown error: %v", err)
-	// }
+	if err := jc.Stop(shutdownCtx); err != nil {
+		appLogger.Errorf("job client shutdown error: %v", err)
+	}
 
 	appLogger.Info("shutdown complete")
 }

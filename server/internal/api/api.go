@@ -34,6 +34,10 @@ func New(
 	github := api.Group("/github")
 	// Public: GitHub redirects here after OAuth — no Bearer token, state JWT carries identity.
 	github.GET("/auth/callback", h.Github.Callback)
+	// Public: GitHub redirects here after App installation — state JWT carries org identity.
+	github.GET("/app/callback", h.Github.AppInstallCallback)
+	// Public: GitHub App webhook events (HMAC-verified).
+	github.POST("/webhooks", h.Github.HandleWebhook)
 	github.Use(middleware.RequireAuth(jwtSecret))
 	github.GET("/authorize", h.Github.Authorize)
 
@@ -61,6 +65,10 @@ func New(
 	organizations.PUT("/:id", h.Organization.UpdateOrganization)
 	organizations.PATCH("/:id/slug", h.Organization.UpdateSlug)
 	organizations.DELETE("/:id", h.Organization.DeleteOrganization)
+
+	// GitHub App installation (per org)
+	organizations.GET("/:id/github-app/install-url", h.Github.GetAppInstallURL)
+	organizations.GET("/:id/github-app/status", h.Github.GetAppInstallationStatus)
 
 	// Organization repositories
 	organizations.GET("/:id/repositories", h.Repository.List)

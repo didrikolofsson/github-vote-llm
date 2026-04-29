@@ -172,6 +172,8 @@ import {
   OrganizationMemberRoleSchema,
   OrganizationSchema,
   OrganizationWithMembersSchema,
+  AppInstallURLResponseSchema,
+  AppInstallationStatusSchema,
   RepoMetaSchema,
   RepositoryListResponseSchema,
   RepositorySchema,
@@ -180,6 +182,7 @@ import {
 } from "./api-schemas";
 
 export type {
+  AppInstallationStatus,
   Feature,
   FeatureBuildStatus,
   FeatureComment,
@@ -532,5 +535,19 @@ export async function createRun(
     method: "POST",
     body: JSON.stringify({ prompt, created_by_user_id: createdByUserId }),
     schema: RunSchema,
+  });
+}
+
+// ─── GitHub App ───────────────────────────────────────────────────────────────
+
+export async function getGithubAppInstallURL(orgId: number) {
+  return requestWithRefresh(`/organizations/${orgId}/github-app/install-url`, {
+    schema: AppInstallURLResponseSchema,
+  });
+}
+
+export async function getGithubAppInstallStatus(orgId: number) {
+  return requestWithRefresh(`/organizations/${orgId}/github-app/status`, {
+    schema: AppInstallationStatusSchema,
   });
 }
