@@ -29,10 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   deleteUser,
-  disconnectGitHub,
   formatApiError,
-  getGitHubInstallUrl,
-  getGitHubStatus,
   getMe,
   listMyOrganizations,
   listOrgMembers,
@@ -43,7 +40,7 @@ import {
   updateUsername,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { useAccount } from "@/lib/account";
+import { useGitAuth } from "@/lib/github-auth";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -136,11 +133,11 @@ function StepRow({
 }
 
 function ActivationSection() {
-  const { status, connectGitHub, installApp } = useAccount();
+  const { status, connectAccount, installApp } = useGitAuth();
   const isStep1Done = status === "github_connected" || status === "active";
 
   return (
-    <Card variant={"cta"}>
+    <Card variant="cta">
       <CardHeader>
         <CardTitle className="text-[15px]">
           Activate your organization
@@ -157,7 +154,7 @@ function ActivationSection() {
           title="Connect your GitHub account"
           description="Links your GitHub identity so installations can be reliably matched back to your organization."
           action={
-            <Button size="xs" onClick={connectGitHub}>
+            <Button size="xs" onClick={connectAccount}>
               <Github data-icon="inline-start" />
               Connect GitHub
             </Button>
@@ -183,7 +180,7 @@ function ActivationSection() {
                     </Button>
                   </span>
                 </TooltipTrigger>
-                <TooltipContent>Connect GitHub first</TooltipContent>
+                <TooltipContent>Connect your GitHub account first</TooltipContent>
               </Tooltip>
             )
           }
@@ -194,21 +191,6 @@ function ActivationSection() {
 }
 
 export default function SettingsPage() {
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const installed = params.get("github_installed");
-    const error = params.get("github_error");
-    if (installed === "1" || error) {
-      queryClient.invalidateQueries({ queryKey: ["github-status"] });
-      const url = new URL(window.location.href);
-      url.searchParams.delete("github_installed");
-      url.searchParams.delete("github_error");
-      window.history.replaceState({}, "", url.pathname);
-    }
-  }, [queryClient]);
-
   return (
     <div className="animate-slide-up flex flex-col gap-6 p-8 max-w-[1280px] mx-auto w-full">
       <div>
@@ -238,14 +220,7 @@ export default function SettingsPage() {
 
 function OrganizationTab() {
   const queryClient = useQueryClient();
-  const {
-    status,
-    github_account_login,
-    connectGitHub: connectGitHubAccount,
-    installApp,
-  } = useAccount();
-  const isGitHubAccountConnected =
-    status === "github_connected" || status === "active";
+  const { status, connectAccount } = useGitAuth();
 
   const { data: orgs = [], isLoading: orgsLoading } = useQuery({
     queryKey: ["organizations"],
@@ -265,30 +240,10 @@ function OrganizationTab() {
     if (org?.slug) setOrgSlug(org.slug);
   }, [org?.name, org?.slug]);
 
-  const { data: ghStatus, isLoading: ghLoading } = useQuery({
-    queryKey: ["github-status"],
-    queryFn: () => getGitHubStatus(),
-    enabled: !!orgId,
-  });
-
   const { data: members = [], isLoading: membersLoading } = useQuery({
     queryKey: ["organizations", orgId, "members"],
     queryFn: () => listOrgMembers(orgId!),
     enabled: !!orgId,
-  });
-
-  const installGitHubApp = useMutation({
-    mutationFn: async () => {
-      const { install_url } = await getGitHubInstallUrl();
-      window.location.href = install_url;
-    },
-  });
-
-  const disconnectGitHubMutation = useMutation({
-    mutationFn: () => disconnectGitHub(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["github-status"] });
-    },
   });
 
   const updateOrgMutation = useMutation({
@@ -456,112 +411,36 @@ function OrganizationTab() {
             <CardContent className="flex flex-col py-0">
               <GitHubSettingsRow
                 title="GitHub account"
-                dotTone={isGitHubAccountConnected ? "success" : "muted"}
-                description={
-                  isGitHubAccountConnected ? (
-                    <>
-                      Connected
-                      {github_account_login && (
-                        <>
-                          {" "}
-                          as{" "}
-                          <span className="font-medium text-foreground">
-                            @{github_account_login}
-                          </span>
-                        </>
-                      )}
-                    </>
-                  ) : (
-                    "Not connected"
-                  )
-                }
+                dotTone="muted"
+                description="Connection status will appear here once the backend exposes it."
                 action={
                   <Button
-                    variant={isGitHubAccountConnected ? "outline" : "default"}
                     size="xs"
-                    onClick={connectGitHubAccount}
+                    onClick={connectAccount}
                   >
                     <Github data-icon="inline-start" />
-                    {isGitHubAccountConnected ? "Reconnect" : "Connect"}
+                    Connect
                   </Button>
                 }
               />
               <Separator />
-              {ghLoading ? (
-                <div className="py-3">
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              ) : ghStatus?.installed ? (
-                <GitHubSettingsRow
-                  title="GitHub App"
-                  dotTone={ghStatus.suspended ? "warning" : "success"}
-                  description={
-                    <>
-                      Installed on{" "}
-                      <span className="font-medium text-foreground">
-                        @{ghStatus.login}
+              <GitHubSettingsRow
+                title="GitHub App"
+                dotTone="muted"
+                description="Installation is disabled until the backend endpoint is implemented."
+                action={
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Button size="xs" disabled>
+                          Install
+                        </Button>
                       </span>
-                      {ghStatus.repository_selection && (
-                        <span className="ml-1.5">
-                          (
-                          {ghStatus.repository_selection === "all"
-                            ? "all repos"
-                            : "selected repos"}
-                          )
-                        </span>
-                      )}
-                      {ghStatus.suspended && (
-                        <span className="ml-1.5 text-amber-600">suspended</span>
-                      )}
-                    </>
-                  }
-                  action={
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      onClick={() => disconnectGitHubMutation.mutate()}
-                      disabled={disconnectGitHubMutation.isPending}
-                    >
-                      {disconnectGitHubMutation.isPending
-                        ? "Removing..."
-                        : "Disconnect"}
-                    </Button>
-                  }
-                />
-              ) : (
-                <GitHubSettingsRow
-                  title="GitHub App"
-                  dotTone="muted"
-                  description="Not installed"
-                  action={
-                    isGitHubAccountConnected ? (
-                      <Button
-                        size="xs"
-                        onClick={() => {
-                          installApp();
-                          installGitHubApp.mutate();
-                        }}
-                        disabled={installGitHubApp.isPending}
-                      >
-                        {installGitHubApp.isPending
-                          ? "Redirecting..."
-                          : "Install"}
-                      </Button>
-                    ) : (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span>
-                            <Button size="xs" disabled>
-                              Install
-                            </Button>
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>Connect GitHub first</TooltipContent>
-                      </Tooltip>
-                    )
-                  }
-                />
-              )}
+                    </TooltipTrigger>
+                    <TooltipContent>GitHub App installation is not wired yet</TooltipContent>
+                  </Tooltip>
+                }
+              />
             </CardContent>
           </Card>
 

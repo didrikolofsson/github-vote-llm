@@ -137,6 +137,24 @@ func (q *Queries) GetAuthCode(ctx context.Context, code string) (UserAuthorizati
 	return i, err
 }
 
+const getGithubConnectionByUserID = `-- name: GetGithubConnectionByUserID :one
+SELECT id, user_id, access_token, access_token_expires_at, refresh_token, updated_at FROM github_connections WHERE user_id = $1
+`
+
+func (q *Queries) GetGithubConnectionByUserID(ctx context.Context, userID int64) (GithubConnection, error) {
+	row := q.db.QueryRow(ctx, getGithubConnectionByUserID, userID)
+	var i GithubConnection
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.AccessToken,
+		&i.AccessTokenExpiresAt,
+		&i.RefreshToken,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getRefreshToken = `-- name: GetRefreshToken :one
 SELECT
     id,
@@ -158,6 +176,63 @@ func (q *Queries) GetRefreshToken(ctx context.Context, tokenHash string) (UserRe
 		&i.UserID,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const upsertGithubAccountTokenByUserID = `-- name: UpsertGithubAccountTokenByUserID :one
+INSERT INTO
+    github_connections (
+        user_id,
+        access_token,
+        access_token_expires_at,
+        refresh_token
+    )
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (user_id) DO
+UPDATE
+SET
+    access_token = EXCLUDED.access_token,
+    access_token_expires_at = EXCLUDED.access_token_expires_at,
+    refresh_token = EXCLUDED.refresh_token,
+    updated_at = now()
+RETURNING
+    user_id,
+    access_token,
+    access_token_expires_at,
+    refresh_token,
+    updated_at
+`
+
+type UpsertGithubAccountTokenByUserIDParams struct {
+	UserID               int64
+	AccessToken          string
+	AccessTokenExpiresAt pgtype.Timestamptz
+	RefreshToken         string
+}
+
+type UpsertGithubAccountTokenByUserIDRow struct {
+	UserID               int64
+	AccessToken          string
+	AccessTokenExpiresAt pgtype.Timestamptz
+	RefreshToken         string
+	UpdatedAt            pgtype.Timestamptz
+}
+
+func (q *Queries) UpsertGithubAccountTokenByUserID(ctx context.Context, arg UpsertGithubAccountTokenByUserIDParams) (UpsertGithubAccountTokenByUserIDRow, error) {
+	row := q.db.QueryRow(ctx, upsertGithubAccountTokenByUserID,
+		arg.UserID,
+		arg.AccessToken,
+		arg.AccessTokenExpiresAt,
+		arg.RefreshToken,
+	)
+	var i UpsertGithubAccountTokenByUserIDRow
+	err := row.Scan(
+		&i.UserID,
+		&i.AccessToken,
+		&i.AccessTokenExpiresAt,
+		&i.RefreshToken,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

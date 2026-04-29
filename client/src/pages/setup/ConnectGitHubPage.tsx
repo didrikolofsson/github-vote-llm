@@ -6,21 +6,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useAccount } from "@/lib/account";
+import { useGitAuth } from "@/lib/github-auth";
 import { Github } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { SetupShell, StepIndicator } from "./SetupShell";
 
 const STEPS = ["Connect GitHub", "Install App"];
 
 export default function ConnectGitHubPage() {
-  const { connectGitHub } = useAccount();
-  const navigate = useNavigate();
-
-  function handleConnect() {
-    connectGitHub();
-    navigate("/setup/install-app");
-  }
+  const { connectAccount } = useGitAuth();
 
   return (
     <SetupShell>
@@ -40,12 +33,12 @@ export default function ConnectGitHubPage() {
           </div>
         </CardHeader>
         <CardContent className="pt-4 flex flex-col gap-3">
-          <Button className="w-full" onClick={handleConnect}>
+          <Button className="w-full" onClick={connectAccount}>
             <Github className="w-4 h-4 mr-2" />
             Connect GitHub
           </Button>
           <p className="text-xs text-center text-muted-foreground">
-            You'll be redirected to GitHub to authorize access.
+            GitHub authorization opens in a new tab.
           </p>
         </CardContent>
       </Card>

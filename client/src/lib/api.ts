@@ -168,6 +168,7 @@ import {
   FeatureCommentSchema,
   FeatureListResponseSchema,
   FeatureSchema,
+  GithubAuthorizeResponseSchema,
   OrganizationListResponseSchema,
   OrganizationMemberRoleSchema,
   OrganizationSchema,
@@ -189,7 +190,7 @@ export type {
   OrganizationMemberRole,
   OrganizationWithMembers,
   Repository,
-  Roadmap
+  Roadmap,
 } from "./api-schemas";
 
 export const UserProfileSchema = z.object({
@@ -282,42 +283,19 @@ export async function updateOrganizationSlug(orgId: number, slug: string) {
   });
 }
 
-// ─── GitHub App ───────────────────────────────────────────────────────────────
+// ─── GitHub Authentication ─────────────────────────────────────────────────────
 
-export const GitHubStatusSchema = z.object({
-  installed: z.boolean(),
-  login: z.string().nullable().optional(),
-  account_type: z.string().nullable().optional(),
-  repository_selection: z.string().nullable().optional(),
-  suspended: z.boolean().nullable().optional(),
-});
-export async function getGitHubStatus() {
-  return requestWithRefresh("/github/status", { schema: GitHubStatusSchema });
+export async function connectGithubAccount() {
+  return requestWithRefresh("/github/authorize", {
+    method: "GET",
+    schema: GithubAuthorizeResponseSchema,
+  });
 }
 
-export const GitHubInstallUrlSchema = z.object({
-  install_url: z.string(),
-});
 export async function getGitHubInstallUrl() {
   return requestWithRefresh("/github/install", {
-    schema: GitHubInstallUrlSchema,
-  });
-}
-
-export async function disconnectGitHub(): Promise<void> {
-  return requestWithRefresh("/github/installation", {
-    method: "DELETE",
-    schema: z.void(),
-  });
-}
-
-export const AvailableRepositoriesSchema = z.object({
-  repositories: z.array(z.object({ owner: z.string(), repo: z.string() })),
-  has_more: z.boolean(),
-});
-export async function listAvailableRepositories(page = 1) {
-  return requestWithRefresh(`/github/repositories?page=${page}`, {
-    schema: AvailableRepositoriesSchema,
+    method: "GET",
+    schema: GithubInstallResponseSchema,
   });
 }
 
@@ -562,7 +540,11 @@ export async function createFeatureComment(
   );
 }
 
-export async function createRun(prompt: string, featureId: number, createdByUserId: number) {
+export async function createRun(
+  prompt: string,
+  featureId: number,
+  createdByUserId: number,
+) {
   return requestWithRefresh(`/features/${featureId}/runs`, {
     method: "POST",
     body: JSON.stringify({ prompt, created_by_user_id: createdByUserId }),

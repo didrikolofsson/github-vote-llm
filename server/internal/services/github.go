@@ -3,13 +3,18 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	"github.com/didrikolofsson/github-vote-llm/internal/gitauth"
+	gitauth_account "github.com/didrikolofsson/github-vote-llm/internal/gitauth/account"
+	gitauth_client "github.com/didrikolofsson/github-vote-llm/internal/gitauth/client"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
+	"golang.org/x/oauth2"
 )
 
 var (
@@ -27,19 +32,90 @@ type GithubService struct {
 	gitAuth gitauth.GitAuthClient
 	env     *config.Environment
 	jc      *river.Client[pgx.Tx]
+	cfg     *oauth2.Config
 }
 
-func NewGithubService(db *pgxpool.Pool, q *store.Queries, gitAuth gitauth.GitAuthClient, env *config.Environment, jc *river.Client[pgx.Tx]) *GithubService {
-	return &GithubService{db: db, q: q, gitAuth: gitAuth, env: env, jc: jc}
+type GithubServiceDeps struct {
+	DB        *pgxpool.Pool
+	Queries   *store.Queries
+	Env       *config.Environment
+	JobClient *river.Client[pgx.Tx]
+	GitAuth   gitauth.GitAuthClient
+	Config    *oauth2.Config
+}
+
+func NewGithubService(deps GithubServiceDeps) *GithubService {
+	return &GithubService{
+		db:      deps.DB,
+		q:       deps.Queries,
+		gitAuth: deps.GitAuth,
+		env:     deps.Env,
+		jc:      deps.JobClient,
+		cfg:     deps.Config,
+	}
+}
+
+func (s *GithubService) FrontendURL() string {
+	return s.env.FRONTEND_URL
 }
 
 func (s *GithubService) CreateAuthURL(ctx context.Context, userID int64) (string, error) {
-	client := s.gitAuth.NewOauthClient(s.env.GITHUB_APP_ID)
+	client := s.gitAuth.NewAccountClient(s.env.GITHUB_CLIENT_ID)
 	authUrl, err := client.CreateAuthURL(ctx, userID)
 	if err != nil {
 		return "", err
 	}
 	return authUrl, nil
+}
+
+func (s *GithubService) ExchangeCode(ctx context.Context, code, state string) (*oauth2.Token, error) {
+	config := gitauth_client.NewOauthConfig(gitauth_client.OauthConfigParams{
+		ClientID:     s.env.GITHUB_CLIENT_ID,
+		ClientSecret: s.env.GITHUB_CLIENT_SECRET,
+		Scopes:       []string{"user:email", "read:org"},
+		RedirectURL:  fmt.Sprintf("%s/github/auth/callback", s.env.SERVER_URL),
+	})
+
+	token, err := config.Exchange(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	return token, nil
+}
+
+func (s *GithubService) VerifyAuthStateToken(ctx context.Context, token string) (gitauth_account.AuthStateClaims, error) {
+	client := s.gitAuth.NewAccountClient(s.env.GITHUB_CLIENT_ID)
+	claims, err := client.VerifyAuthStateToken(ctx, token)
+	if err != nil {
+		return gitauth_account.AuthStateClaims{}, err
+	}
+	return claims, nil
+}
+
+func (s *GithubService) UpsertGithubAccountTokenByUserID(ctx context.Context, userID int64, token *oauth2.Token) error {
+	client := s.gitAuth.NewAccountClient(s.env.GITHUB_CLIENT_ID)
+	return client.UpsertGithubAccountTokenByUserID(ctx, userID, token)
+}
+
+func (s *GithubService) GetAccountByUserID(ctx context.Context, userID int64) (string, error) {
+	ts := gitauth_client.NewGithubTokenSource(gitauth_client.GithubTokenSourceDeps{
+		DB:      s.db,
+		Queries: s.q,
+		UserID:  userID,
+		Config:  s.cfg,
+	})
+	client := gitauth_client.NewGithubClient(ctx, ts)
+	user, _, err := client.Users.Get(ctx, "")
+	if err != nil {
+		return "", err
+	}
+	return user.GetLogin(), nil
+}
+
+type InstallStateClaims struct {
+	UserID int64 `json:"user_id"`
+	OrgID  int64 `json:"org_id"`
+	jwt.RegisteredClaims
 }
 
 // // CreateInstallURL returns the github.com URL where the user will install the app,

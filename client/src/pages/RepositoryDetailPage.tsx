@@ -65,10 +65,15 @@ export default function RepositoryDetailPage() {
     prompt: string;
     featureId: number;
     createdByUserId: number;
-  }
+  };
   const createRun = useMutation({
-    mutationFn: ({ prompt, featureId, createdByUserId }: CreateFeatureRunParams) => createFeatureRun(prompt, featureId, createdByUserId),
-  })
+    mutationFn: ({
+      prompt,
+      featureId,
+      createdByUserId,
+    }: CreateFeatureRunParams) =>
+      createFeatureRun(prompt, featureId, createdByUserId),
+  });
 
   const togglePortal = useMutation({
     mutationFn: (portalPublic: boolean) =>
@@ -178,11 +183,17 @@ export default function RepositoryDetailPage() {
           value="runs"
           className="px-8 pb-8 mt-6 w-full max-w-[1280px] mx-auto"
         >
-          <Button onClick={() => createRun.mutate({
-            prompt: "Create a new implementation for the feature",
-            featureId: 1,
-            createdByUserId: 1,
-          })}>Create run</Button>
+          <Button
+            onClick={() =>
+              createRun.mutate({
+                prompt: "Create a new implementation for the feature",
+                featureId: 1,
+                createdByUserId: 1,
+              })
+            }
+          >
+            Create run
+          </Button>
           <div className="py-16 text-center rounded-lg bg-muted/50">
             <p className="text-sm font-medium text-muted-foreground">
               No implementations yet
@@ -215,7 +226,7 @@ export default function RepositoryDetailPage() {
             </CardHeader>
             <CardContent>
               <Button
-                variant="destructive"
+                variant="danger"
                 size="sm"
                 onClick={() => removeRepo.mutate()}
                 disabled={removeRepo.isPending || !orgId || !repoIdNum}

@@ -330,7 +330,7 @@ export function FeatureDrawer({
                 Create run
               </Button>
               <Button
-                variant="destructive"
+                variant="danger"
                 size="sm"
                 className="w-full"
                 onClick={() => deleteMutation.mutate()}

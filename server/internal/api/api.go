@@ -31,12 +31,13 @@ func New(
 	auth.POST("/token", h.Auth.Token)
 	auth.POST("/revoke", h.Auth.Revoke)
 
-	// github := api.Group("/github")
-	// Callback is public: GitHub's Setup URL redirect is a top-level browser
-	// navigation with no Bearer token. Auth is carried by the state nonce.
-	// github.GET("/callback", h.Github.Callback)
-	// github.Use(middleware.RequireAuth(jwtSecret))
-	// github.GET("/install", h.Github.Install)
+	github := api.Group("/github")
+	// Public: GitHub redirects here after install — no Bearer token, state nonce carries identity.
+	github.GET("/auth/callback", h.Github.Callback)
+	github.GET("/app/callback", h.Github.AppCallback)
+	github.Use(middleware.RequireAuth(jwtSecret))
+	github.GET("/authorize", h.Github.Authorize)
+	github.GET("/install", h.Github.Install)
 	// github.GET("/status", h.Github.Status)
 	// github.GET("/repositories", h.Github.ListRepositories)
 	// github.DELETE("/installation", h.Github.Disconnect)

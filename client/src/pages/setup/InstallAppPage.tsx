@@ -6,22 +6,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useAccount } from "@/lib/account";
 import { GitBranch } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { SetupShell, StepIndicator } from "./SetupShell";
 
 const STEPS = ["Connect GitHub", "Install App"];
 
 export default function InstallAppPage() {
-  const { installApp, github_account_login } = useAccount();
-  const navigate = useNavigate();
-
-  function handleInstall() {
-    installApp();
-    navigate("/setup/complete");
-  }
-
   return (
     <SetupShell>
       <StepIndicator steps={STEPS} currentStep={2} />
@@ -34,17 +24,8 @@ export default function InstallAppPage() {
             <CardTitle>Install the GitHub App</CardTitle>
             <CardDescription>
               Grant repository access so the AI agent can open pull requests on
-              your behalf.
-              {github_account_login && (
-                <>
-                  {" "}
-                  You'll be installing on{" "}
-                  <strong className="text-foreground font-medium">
-                    {github_account_login}
-                  </strong>
-                  .
-                </>
-              )}
+              your behalf. This step is disabled until the backend endpoint is
+              implemented.
             </CardDescription>
           </div>
         </CardHeader>
@@ -59,7 +40,7 @@ export default function InstallAppPage() {
               <li>· Post comments on pull requests</li>
             </ul>
           </div>
-          <Button className="w-full" onClick={handleInstall}>
+          <Button className="w-full" disabled>
             Install GitHub App
           </Button>
           <p className="text-xs text-center text-muted-foreground">

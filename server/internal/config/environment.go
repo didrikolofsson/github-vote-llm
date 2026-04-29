@@ -11,8 +11,10 @@ type Environment struct {
 	GITHUB_APP_SLUG           string `env:"GITHUB_APP_SLUG,required"`
 	GITHUB_APP_PRIVATE_KEY    string `env:"GITHUB_APP_PRIVATE_KEY,required"` // PEM or base64-encoded PEM
 	GITHUB_APP_WEBHOOK_SECRET string `env:"GITHUB_APP_WEBHOOK_SECRET,required"`
-	FRONTEND_URL              string `env:"FRONTEND_URL,required"` // e.g. http://localhost:5173
-	SERVER_URL                string `env:"SERVER_URL,required"`   // e.g. http://localhost:8080 — base URL the browser uses to reach the API
+	GITHUB_CLIENT_ID          string `env:"GITHUB_CLIENT_ID,required"`     // OAuth Client ID (e.g. Iv23liXXXXXXXXXXXX)
+	GITHUB_CLIENT_SECRET      string `env:"GITHUB_CLIENT_SECRET,required"` // OAuth Client Secret
+	FRONTEND_URL              string `env:"FRONTEND_URL,required"`         // e.g. http://localhost:5173
+	SERVER_URL                string `env:"SERVER_URL,required"`           // e.g. http://localhost:8080 — base URL the browser uses to reach the API
 	API_KEY                   string `env:"API_KEY,required"`
 	DATABASE_URL              string `env:"DATABASE_URL,required"`
 	PORT                      string `env:"PORT" envDefault:"8080"`

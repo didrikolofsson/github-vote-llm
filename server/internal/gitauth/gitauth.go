@@ -1,15 +1,14 @@
 package gitauth
 
 import (
+	gitauth_account "github.com/didrikolofsson/github-vote-llm/internal/gitauth/account"
 	gitauth_app "github.com/didrikolofsson/github-vote-llm/internal/gitauth/app"
-	gitauth_oauth "github.com/didrikolofsson/github-vote-llm/internal/gitauth/oauth"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type GitAuthClient interface {
-	NewOauthClient(clientID string) *gitauth_oauth.GithubOauthClient
-	NewAppClient(db *pgxpool.Pool) *gitauth_app.GithubAppClient
+	NewAccountClient(clientID string) *gitauth_account.GithubAccountClient
+	NewAppClient() *gitauth_app.GithubAppClient
 }
 
 type GitAuthClientImpl struct {
@@ -23,10 +22,10 @@ func New(q *store.Queries, clientID string, jwtSecret string) GitAuthClient {
 	}
 }
 
-func (c *GitAuthClientImpl) NewOauthClient(clientID string) *gitauth_oauth.GithubOauthClient {
-	return gitauth_oauth.New(c.q, clientID, c.jwtSecret)
+func (c *GitAuthClientImpl) NewAccountClient(clientID string) *gitauth_account.GithubAccountClient {
+	return gitauth_account.New(c.q, clientID, c.jwtSecret)
 }
 
-func (c *GitAuthClientImpl) NewAppClient(db *pgxpool.Pool) *gitauth_app.GithubAppClient {
-	return gitauth_app.New(db)
+func (c *GitAuthClientImpl) NewAppClient() *gitauth_app.GithubAppClient {
+	return gitauth_app.New()
 }

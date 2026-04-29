@@ -11,12 +11,11 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  getGitHubStatus,
   listMyOrganizations,
   listOrgMembers,
   listOrgRepositories,
 } from "@/lib/api";
-import { type AccountStatus, useAccount } from "@/lib/account";
+import { type GitHubSetupStatus, useGitAuth } from "@/lib/github-auth";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -67,7 +66,7 @@ function SetupStep({ done, label }: { done: boolean; label: string }) {
   );
 }
 
-function ActivationBanner({ status }: { status: AccountStatus }) {
+function ActivationBanner({ status }: { status: GitHubSetupStatus }) {
   const isStep1Done = status === "github_connected" || status === "active";
 
   return (
@@ -86,7 +85,7 @@ function ActivationBanner({ status }: { status: AccountStatus }) {
       <CardContent className="pl-16">
         <div className="flex flex-col gap-1.5">
           <SetupStep done={isStep1Done} label="Connect your GitHub account" />
-          <SetupStep done={false} label="Install the GitHub App" />
+          <SetupStep done={status === "active"} label="Install the GitHub App" />
         </div>
       </CardContent>
       <CardFooter className="border-t-0 bg-transparent pt-0 pl-16">
@@ -111,7 +110,7 @@ function formatDate(dateStr: string) {
 
 export default function OrganizationDashboardPage() {
   const navigate = useNavigate();
-  const { status } = useAccount();
+  const { status } = useGitAuth();
 
   const { data: orgs = [], isLoading: orgsLoading } = useQuery({
     queryKey: ["organizations"],
@@ -120,12 +119,6 @@ export default function OrganizationDashboardPage() {
 
   const org = orgs[0];
   const orgId = org?.id;
-
-  const { data: ghStatus, isLoading: ghStatusLoading } = useQuery({
-    queryKey: ["github-status"],
-    queryFn: () => getGitHubStatus(),
-    enabled: !!orgId,
-  });
 
   const { data: repos = [], isLoading: reposLoading } = useQuery({
     queryKey: ["organizations", orgId, "repositories"],
@@ -139,13 +132,12 @@ export default function OrganizationDashboardPage() {
     enabled: !!orgId,
   });
 
+  const recentRepos = repos.slice(0, 3);
   const isActivated = status === "active";
   const addRepoTooltip =
     status === "inactive"
       ? "Connect your GitHub account first"
       : "Install the GitHub App to add repositories";
-
-  const recentRepos = repos.slice(0, 3);
 
   if (orgsLoading) {
     return (
@@ -184,7 +176,7 @@ export default function OrganizationDashboardPage() {
         </div>
       )}
 
-      {status === "active" && (
+      {isActivated && (
         <>
           {/* Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -246,28 +238,10 @@ export default function OrganizationDashboardPage() {
                     </div>
                     <ArrowUpRight className="size-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
                   </div>
-                  {ghStatusLoading ? (
-                    <>
-                      <Skeleton className="h-6 w-24 mb-1" />
-                      <Skeleton className="h-4 w-16 mt-1" />
-                    </>
-                  ) : ghStatus?.installed ? (
-                    <>
-                      <Badge color="lime">Installed</Badge>
-                      {ghStatus.login && (
-                        <p className="text-sm text-muted-foreground mt-1.5">
-                          on @{ghStatus.login}
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <Badge color="red">Not installed</Badge>
-                      <p className="text-sm text-muted-foreground mt-1.5">
-                        GitHub App
-                      </p>
-                    </>
-                  )}
+                  <Badge color="zinc">Pending</Badge>
+                  <p className="text-sm text-muted-foreground mt-1.5">
+                    Backend in progress
+                  </p>
                 </CardContent>
               </Card>
             </Link>

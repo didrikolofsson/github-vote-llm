@@ -26,6 +26,15 @@ export const OrganizationListResponseSchema = z.object({
   organizations: z.array(OrganizationSchema),
 });
 
+// ─── GitHub Authentication ─────────────────────────────────────────────────────
+export const GithubAuthorizeResponseSchema = z.object({
+  authorize_url: z.string(),
+});
+
+export const GithubInstallResponseSchema = z.object({
+  install_url: z.string(),
+});
+
 // ─── Repository ───────────────────────────────────────────────────────────────
 
 export const RepositorySchema = z.object({
@@ -111,7 +120,7 @@ export const RunSchema = z.object({
   created_by_user_id: z.number(),
   created_at: z.string().datetime(),
   completed_at: z.string().datetime().nullable(),
-})
+});
 
 // ─── Exported types ───────────────────────────────────────────────────────────
 

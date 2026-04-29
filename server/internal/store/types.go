@@ -367,6 +367,15 @@ type FeatureVote struct {
 	Urgency    NullVoteUrgencyType
 }
 
+type GithubConnection struct {
+	ID                   int64
+	UserID               int64
+	AccessToken          string
+	AccessTokenExpiresAt pgtype.Timestamptz
+	RefreshToken         string
+	UpdatedAt            pgtype.Timestamptz
+}
+
 type GithubInstallation struct {
 	ID                   int64
 	OrganizationID       int64

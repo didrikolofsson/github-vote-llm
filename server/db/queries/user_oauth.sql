@@ -63,3 +63,29 @@ WHERE
 
 -- name: DeleteRefreshToken :exec
 DELETE FROM user_refresh_tokens WHERE token_hash = $1;
+
+-- name: UpsertGithubAccountTokenByUserID :one
+INSERT INTO
+    github_connections (
+        user_id,
+        access_token,
+        access_token_expires_at,
+        refresh_token
+    )
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (user_id) DO
+UPDATE
+SET
+    access_token = EXCLUDED.access_token,
+    access_token_expires_at = EXCLUDED.access_token_expires_at,
+    refresh_token = EXCLUDED.refresh_token,
+    updated_at = now()
+RETURNING
+    user_id,
+    access_token,
+    access_token_expires_at,
+    refresh_token,
+    updated_at;
+
+-- name: GetGithubConnectionByUserID :one
+SELECT * FROM github_connections WHERE user_id = $1;
