@@ -157,177 +157,267 @@ function OrganizationTab() {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 items-start">
-      {/* Left: org info form + GitHub App */}
-      <div className="flex flex-col gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-[15px] flex items-center gap-2">
-              Organization
-            </CardTitle>
-            <CardDescription>Edit your organization details.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="org-name">Name</Label>
-              <Input
-                id="org-name"
-                value={orgName}
-                onChange={(e) => setOrgName(e.target.value)}
-                placeholder="Organization name"
-              />
-            </div>
-            {saveError && (
-              <p className="text-sm text-destructive">{saveError}</p>
-            )}
-            <div>
-              <Button
-                onClick={() => updateOrgMutation.mutate()}
-                disabled={
-                  updateOrgMutation.isPending ||
-                  !orgName.trim() ||
-                  orgName.trim() === org?.name
-                }
-                size="sm"
-              >
-                {updateOrgMutation.isPending ? "Saving..." : "Save"}
-              </Button>
-            </div>
+    <div className="flex flex-col gap-4">
+      {/* Full-width CTA — disappears once the app is installed */}
+      <GithubAppCard orgId={orgId} />
 
-            <Separator />
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="org-slug">
-                Portal URL slug
-                <span className="ml-1.5 text-xs text-muted-foreground font-normal">
-                  Used in your community portal URL
-                </span>
-              </Label>
-              <Input
-                id="org-slug"
-                value={orgSlug}
-                onChange={(e) => setOrgSlug(e.target.value)}
-                placeholder="my-organization"
-                className="font-mono text-sm"
-              />
-              {org?.slug && (
-                <p className="text-xs text-muted-foreground">
-                  Portal URL:{" "}
-                  <span className="font-mono">
-                    {window.location.origin}/portal/{orgSlug}/…
-                  </span>
-                </p>
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 items-start">
+        {/* Left: Organization details + GitHub connection status */}
+        <div className="flex flex-col gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-[15px] flex items-center gap-2">
+                Organization
+              </CardTitle>
+              <CardDescription>Edit your organization details.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="org-name">Name</Label>
+                <Input
+                  id="org-name"
+                  value={orgName}
+                  onChange={(e) => setOrgName(e.target.value)}
+                  placeholder="Organization name"
+                />
+              </div>
+              {saveError && (
+                <p className="text-sm text-destructive">{saveError}</p>
               )}
-            </div>
-            {slugError && (
-              <p className="text-sm text-destructive">{slugError}</p>
-            )}
-            <div>
-              <Button
-                onClick={() => updateSlugMutation.mutate()}
-                disabled={
-                  updateSlugMutation.isPending ||
-                  !orgSlug.trim() ||
-                  orgSlug.trim() === org?.slug
-                }
-                size="sm"
-                variant="outline"
-              >
-                {updateSlugMutation.isPending ? "Saving..." : "Update slug"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+              <div>
+                <Button
+                  onClick={() => updateOrgMutation.mutate()}
+                  disabled={
+                    updateOrgMutation.isPending ||
+                    !orgName.trim() ||
+                    orgName.trim() === org?.name
+                  }
+                  size="sm"
+                >
+                  {updateOrgMutation.isPending ? "Saving..." : "Save"}
+                </Button>
+              </div>
 
-        <GithubAppCard orgId={orgId} />
-      </div>
+              <Separator />
 
-      {/* Right: Members */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-[15px] flex items-center gap-2">
-            Members
-          </CardTitle>
-          <CardDescription>
-            Manage who has access to this organization.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {membersLoading ? (
-            <div className="flex flex-col gap-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : members.length === 0 ? (
-            <div className="py-8 text-center rounded-lg bg-muted/50">
-              <p className="text-sm text-muted-foreground">No members yet.</p>
-            </div>
-          ) : (
-            <ul className="flex flex-col">
-              {members.map((m, i) => (
-                <li key={m.user_id}>
-                  {i > 0 && <Separator className="my-1" />}
-                  <div className="flex items-center justify-between py-2">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="size-8 shrink-0">
-                        <AvatarFallback className="text-xs">
-                          {m.email.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col">
-                        <span className="text-sm text-foreground">
-                          {m.email}
-                        </span>
-                        <Badge color={userRoleToBadgeColor(m.role)} small>
-                          {m.role}
-                        </Badge>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="org-slug">
+                  Portal URL slug
+                  <span className="ml-1.5 text-xs text-muted-foreground font-normal">
+                    Used in your community portal URL
+                  </span>
+                </Label>
+                <Input
+                  id="org-slug"
+                  value={orgSlug}
+                  onChange={(e) => setOrgSlug(e.target.value)}
+                  placeholder="my-organization"
+                  className="font-mono text-sm"
+                />
+                {org?.slug && (
+                  <p className="text-xs text-muted-foreground">
+                    Portal URL:{" "}
+                    <span className="font-mono">
+                      {window.location.origin}/portal/{orgSlug}/…
+                    </span>
+                  </p>
+                )}
+              </div>
+              {slugError && (
+                <p className="text-sm text-destructive">{slugError}</p>
+              )}
+              <div>
+                <Button
+                  onClick={() => updateSlugMutation.mutate()}
+                  disabled={
+                    updateSlugMutation.isPending ||
+                    !orgSlug.trim() ||
+                    orgSlug.trim() === org?.slug
+                  }
+                  size="sm"
+                  variant="outline"
+                >
+                  {updateSlugMutation.isPending ? "Saving..." : "Update slug"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right: Members + GitHub App status */}
+        <div className="flex flex-col gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-[15px] flex items-center gap-2">
+                Members
+              </CardTitle>
+              <CardDescription>
+                Manage who has access to this organization.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {membersLoading ? (
+                <div className="flex flex-col gap-2">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ) : members.length === 0 ? (
+                <div className="py-8 text-center rounded-lg bg-muted/50">
+                  <p className="text-sm text-muted-foreground">
+                    No members yet.
+                  </p>
+                </div>
+              ) : (
+                <ul className="flex flex-col">
+                  {members.map((m, i) => (
+                    <li key={m.user_id}>
+                      {i > 0 && <Separator className="my-1" />}
+                      <div className="flex items-center justify-between py-2">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="size-8 shrink-0">
+                            <AvatarFallback className="text-xs">
+                              {m.email.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex flex-col">
+                            <span className="text-sm text-foreground">
+                              {m.email}
+                            </span>
+                            <Badge color={userRoleToBadgeColor(m.role)} small>
+                              {m.role}
+                            </Badge>
+                          </div>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8 text-muted-foreground"
+                            >
+                              <MoreHorizontal />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() =>
+                                updateRoleMutation.mutate({
+                                  userId: m.user_id,
+                                  role:
+                                    m.role === "member" ? "owner" : "member",
+                                })
+                              }
+                              disabled={updateRoleMutation.isPending}
+                            >
+                              {m.role === "member"
+                                ? "Make owner"
+                                : "Make member"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-danger focus:text-danger"
+                              onClick={() =>
+                                removeMemberMutation.mutate(m.user_id)
+                              }
+                              disabled={removeMemberMutation.isPending}
+                            >
+                              Remove
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 text-muted-foreground"
-                        >
-                          <MoreHorizontal />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() =>
-                            updateRoleMutation.mutate({
-                              userId: m.user_id,
-                              role: m.role === "member" ? "owner" : "member",
-                            })
-                          }
-                          disabled={updateRoleMutation.isPending}
-                        >
-                          {m.role === "member" ? "Make owner" : "Make member"}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-danger focus:text-danger"
-                          onClick={() => removeMemberMutation.mutate(m.user_id)}
-                          disabled={removeMemberMutation.isPending}
-                        >
-                          Remove
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+          <GithubAppStatusCard orgId={orgId} />
+        </div>
+      </div>
     </div>
   );
 }
 
-function GithubAppCard({ orgId }: { orgId: number | undefined }) {
+function GithubAppStatusCard({ orgId }: { orgId: number | undefined }) {
   const { isReady, isSuspended, targetLogin, accountType, isLoading } =
     useOrgSetup(orgId);
+
+  const manageURL =
+    targetLogin && accountType === "organization"
+      ? `https://github.com/organizations/${targetLogin}/settings/installations`
+      : "https://github.com/settings/installations";
+
+  const { installing, handleInstall } = useInstallGithubApp(orgId);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-[15px] flex items-center gap-2">
+          <Github className="size-4" />
+          GitHub connection
+        </CardTitle>
+        <CardDescription>
+          Current GitHub App installation status.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex items-center justify-between gap-4">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-8 w-20" />
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-4">
+            {isReady ? (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="size-2 rounded-full bg-success shrink-0" />
+                <span className="font-medium">
+                  {targetLogin ? (
+                    <span className="font-mono">{targetLogin}</span>
+                  ) : (
+                    "Connected"
+                  )}
+                </span>
+              </div>
+            ) : isSuspended ? (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="size-2 rounded-full bg-warning shrink-0" />
+                <span className="font-medium text-muted-foreground">
+                  Suspended
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="size-2 rounded-full bg-danger shrink-0" />
+                <span className="font-medium text-muted-foreground">
+                  Not connected
+                </span>
+              </div>
+            )}
+            {isReady || isSuspended ? (
+              <Button variant="outline" size="sm" asChild>
+                <a href={manageURL} target="_blank" rel="noopener noreferrer">
+                  Manage
+                  <ExternalLink className="size-3.5" />
+                </a>
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={handleInstall}
+                disabled={installing || !orgId}
+              >
+                {installing ? "Opening…" : "Install"}
+              </Button>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function useInstallGithubApp(orgId: number | undefined) {
   const [installing, setInstalling] = useState(false);
 
   async function handleInstall() {
@@ -350,93 +440,36 @@ function GithubAppCard({ orgId }: { orgId: number | undefined }) {
     }
   }
 
+  return { installing, handleInstall };
+}
+
+function GithubAppCard({ orgId }: { orgId: number | undefined }) {
+  const { isReady, isLoading } = useOrgSetup(orgId);
+  const { installing, handleInstall } = useInstallGithubApp(orgId);
+
+  if (isLoading || isReady) return null;
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-[15px] flex items-center gap-2">
-          <Github className="size-4" />
-          GitHub App
-        </CardTitle>
-        <CardDescription>
-          Required to run AI agents on your repositories.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <Skeleton className="h-9 w-40" />
-        ) : isReady ? (
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <Badge color="green">Connected</Badge>
-              {targetLogin && (
-                <p className="text-sm text-muted-foreground mt-1">
-                  Connected as{" "}
-                  <span className="font-mono font-medium text-foreground">
-                    {targetLogin}
-                  </span>
-                </p>
-              )}
-            </div>
-            {targetLogin && (
-              <Button variant="outline" size="sm" asChild>
-                <a
-                  href={
-                    accountType === "organization"
-                      ? `https://github.com/organizations/${targetLogin}/settings/installations`
-                      : `https://github.com/settings/installations`
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Manage on GitHub
-                  <ExternalLink className="size-3.5" />
-                </a>
-              </Button>
-            )}
+    <Card variant="cta" gradient={"warning"}>
+      <CardContent className="flex items-center justify-between gap-6 py-5">
+        <div className="flex items-start gap-3">
+          <Github className="size-5 mt-0.5 shrink-0 text-foreground" />
+          <div>
+            <p className="text-sm font-semibold">Install the GitHub App</p>
+            <p className="text-sm text-muted-foreground">
+              Required to push branches and open pull requests from the AI
+              agent.
+            </p>
           </div>
-        ) : isSuspended ? (
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <Badge color="yellow">Suspended</Badge>
-              <p className="text-sm text-muted-foreground mt-1">
-                The GitHub App is suspended. Re-enable it on GitHub.
-              </p>
-            </div>
-            {targetLogin && (
-              <Button variant="outline" size="sm" asChild>
-                <a
-                  href={
-                    accountType === "organization"
-                      ? `https://github.com/organizations/${targetLogin}/settings/installations`
-                      : `https://github.com/settings/installations`
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Manage on GitHub
-                  <ExternalLink className="size-3.5" />
-                </a>
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <Badge color="red">Not installed</Badge>
-              <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-                Install the GitHub App to allow the AI agent to push branches
-                and open pull requests on your behalf.
-              </p>
-            </div>
-            <Button
-              size="sm"
-              onClick={handleInstall}
-              disabled={installing || !orgId}
-            >
-              {installing ? "Opening…" : "Install GitHub App"}
-            </Button>
-          </div>
-        )}
+        </div>
+        <Button
+          size="sm"
+          onClick={handleInstall}
+          disabled={installing || !orgId}
+          className="shrink-0"
+        >
+          {installing ? "Opening…" : "Install GitHub App"}
+        </Button>
       </CardContent>
     </Card>
   );
