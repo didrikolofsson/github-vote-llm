@@ -37,6 +37,7 @@ import { Building2, ChevronsUpDown } from "lucide-react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { cn } from "@/lib/utils";
+import { GithubPopupListener } from "@/components/setup/GithubPopupListener";
 
 /** Static path segment → display label (unknown segments get title-cased). */
 const SEGMENT_LABELS: Record<string, string> = {
@@ -111,6 +112,7 @@ export default function Layout() {
 
   return (
     <SidebarProvider>
+      <GithubPopupListener />
       <Sidebar>
         <SidebarHeader>
           <SidebarMenu>

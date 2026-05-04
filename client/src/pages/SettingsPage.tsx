@@ -160,86 +160,86 @@ function OrganizationTab() {
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 items-start">
       {/* Left: org info form + GitHub App */}
       <div className="flex flex-col gap-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-[15px] flex items-center gap-2">
-            Organization
-          </CardTitle>
-          <CardDescription>Edit your organization details.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="org-name">Name</Label>
-            <Input
-              id="org-name"
-              value={orgName}
-              onChange={(e) => setOrgName(e.target.value)}
-              placeholder="Organization name"
-            />
-          </div>
-          {saveError && (
-            <p className="text-sm text-destructive">{saveError}</p>
-          )}
-          <div>
-            <Button
-              onClick={() => updateOrgMutation.mutate()}
-              disabled={
-                updateOrgMutation.isPending ||
-                !orgName.trim() ||
-                orgName.trim() === org?.name
-              }
-              size="sm"
-            >
-              {updateOrgMutation.isPending ? "Saving..." : "Save"}
-            </Button>
-          </div>
-
-          <Separator />
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="org-slug">
-              Portal URL slug
-              <span className="ml-1.5 text-xs text-muted-foreground font-normal">
-                Used in your community portal URL
-              </span>
-            </Label>
-            <Input
-              id="org-slug"
-              value={orgSlug}
-              onChange={(e) => setOrgSlug(e.target.value)}
-              placeholder="my-organization"
-              className="font-mono text-sm"
-            />
-            {org?.slug && (
-              <p className="text-xs text-muted-foreground">
-                Portal URL:{" "}
-                <span className="font-mono">
-                  {window.location.origin}/portal/{orgSlug}/…
-                </span>
-              </p>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-[15px] flex items-center gap-2">
+              Organization
+            </CardTitle>
+            <CardDescription>Edit your organization details.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="org-name">Name</Label>
+              <Input
+                id="org-name"
+                value={orgName}
+                onChange={(e) => setOrgName(e.target.value)}
+                placeholder="Organization name"
+              />
+            </div>
+            {saveError && (
+              <p className="text-sm text-destructive">{saveError}</p>
             )}
-          </div>
-          {slugError && (
-            <p className="text-sm text-destructive">{slugError}</p>
-          )}
-          <div>
-            <Button
-              onClick={() => updateSlugMutation.mutate()}
-              disabled={
-                updateSlugMutation.isPending ||
-                !orgSlug.trim() ||
-                orgSlug.trim() === org?.slug
-              }
-              size="sm"
-              variant="outline"
-            >
-              {updateSlugMutation.isPending ? "Saving..." : "Update slug"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+            <div>
+              <Button
+                onClick={() => updateOrgMutation.mutate()}
+                disabled={
+                  updateOrgMutation.isPending ||
+                  !orgName.trim() ||
+                  orgName.trim() === org?.name
+                }
+                size="sm"
+              >
+                {updateOrgMutation.isPending ? "Saving..." : "Save"}
+              </Button>
+            </div>
 
-      <GithubAppCard orgId={orgId} />
+            <Separator />
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="org-slug">
+                Portal URL slug
+                <span className="ml-1.5 text-xs text-muted-foreground font-normal">
+                  Used in your community portal URL
+                </span>
+              </Label>
+              <Input
+                id="org-slug"
+                value={orgSlug}
+                onChange={(e) => setOrgSlug(e.target.value)}
+                placeholder="my-organization"
+                className="font-mono text-sm"
+              />
+              {org?.slug && (
+                <p className="text-xs text-muted-foreground">
+                  Portal URL:{" "}
+                  <span className="font-mono">
+                    {window.location.origin}/portal/{orgSlug}/…
+                  </span>
+                </p>
+              )}
+            </div>
+            {slugError && (
+              <p className="text-sm text-destructive">{slugError}</p>
+            )}
+            <div>
+              <Button
+                onClick={() => updateSlugMutation.mutate()}
+                disabled={
+                  updateSlugMutation.isPending ||
+                  !orgSlug.trim() ||
+                  orgSlug.trim() === org?.slug
+                }
+                size="sm"
+                variant="outline"
+              >
+                {updateSlugMutation.isPending ? "Saving..." : "Update slug"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <GithubAppCard orgId={orgId} />
       </div>
 
       {/* Right: Members */}
@@ -260,9 +260,7 @@ function OrganizationTab() {
             </div>
           ) : members.length === 0 ? (
             <div className="py-8 text-center rounded-lg bg-muted/50">
-              <p className="text-sm text-muted-foreground">
-                No members yet.
-              </p>
+              <p className="text-sm text-muted-foreground">No members yet.</p>
             </div>
           ) : (
             <ul className="flex flex-col">
@@ -300,21 +298,16 @@ function OrganizationTab() {
                           onClick={() =>
                             updateRoleMutation.mutate({
                               userId: m.user_id,
-                              role:
-                                m.role === "member" ? "owner" : "member",
+                              role: m.role === "member" ? "owner" : "member",
                             })
                           }
                           disabled={updateRoleMutation.isPending}
                         >
-                          {m.role === "member"
-                            ? "Make owner"
-                            : "Make member"}
+                          {m.role === "member" ? "Make owner" : "Make member"}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-danger focus:text-danger"
-                          onClick={() =>
-                            removeMemberMutation.mutate(m.user_id)
-                          }
+                          onClick={() => removeMemberMutation.mutate(m.user_id)}
                           disabled={removeMemberMutation.isPending}
                         >
                           Remove
@@ -333,15 +326,25 @@ function OrganizationTab() {
 }
 
 function GithubAppCard({ orgId }: { orgId: number | undefined }) {
-  const { isReady, isSuspended, targetLogin, isLoading } = useOrgSetup(orgId);
+  const { isReady, isSuspended, targetLogin, accountType, isLoading } =
+    useOrgSetup(orgId);
   const [installing, setInstalling] = useState(false);
 
   async function handleInstall() {
     if (!orgId) return;
     setInstalling(true);
     try {
+      const popup = window.open(
+        "about:blank",
+        "github_app_install",
+        "popup,width=520,height=720",
+      );
       const { install_url } = await getGithubAppInstallURL(orgId);
-      window.open(install_url, "_blank", "noopener,noreferrer");
+      if (popup) {
+        popup.location.href = install_url;
+      } else {
+        window.location.href = install_url;
+      }
     } finally {
       setInstalling(false);
     }
@@ -377,7 +380,11 @@ function GithubAppCard({ orgId }: { orgId: number | undefined }) {
             {targetLogin && (
               <Button variant="outline" size="sm" asChild>
                 <a
-                  href={`https://github.com/organizations/${targetLogin}/settings/installations`}
+                  href={
+                    accountType === "organization"
+                      ? `https://github.com/organizations/${targetLogin}/settings/installations`
+                      : `https://github.com/settings/installations`
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -398,7 +405,11 @@ function GithubAppCard({ orgId }: { orgId: number | undefined }) {
             {targetLogin && (
               <Button variant="outline" size="sm" asChild>
                 <a
-                  href={`https://github.com/organizations/${targetLogin}/settings/installations`}
+                  href={
+                    accountType === "organization"
+                      ? `https://github.com/organizations/${targetLogin}/settings/installations`
+                      : `https://github.com/settings/installations`
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -417,7 +428,11 @@ function GithubAppCard({ orgId }: { orgId: number | undefined }) {
                 and open pull requests on your behalf.
               </p>
             </div>
-            <Button size="sm" onClick={handleInstall} disabled={installing || !orgId}>
+            <Button
+              size="sm"
+              onClick={handleInstall}
+              disabled={installing || !orgId}
+            >
               {installing ? "Opening…" : "Install GitHub App"}
             </Button>
           </div>

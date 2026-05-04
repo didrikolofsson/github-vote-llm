@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
 import { getGithubAppInstallStatus } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
 
 export function useOrgSetup(orgId: number | undefined) {
   const { data, isLoading } = useQuery({
@@ -13,6 +13,7 @@ export function useOrgSetup(orgId: number | undefined) {
     isReady: data?.installed === true && !data?.suspended_at,
     isSuspended: data?.suspended_at != null,
     targetLogin: data?.target_login,
+    accountType: data?.account_type,
     isLoading,
     status: data,
   };

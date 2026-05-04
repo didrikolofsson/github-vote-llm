@@ -14,6 +14,7 @@ import RepositoriesPage from "./pages/RepositoriesPage";
 import RepositoryDetailPage from "./pages/RepositoryDetailPage";
 import SettingsPage from "./pages/SettingsPage";
 import CompletePage from "./pages/setup/CompletePage";
+import PopupCompletePage from "./pages/setup/PopupCompletePage";
 import Layout from "./components/Layout";
 
 function AppRoutes() {
@@ -21,6 +22,7 @@ function AppRoutes() {
     <Routes>
       {/* Callback landing pages */}
       <Route path="setup/complete" element={<CompletePage />} />
+      <Route path="setup/popup-complete" element={<PopupCompletePage />} />
 
       <Route element={<Layout />}>
         <Route index element={<Navigate to="/dashboard" replace />} />

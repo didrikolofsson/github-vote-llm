@@ -53,3 +53,5 @@ DELETE FROM github_installations WHERE github_installation_id = $1;
 DELETE FROM github_installations WHERE organization_id = $1;
 -- name: DeleteInstallationByID :exec
 DELETE FROM github_installations WHERE id = $1;
+-- name: GetInstallationByInstallationID :one
+SELECT * FROM github_installations WHERE github_installation_id = $1;

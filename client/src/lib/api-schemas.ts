@@ -122,6 +122,7 @@ export const AppInstallationStatusSchema = z.object({
   installed: z.boolean(),
   target_login: z.string().optional(),
   suspended_at: z.string().datetime().nullable().optional(),
+  account_type: z.enum(["user", "organization"]),
 });
 
 // ─── Exported types ───────────────────────────────────────────────────────────

@@ -19,8 +19,8 @@ import (
 )
 
 type GithubHandlers struct {
-	s           *services.GithubService
-	l           *logger.Logger
+	s             *services.GithubService
+	l             *logger.Logger
 	webhookSecret string
 }
 
@@ -68,7 +68,7 @@ func (h *GithubHandlers) Callback(c *gin.Context) {
 		return
 	}
 
-	c.Redirect(http.StatusFound, h.s.FrontendURL()+"?github_connected=1")
+	c.Redirect(http.StatusFound, fmt.Sprintf("%s/setup/popup-complete?kind=oauth&ok=1", h.s.FrontendURL()))
 }
 
 // GetAppInstallURL returns the GitHub App installation URL for the given org.
@@ -94,28 +94,54 @@ func (h *GithubHandlers) GetAppInstallURL(c *gin.Context) {
 // It validates the state JWT, fetches installation details from GitHub, and stores the record.
 func (h *GithubHandlers) AppInstallCallback(c *gin.Context) {
 	installationIDStr := c.Query("installation_id")
+	setupAction := c.Query("setup_action")
 	state := c.Query("state")
 
-	if installationIDStr == "" || state == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing installation_id or state"})
+	if setupAction == "" {
+		h.l.Errorw("Missing setup_action", "request_id", request.GetRequestID(c))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing setup_action"})
+		return
+	}
+
+	if installationIDStr == "" {
+		h.l.Errorw("Missing installation_id", "request_id", request.GetRequestID(c))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing installation_id"})
 		return
 	}
 
 	installationID, err := strconv.ParseInt(installationIDStr, 10, 64)
 	if err != nil {
+		h.l.Errorw("Failed to parse installation_id", "error", err, "installation_id", installationIDStr, "request_id", request.GetRequestID(c))
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid installation_id"})
 		return
 	}
 
-	orgID, err := h.s.HandleAppInstallCallback(c.Request.Context(), installationID, state)
-	if err != nil {
-		h.l.Errorw("Failed to handle app install callback", "error", err, "installation_id", installationID, "request_id", request.GetRequestID(c))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+	if setupAction == "update" {
+		orgID, err := h.s.HandleAppUpdateCallback(c.Request.Context(), installationID)
+		if err != nil {
+			h.l.Errorw("Failed to handle app update callback", "error", err, "installation_id", installationID, "request_id", request.GetRequestID(c))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+		h.l.Infow("GitHub App updated", "installation_id", installationID, "org_id", orgID)
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/setup/popup-complete?kind=app_update&ok=1&org_id=%d", h.s.FrontendURL(), orgID))
 		return
 	}
 
-	h.l.Infow("GitHub App installed", "installation_id", installationID, "org_id", orgID)
-	c.Redirect(http.StatusFound, fmt.Sprintf("%s?app_installed=1", h.s.FrontendURL()))
+	if setupAction == "install" {
+		orgID, err := h.s.HandleAppInstallCallback(c.Request.Context(), installationID, state)
+		if err != nil {
+			h.l.Errorw("Failed to handle app install callback", "error", err, "installation_id", installationID, "request_id", request.GetRequestID(c))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+
+		h.l.Infow("GitHub App installed", "installation_id", installationID, "org_id", orgID)
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/setup/popup-complete?kind=app_install&ok=1&org_id=%d", h.s.FrontendURL(), orgID))
+	}
+
+	h.l.Errorw("Invalid setup action", "setup_action", setupAction, "request_id", request.GetRequestID(c))
+	c.JSON(http.StatusBadRequest, gin.H{"error": "invalid setup action"})
 }
 
 // GetAppInstallationStatus returns the GitHub App installation status for the given org.
@@ -138,6 +164,7 @@ func (h *GithubHandlers) GetAppInstallationStatus(c *gin.Context) {
 		Installed:   status.Installed,
 		TargetLogin: status.TargetLogin,
 		SuspendedAt: status.SuspendedAt,
+		AccountType: string(status.AccountType),
 	})
 }
 

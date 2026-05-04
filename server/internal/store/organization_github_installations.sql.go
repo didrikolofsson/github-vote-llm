@@ -62,6 +62,30 @@ func (q *Queries) GetInstallationByGithubID(ctx context.Context, githubInstallat
 	return i, err
 }
 
+const getInstallationByInstallationID = `-- name: GetInstallationByInstallationID :one
+SELECT id, organization_id, github_installation_id, github_account_login, github_account_id, github_account_type, repository_selection, suspended_at, installed_by_user_id, created_at, updated_at, state FROM github_installations WHERE github_installation_id = $1
+`
+
+func (q *Queries) GetInstallationByInstallationID(ctx context.Context, githubInstallationID int64) (GithubInstallation, error) {
+	row := q.db.QueryRow(ctx, getInstallationByInstallationID, githubInstallationID)
+	var i GithubInstallation
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.GithubInstallationID,
+		&i.GithubAccountLogin,
+		&i.GithubAccountID,
+		&i.GithubAccountType,
+		&i.RepositorySelection,
+		&i.SuspendedAt,
+		&i.InstalledByUserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.State,
+	)
+	return i, err
+}
+
 const getInstallationByOrgID = `-- name: GetInstallationByOrgID :one
 SELECT id, organization_id, github_installation_id, github_account_login, github_account_id, github_account_type, repository_selection, suspended_at, installed_by_user_id, created_at, updated_at, state FROM github_installations WHERE organization_id = $1
 `

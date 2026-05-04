@@ -25,7 +25,10 @@ import (
 	"golang.org/x/oauth2"
 )
 
-var ErrInstallationNotFound = errors.New("github app installation not found")
+var (
+	ErrInstallationNotFound  = errors.New("github app installation not found")
+	ErrInstallationNotActive = errors.New("github app installation is not active")
+)
 
 type appInstallStateClaims struct {
 	OrgID int64 `json:"org_id"`
@@ -186,10 +189,33 @@ func (s *GithubService) HandleAppInstallCallback(ctx context.Context, installati
 	return orgID, nil
 }
 
+func (s *GithubService) HandleAppUpdateCallback(ctx context.Context, installationID int64) (int64, error) {
+	installation, err := s.q.GetInstallationByInstallationID(ctx, installationID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, ErrInstallationNotFound
+		}
+		return 0, fmt.Errorf("get installation by id: %w", err)
+	}
+
+	if installation.State != store.GithubInstallationStateActive {
+		return 0, ErrInstallationNotActive
+	}
+	return installation.OrganizationID, nil
+}
+
+type GithubAccountType string
+
+const (
+	GithubAccountTypeUser         GithubAccountType = "user"
+	GithubAccountTypeOrganization GithubAccountType = "organization"
+)
+
 type AppInstallationStatus struct {
 	Installed   bool
 	TargetLogin string
 	SuspendedAt *time.Time
+	AccountType GithubAccountType
 }
 
 // GetInstallationStatus returns the installation status for an org, doing a live GitHub API
@@ -218,9 +244,14 @@ func (s *GithubService) GetInstallationStatus(ctx context.Context, orgID int64) 
 		return AppInstallationStatus{}, fmt.Errorf("verify installation with github: %w", err)
 	}
 
+	accountType := GithubAccountTypeOrganization
+	if installation.GithubAccountType == "User" {
+		accountType = GithubAccountTypeUser
+	}
 	status := AppInstallationStatus{
 		Installed:   true,
 		TargetLogin: installation.GithubAccountLogin,
+		AccountType: accountType,
 	}
 	if installation.SuspendedAt.Valid {
 		status.SuspendedAt = &installation.SuspendedAt.Time
