@@ -16,11 +16,19 @@ type AppInstallURLResponse struct {
 	InstallURL string `json:"install_url"`
 }
 
-type AppInstallationStatusResponse struct {
-	Installed   bool       `json:"installed"`
-	TargetLogin string     `json:"target_login,omitempty"`
-	SuspendedAt *time.Time `json:"suspended_at,omitempty"`
-	AccountType string     `json:"account_type,omitempty"`
+type GithubAccountType string
+
+const (
+	GithubAccountTypeUser         GithubAccountType = "user"
+	GithubAccountTypeOrganization GithubAccountType = "organization"
+)
+
+type AppInstallationStatus struct {
+	Installed           bool              `json:"installed"`
+	SuspendedAt         *time.Time        `json:"suspended_at,omitempty"`
+	InstalledByUserName string            `json:"installed_by_user_name,omitempty"`
+	TargetLogin         string            `json:"target_login,omitempty"`
+	AccountType         GithubAccountType `json:"account_type,omitempty"`
 }
 
 type AppInstallation struct {

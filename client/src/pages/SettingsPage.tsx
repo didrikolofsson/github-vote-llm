@@ -30,6 +30,7 @@ import {
 import {
   deleteUser,
   formatApiError,
+  getGithubAppInstallStatus,
   getGithubAppInstallURL,
   getMe,
   listMyOrganizations,
@@ -44,7 +45,7 @@ import { useAuth } from "@/lib/auth";
 import { useOrgSetup } from "@/hooks/use-org-setup";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, Github, MoreHorizontal } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { userRoleToBadgeColor } from "@/lib/utils";
 
 export default function SettingsPage() {
@@ -339,7 +340,7 @@ function OrganizationTab() {
 }
 
 function GithubAppStatusCard({ orgId }: { orgId: number | undefined }) {
-  const { isReady, isSuspended, targetLogin, accountType, isLoading } =
+  const { installed, isSuspended, targetLogin, accountType, isLoading } =
     useOrgSetup(orgId);
 
   const manageURL =
@@ -367,49 +368,56 @@ function GithubAppStatusCard({ orgId }: { orgId: number | undefined }) {
             <Skeleton className="h-8 w-20" />
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-4">
-            {isReady ? (
-              <div className="flex items-center gap-2 text-sm">
-                <span className="size-2 rounded-full bg-success shrink-0" />
-                <span className="font-medium">
-                  {targetLogin ? (
-                    <span className="font-mono">{targetLogin}</span>
-                  ) : (
-                    "Connected"
-                  )}
-                </span>
-              </div>
-            ) : isSuspended ? (
-              <div className="flex items-center gap-2 text-sm">
-                <span className="size-2 rounded-full bg-warning shrink-0" />
-                <span className="font-medium text-muted-foreground">
-                  Suspended
-                </span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-sm">
-                <span className="size-2 rounded-full bg-danger shrink-0" />
-                <span className="font-medium text-muted-foreground">
-                  Not connected
-                </span>
-              </div>
-            )}
-            {isReady || isSuspended ? (
-              <Button variant="outline" size="sm" asChild>
-                <a href={manageURL} target="_blank" rel="noopener noreferrer">
-                  Manage
-                  <ExternalLink className="size-3.5" />
-                </a>
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                onClick={handleInstall}
-                disabled={installing || !orgId}
-              >
-                {installing ? "Opening…" : "Install"}
-              </Button>
-            )}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-4">
+              {installed ? (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="size-2 rounded-full bg-success shrink-0" />
+                  <span className="font-medium">
+                    {targetLogin ? (
+                      <span className="font-mono">{targetLogin}</span>
+                    ) : (
+                      "Connected"
+                    )}
+                  </span>
+                </div>
+              ) : isSuspended ? (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="size-2 rounded-full bg-warning shrink-0" />
+                  <span className="font-medium text-muted-foreground">
+                    Suspended
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="size-2 rounded-full bg-danger shrink-0" />
+                  <span className="font-medium text-muted-foreground">
+                    Not connected
+                  </span>
+                </div>
+              )}
+              {installed || isSuspended ? (
+                <Button variant="outline" size="sm" asChild>
+                  <a href={manageURL} target="_blank" rel="noopener noreferrer">
+                    Manage
+                    <ExternalLink className="size-3.5" />
+                  </a>
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={handleInstall}
+                  disabled={installing || !orgId}
+                >
+                  {installing ? "Opening…" : "Install"}
+                </Button>
+              )}
+            </div>
+            {/* {installedByUserId && (
+              <p className="text-xs text-muted-foreground">
+                Connected by <span className="font-mono">Email</span>
+              </p>
+            )} */}
           </div>
         )}
       </CardContent>
@@ -444,10 +452,10 @@ function useInstallGithubApp(orgId: number | undefined) {
 }
 
 function GithubAppCard({ orgId }: { orgId: number | undefined }) {
-  const { isReady, isLoading } = useOrgSetup(orgId);
+  const { installed, isLoading } = useOrgSetup(orgId);
   const { installing, handleInstall } = useInstallGithubApp(orgId);
 
-  if (isLoading || isReady) return null;
+  if (isLoading || installed) return null;
 
   return (
     <Card variant="cta" gradient={"warning"}>

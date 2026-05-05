@@ -3,45 +3,41 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { cva, VariantProps } from "class-variance-authority";
 
-const cardVariants = cva("", {
-  variants: {
-    variant: {
-      default: "",
-      cta: "border-l-[3px] border-primary ring-1 ring-foreground/10",
+const cardVariants = cva(
+  "group/card flex flex-col ring-1 ring-foreground/10 gap-4 overflow-hidden rounded-xl bg-card py-4 text-sm text-card-foreground has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
+  {
+    variants: {
+      variant: {
+        default: "",
+        cta: "border-l-[3px] border-primary",
+      },
+      gradient: {
+        success:
+          "bg-linear-to-r from-success/3 to-transparent border-success ring-success/10",
+        warning:
+          "bg-linear-to-r from-warning/3 to-transparent border-warning  ring-warning/10",
+        info: "bg-linear-to-r from-info/3 to-transparent border-info ring-info/10",
+        danger:
+          "bg-linear-to-r from-danger/3 to-transparent border-danger ring-danger/10",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      gradient: null,
     },
   },
-  defaultVariants: {
-    variant: "default",
-  },
-});
-
-const cardGradients = cva("", {
-  variants: {
-    gradient: {
-      success:
-        "bg-linear-to-r from-success/3 to-transparent border-success ring-1 ring-success/10",
-      warning:
-        "bg-linear-to-r from-warning/3 to-transparent border-warning ring-1 ring-warning/10",
-      info: "bg-linear-to-r from-info/3 to-transparent border-info ring-1 ring-info/10",
-      danger:
-        "bg-linear-to-r from-danger/3 to-transparent border-danger ring-1 ring-danger/10",
-    },
-  },
-});
+);
 
 function Card({
   className,
   ...props
 }: React.ComponentProps<"div"> &
-  VariantProps<typeof cardVariants> &
-  VariantProps<typeof cardGradients> & { size?: "default" | "sm" }) {
+  VariantProps<typeof cardVariants> & { size?: "default" | "sm" }) {
   return (
     <div
       data-slot="card"
       className={cn(
-        "group/card flex flex-col gap-4 overflow-hidden rounded-xl bg-card py-4 text-sm text-card-foreground has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
-        cardVariants({ variant: props.variant }),
-        cardGradients({ gradient: props.gradient }),
+        cardVariants({ variant: props.variant, gradient: props.gradient }),
         className,
       )}
       {...props}

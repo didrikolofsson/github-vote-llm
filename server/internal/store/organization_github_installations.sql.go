@@ -87,12 +87,33 @@ func (q *Queries) GetInstallationByInstallationID(ctx context.Context, githubIns
 }
 
 const getInstallationByOrgID = `-- name: GetInstallationByOrgID :one
-SELECT id, organization_id, github_installation_id, github_account_login, github_account_id, github_account_type, repository_selection, suspended_at, installed_by_user_id, created_at, updated_at, state FROM github_installations WHERE organization_id = $1
+SELECT gi.id, gi.organization_id, gi.github_installation_id, gi.github_account_login, gi.github_account_id, gi.github_account_type, gi.repository_selection, gi.suspended_at, gi.installed_by_user_id, gi.created_at, gi.updated_at, gi.state, u.username AS installed_by_user_name
+FROM
+    github_installations gi
+    INNER JOIN users u ON gi.installed_by_user_id = u.id
+WHERE
+    gi.organization_id = $1
 `
 
-func (q *Queries) GetInstallationByOrgID(ctx context.Context, organizationID int64) (GithubInstallation, error) {
+type GetInstallationByOrgIDRow struct {
+	ID                   int64
+	OrganizationID       int64
+	GithubInstallationID int64
+	GithubAccountLogin   string
+	GithubAccountID      int64
+	GithubAccountType    string
+	RepositorySelection  string
+	SuspendedAt          pgtype.Timestamptz
+	InstalledByUserID    *int64
+	CreatedAt            pgtype.Timestamptz
+	UpdatedAt            pgtype.Timestamptz
+	State                GithubInstallationState
+	InstalledByUserName  *string
+}
+
+func (q *Queries) GetInstallationByOrgID(ctx context.Context, organizationID int64) (GetInstallationByOrgIDRow, error) {
 	row := q.db.QueryRow(ctx, getInstallationByOrgID, organizationID)
-	var i GithubInstallation
+	var i GetInstallationByOrgIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.OrganizationID,
@@ -106,6 +127,7 @@ func (q *Queries) GetInstallationByOrgID(ctx context.Context, organizationID int
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.State,
+		&i.InstalledByUserName,
 	)
 	return i, err
 }

@@ -31,16 +31,13 @@ func New(
 	auth.POST("/token", h.Auth.Token)
 	auth.POST("/revoke", h.Auth.Revoke)
 
+	// GitHub endpoints
 	github := api.Group("/github")
-	// Public: GitHub redirects here after OAuth — no Bearer token, state JWT carries identity.
-	github.GET("/auth/callback", h.Github.Callback)
-	// Public: GitHub redirects here after App installation — state JWT carries org identity.
 	github.GET("/app/callback", h.Github.AppInstallCallback)
-	// Public: GitHub App webhook events (HMAC-verified).
 	github.POST("/webhooks", h.Github.HandleWebhook)
 	github.Use(middleware.RequireAuth(jwtSecret))
-	github.GET("/authorize", h.Github.Authorize)
 
+	// User endpoints
 	users := api.Group("/users")
 	users.POST("/signup", h.User.SignupUser)
 	users.Use(middleware.RequireAuth(jwtSecret))

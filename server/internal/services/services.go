@@ -4,25 +4,21 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/agents/claude"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	appgithub "github.com/didrikolofsson/github-vote-llm/internal/github"
-	gitauth_account "github.com/didrikolofsson/github-vote-llm/internal/gitauth/account"
 	"github.com/didrikolofsson/github-vote-llm/internal/hub"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
-	"golang.org/x/oauth2"
 )
 
 type ServicesDeps struct {
-	DB            *pgxpool.Pool
-	Queries       *store.Queries
-	Env           *config.Environment
-	JobClient     *river.Client[pgx.Tx]
-	Hub           hub.Hub
-	AgentRunner   *claude.ClaudeRunner
-	AccountClient *gitauth_account.GithubAccountClient
-	OAuthConfig   *oauth2.Config
-	AppClient     *appgithub.AppClient
+	DB          *pgxpool.Pool
+	Queries     *store.Queries
+	Env         *config.Environment
+	JobClient   *river.Client[pgx.Tx]
+	Hub         hub.Hub
+	AgentRunner *claude.ClaudeRunner
+	AppClient   *appgithub.AppClient
 }
 
 type Services struct {
@@ -45,12 +41,10 @@ func New(
 		AuthService:         NewAuthService(deps.DB, deps.Queries, deps.Env.JWT_SECRET),
 		OrganizationService: NewOrganizationService(deps.DB, deps.Queries),
 		GithubService: NewGithubService(GithubServiceDeps{
-			DB:            deps.DB,
-			Queries:       deps.Queries,
-			AccountClient: deps.AccountClient,
-			Env:           deps.Env,
-			Config:        deps.OAuthConfig,
-			AppClient:     deps.AppClient,
+			DB:        deps.DB,
+			Queries:   deps.Queries,
+			Env:       deps.Env,
+			AppClient: deps.AppClient,
 		}),
 		RepositoriesService: NewRepositoriesService(deps.DB, deps.Queries),
 		MembersService:      NewMembersService(deps.Queries),

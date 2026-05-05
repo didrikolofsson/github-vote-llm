@@ -37,7 +37,12 @@ SET
 RETURNING
     *;
 -- name: GetInstallationByOrgID :one
-SELECT * FROM github_installations WHERE organization_id = $1;
+SELECT gi.*, u.username AS installed_by_user_name
+FROM
+    github_installations gi
+    INNER JOIN users u ON gi.installed_by_user_id = u.id
+WHERE
+    gi.organization_id = $1;
 -- name: GetInstallationByGithubID :one
 SELECT * FROM github_installations WHERE github_installation_id = $1;
 -- name: SetInstallationSuspendedByGithubID :exec

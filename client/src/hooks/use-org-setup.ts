@@ -9,12 +9,20 @@ export function useOrgSetup(orgId: number | undefined) {
     staleTime: 60_000,
   });
 
+  if (data?.installed) {
+    return {
+      installed: true,
+      isSuspended: data?.suspendedAt != null,
+      targetLogin: data?.targetLogin,
+      accountType: data?.accountType,
+      isLoading,
+    };
+  }
   return {
-    isReady: data?.installed === true && !data?.suspended_at,
-    isSuspended: data?.suspended_at != null,
-    targetLogin: data?.target_login,
-    accountType: data?.account_type,
+    installed: false,
+    isSuspended: false,
+    targetLogin: null,
+    accountType: null,
     isLoading,
-    status: data,
   };
 }

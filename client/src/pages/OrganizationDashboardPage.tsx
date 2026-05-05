@@ -61,7 +61,12 @@ export default function OrganizationDashboardPage() {
   });
 
   const recentRepos = repos.slice(0, 3);
-  const { isReady: appReady, isSuspended: appSuspended, targetLogin, isLoading: appLoading } = useOrgSetup(orgId);
+  const {
+    isReady: appReady,
+    isSuspended: appSuspended,
+    targetLogin,
+    isLoading: appLoading,
+  } = useOrgSetup(orgId);
 
   if (orgsLoading) {
     return (
@@ -78,7 +83,11 @@ export default function OrganizationDashboardPage() {
   }
 
   return (
-    <div className={cn("animate-slide-up flex flex-col gap-8 p-8 max-w-[1280px] mx-auto w-full")}>
+    <div
+      className={cn(
+        "animate-slide-up flex flex-col gap-8 p-8 max-w-[1280px] mx-auto w-full",
+      )}
+    >
       <SetupBanner orgId={orgId} />
 
       <div>
@@ -131,9 +140,7 @@ export default function OrganizationDashboardPage() {
                   {members.length}
                 </div>
               )}
-              <p className="text-sm text-muted-foreground mt-0.5">
-                Members
-              </p>
+              <p className="text-sm text-muted-foreground mt-0.5">Members</p>
             </CardContent>
           </Card>
         </Link>
@@ -197,9 +204,7 @@ export default function OrganizationDashboardPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-[15px]">
-                Recent repositories
-              </CardTitle>
+              <CardTitle className="text-[15px]">Recent repositories</CardTitle>
               <CardDescription className="mt-1">
                 Your latest connected repositories
               </CardDescription>

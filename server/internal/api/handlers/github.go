@@ -28,59 +28,21 @@ func NewGithubHandlers(s *services.GithubService, l *logger.Logger, webhookSecre
 	return &GithubHandlers{s: s, l: l, webhookSecret: webhookSecret}
 }
 
-func (h *GithubHandlers) Authorize(c *gin.Context) {
+// GetAppInstallURL returns the GitHub App installation URL for the given org.
+// The URL includes a short-lived signed state token that links the install back to the org.
+func (h *GithubHandlers) GetAppInstallURL(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-
-	authUrl, err := h.s.CreateAuthURL(c.Request.Context(), userID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"authorize_url": authUrl})
-}
-
-func (h *GithubHandlers) Callback(c *gin.Context) {
-	code := c.Query("code")
-	state := c.Query("state")
-
-	verified, err := h.s.VerifyAuthStateToken(c.Request.Context(), state)
-	if err != nil {
-		h.l.Errorw("Failed to verify auth state token", "error", err, "state", state, "request_id", request.GetRequestID(c))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
-		return
-	}
-
-	userID := verified.UserID
-	token, err := h.s.ExchangeCode(c.Request.Context(), code, state)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
-		return
-	}
-
-	if err := h.s.UpsertGithubAccountTokenByUserID(c.Request.Context(), userID, token); err != nil {
-		h.l.Errorw("Failed to store user tokens", "error", err, "user_id", userID, "request_id", request.GetRequestID(c))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
-		return
-	}
-
-	c.Redirect(http.StatusFound, fmt.Sprintf("%s/setup/popup-complete?kind=oauth&ok=1", h.s.FrontendURL()))
-}
-
-// GetAppInstallURL returns the GitHub App installation URL for the given org.
-// The URL includes a short-lived signed state token that links the install back to the org.
-func (h *GithubHandlers) GetAppInstallURL(c *gin.Context) {
 	orgID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization id"})
 		return
 	}
 
-	installURL, err := h.s.CreateAppInstallURL(c.Request.Context(), orgID)
+	installURL, err := h.s.CreateAppInstallURL(c.Request.Context(), orgID, userID)
 	if err != nil {
 		h.l.Errorw("Failed to create app install URL", "error", err, "org_id", orgID, "request_id", request.GetRequestID(c))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
@@ -138,6 +100,7 @@ func (h *GithubHandlers) AppInstallCallback(c *gin.Context) {
 
 		h.l.Infow("GitHub App installed", "installation_id", installationID, "org_id", orgID)
 		c.Redirect(http.StatusFound, fmt.Sprintf("%s/setup/popup-complete?kind=app_install&ok=1&org_id=%d", h.s.FrontendURL(), orgID))
+		return
 	}
 
 	h.l.Errorw("Invalid setup action", "setup_action", setupAction, "request_id", request.GetRequestID(c))
@@ -160,11 +123,12 @@ func (h *GithubHandlers) GetAppInstallationStatus(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, dtos.AppInstallationStatusResponse{
-		Installed:   status.Installed,
-		TargetLogin: status.TargetLogin,
-		SuspendedAt: status.SuspendedAt,
-		AccountType: string(status.AccountType),
+	c.JSON(http.StatusOK, dtos.AppInstallationStatus{
+		Installed:           status.Installed,
+		SuspendedAt:         status.SuspendedAt,
+		InstalledByUserName: status.InstalledByUserName,
+		TargetLogin:         status.TargetLogin,
+		AccountType:         status.AccountType,
 	})
 }
 

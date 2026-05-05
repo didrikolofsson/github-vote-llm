@@ -14,8 +14,6 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
 	appgithub "github.com/didrikolofsson/github-vote-llm/internal/github"
-	gitauth_account "github.com/didrikolofsson/github-vote-llm/internal/gitauth/account"
-	gitauth_client "github.com/didrikolofsson/github-vote-llm/internal/gitauth/client"
 	"github.com/didrikolofsson/github-vote-llm/internal/hub"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs"
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs/workers"
@@ -69,14 +67,6 @@ func main() {
 	q := store.New(db)
 	eventHub := hub.NewHub()
 
-	oauthConfig := gitauth_client.NewOauthConfig(gitauth_client.OauthConfigParams{
-		ClientID:     env.GITHUB_CLIENT_ID,
-		ClientSecret: env.GITHUB_CLIENT_SECRET,
-		Scopes:       []string{"user:email", "read:org"},
-		RedirectURL:  env.SERVER_URL + "/github/auth/callback",
-	})
-	accountClient := gitauth_account.New(q, env.GITHUB_CLIENT_ID, env.JWT_SECRET)
-
 	appClient, err := appgithub.NewAppClient(env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY)
 	if err != nil {
 		appLogger.Fatalf("failed to create github app client: %v", err)
@@ -84,8 +74,7 @@ func main() {
 
 	s := services.New(services.ServicesDeps{
 		DB: db, Queries: q, Env: env, JobClient: jc, Hub: eventHub,
-		AgentRunner: claudeRunner, AccountClient: accountClient, OAuthConfig: oauthConfig,
-		AppClient: appClient,
+		AgentRunner: claudeRunner, AppClient: appClient,
 	})
 
 	workers.Register(w, workers.RegisterWorkersDeps{Services: s, Env: env, Logger: appLogger})

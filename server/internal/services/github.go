@@ -4,25 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
 
+	"github.com/didrikolofsson/github-vote-llm/internal/dtos"
 	appgithub "github.com/didrikolofsson/github-vote-llm/internal/github"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
-	gitauth_account "github.com/didrikolofsson/github-vote-llm/internal/gitauth/account"
-	gitauth_client "github.com/didrikolofsson/github-vote-llm/internal/gitauth/client"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/golang-jwt/jwt/v5"
 	gh "github.com/google/go-github/v84/github"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/oauth2"
 )
 
 var (
@@ -31,36 +28,31 @@ var (
 )
 
 type appInstallStateClaims struct {
-	OrgID int64 `json:"org_id"`
+	OrgID  int64 `json:"org_id"`
+	UserID int64 `json:"user_id"`
 	jwt.RegisteredClaims
 }
 
 type GithubService struct {
-	db            *pgxpool.Pool
-	q             *store.Queries
-	accountClient *gitauth_account.GithubAccountClient
-	env           *config.Environment
-	cfg           *oauth2.Config
-	appClient     *appgithub.AppClient
+	db        *pgxpool.Pool
+	q         *store.Queries
+	env       *config.Environment
+	appClient *appgithub.AppClient
 }
 
 type GithubServiceDeps struct {
-	DB            *pgxpool.Pool
-	Queries       *store.Queries
-	Env           *config.Environment
-	AccountClient *gitauth_account.GithubAccountClient
-	Config        *oauth2.Config
-	AppClient     *appgithub.AppClient
+	DB        *pgxpool.Pool
+	Queries   *store.Queries
+	Env       *config.Environment
+	AppClient *appgithub.AppClient
 }
 
 func NewGithubService(deps GithubServiceDeps) *GithubService {
 	return &GithubService{
-		db:            deps.DB,
-		q:             deps.Queries,
-		accountClient: deps.AccountClient,
-		env:           deps.Env,
-		cfg:           deps.Config,
-		appClient:     deps.AppClient,
+		db:        deps.DB,
+		q:         deps.Queries,
+		env:       deps.Env,
+		appClient: deps.AppClient,
 	}
 }
 
@@ -68,61 +60,12 @@ func (s *GithubService) FrontendURL() string {
 	return s.env.FRONTEND_URL
 }
 
-func (s *GithubService) CreateAuthURL(ctx context.Context, userID int64) (string, error) {
-	authUrl, err := s.accountClient.CreateAuthURL(ctx, userID)
-	if err != nil {
-		return "", err
-	}
-	return authUrl, nil
-}
-
-func (s *GithubService) ExchangeCode(ctx context.Context, code, state string) (*oauth2.Token, error) {
-	config := gitauth_client.NewOauthConfig(gitauth_client.OauthConfigParams{
-		ClientID:     s.env.GITHUB_CLIENT_ID,
-		ClientSecret: s.env.GITHUB_CLIENT_SECRET,
-		Scopes:       []string{"user:email", "read:org"},
-		RedirectURL:  fmt.Sprintf("%s/github/auth/callback", s.env.SERVER_URL),
-	})
-
-	token, err := config.Exchange(ctx, code)
-	if err != nil {
-		return nil, err
-	}
-	return token, nil
-}
-
-func (s *GithubService) VerifyAuthStateToken(ctx context.Context, token string) (gitauth_account.AuthStateClaims, error) {
-	claims, err := s.accountClient.VerifyAuthStateToken(ctx, token)
-	if err != nil {
-		return gitauth_account.AuthStateClaims{}, err
-	}
-	return claims, nil
-}
-
-func (s *GithubService) UpsertGithubAccountTokenByUserID(ctx context.Context, userID int64, token *oauth2.Token) error {
-	return s.accountClient.UpsertGithubAccountTokenByUserID(ctx, userID, token)
-}
-
-func (s *GithubService) GetAccountByUserID(ctx context.Context, userID int64) (string, error) {
-	ts := gitauth_client.NewGithubTokenSource(gitauth_client.GithubTokenSourceDeps{
-		DB:      s.db,
-		Queries: s.q,
-		UserID:  userID,
-		Config:  s.cfg,
-	})
-	client := gitauth_client.NewGithubClient(ctx, ts)
-	user, _, err := client.Users.Get(ctx, "")
-	if err != nil {
-		return "", err
-	}
-	return user.GetLogin(), nil
-}
-
 // CreateAppInstallURL generates a GitHub App installation URL with a signed state token
 // that encodes the org ID, so we can link the installation to the org on callback.
-func (s *GithubService) CreateAppInstallURL(ctx context.Context, orgID int64) (string, error) {
+func (s *GithubService) CreateAppInstallURL(ctx context.Context, orgID int64, userID int64) (string, error) {
 	claims := appInstallStateClaims{
-		OrgID: orgID,
+		OrgID:  orgID,
+		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -151,6 +94,7 @@ func (s *GithubService) HandleAppInstallCallback(ctx context.Context, installati
 	}
 
 	orgID := claims.OrgID
+	userID := claims.UserID
 
 	// Fetch installation details from GitHub to get account info.
 	appClient, err := s.appClient.AppAPIClient()
@@ -181,6 +125,7 @@ func (s *GithubService) HandleAppInstallCallback(ctx context.Context, installati
 		RepositorySelection:  repoSelection,
 		SuspendedAt:          suspendedAt,
 		State:                store.GithubInstallationStateActive,
+		InstalledByUserID:    &userID,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("upsert installation: %w", err)
@@ -206,57 +151,48 @@ func (s *GithubService) HandleAppUpdateCallback(ctx context.Context, installatio
 
 type GithubAccountType string
 
-const (
-	GithubAccountTypeUser         GithubAccountType = "user"
-	GithubAccountTypeOrganization GithubAccountType = "organization"
-)
-
-type AppInstallationStatus struct {
-	Installed   bool
-	TargetLogin string
-	SuspendedAt *time.Time
-	AccountType GithubAccountType
-}
-
-// GetInstallationStatus returns the installation status for an org, doing a live GitHub API
-// verification. If GitHub returns 404 the stale record is deleted (self-healing).
-func (s *GithubService) GetInstallationStatus(ctx context.Context, orgID int64) (AppInstallationStatus, error) {
+func (s *GithubService) GetInstallationStatus(ctx context.Context, orgID int64) (dtos.AppInstallationStatus, error) {
 	installation, err := s.q.GetInstallationByOrgID(ctx, orgID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return AppInstallationStatus{Installed: false}, nil
+			return dtos.AppInstallationStatus{
+				Installed: false,
+			}, nil
 		}
-		return AppInstallationStatus{}, err
+		return dtos.AppInstallationStatus{}, err
 	}
 
-	// Live-verify against GitHub.
-	appClient, err := s.appClient.AppAPIClient()
-	if err != nil {
-		return AppInstallationStatus{}, fmt.Errorf("create app client: %w", err)
-	}
-	_, resp, err := appClient.Apps.GetInstallation(ctx, installation.GithubInstallationID)
-	if err != nil {
-		if resp != nil && resp.StatusCode == http.StatusNotFound {
-			// Installation was removed on GitHub — delete the stale record.
-			_ = s.q.DeleteInstallationByOrgID(ctx, orgID)
-			return AppInstallationStatus{Installed: false}, nil
-		}
-		return AppInstallationStatus{}, fmt.Errorf("verify installation with github: %w", err)
-	}
+	return dtos.AppInstallationStatus{
+		Installed:           true,
+		SuspendedAt:         &installation.SuspendedAt.Time,
+		TargetLogin:         installation.GithubAccountLogin,
+		AccountType:         dtos.GithubAccountType(installation.GithubAccountType),
+		InstalledByUserName: *installation.InstalledByUserName,
+	}, nil
+}
 
-	accountType := GithubAccountTypeOrganization
-	if installation.GithubAccountType == "User" {
-		accountType = GithubAccountTypeUser
+func (s *GithubService) GetInstallationByOrgID(ctx context.Context, orgID int64) (dtos.AppInstallation, error) {
+	installation, err := s.q.GetInstallationByOrgID(ctx, orgID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return dtos.AppInstallation{}, nil
+		}
+		return dtos.AppInstallation{}, err
 	}
-	status := AppInstallationStatus{
-		Installed:   true,
-		TargetLogin: installation.GithubAccountLogin,
-		AccountType: accountType,
-	}
-	if installation.SuspendedAt.Valid {
-		status.SuspendedAt = &installation.SuspendedAt.Time
-	}
-	return status, nil
+	return dtos.AppInstallation{
+		ID:                   installation.ID,
+		OrganizationID:       installation.OrganizationID,
+		GithubInstallationID: installation.GithubInstallationID,
+		GithubAccountLogin:   installation.GithubAccountLogin,
+		GithubAccountID:      installation.GithubAccountID,
+		GithubAccountType:    installation.GithubAccountType,
+		RepositorySelection:  installation.RepositorySelection,
+		SuspendedAt:          &installation.SuspendedAt.Time,
+		InstalledByUserID:    installation.InstalledByUserID,
+		CreatedAt:            installation.CreatedAt.Time,
+		UpdatedAt:            installation.UpdatedAt.Time,
+		State:                string(installation.State),
+	}, nil
 }
 
 // InstallationWebhookPayload is a minimal representation of GitHub's installation event.
@@ -298,18 +234,6 @@ func (s *GithubService) HandleInstallationWebhook(ctx context.Context, payload I
 	return nil
 }
 
-// GetInstallationByOrgID returns the stored installation record for an org.
-func (s *GithubService) GetInstallationByOrgID(ctx context.Context, orgID int64) (store.GithubInstallation, error) {
-	installation, err := s.q.GetInstallationByOrgID(ctx, orgID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return store.GithubInstallation{}, ErrInstallationNotFound
-		}
-		return store.GithubInstallation{}, err
-	}
-	return installation, nil
-}
-
 // CloneRepoToWorkspace clones a GitHub repository using an installation token.
 // It is idempotent — if the repo directory already exists it is skipped.
 func (s *GithubService) CloneRepoToWorkspace(ctx context.Context, runID int64) error {
@@ -318,7 +242,7 @@ func (s *GithubService) CloneRepoToWorkspace(ctx context.Context, runID int64) e
 		return fmt.Errorf("get run: %w", err)
 	}
 
-	installation, err := s.GetInstallationByOrgID(ctx, run.OrganizationID)
+	installation, err := s.q.GetInstallationByOrgID(ctx, run.OrganizationID)
 	if err != nil {
 		return fmt.Errorf("get installation for org %d: %w", run.OrganizationID, err)
 	}
@@ -347,7 +271,7 @@ func (s *GithubService) CloneRepoToWorkspace(ctx context.Context, runID int64) e
 
 // PushBranch pushes a local branch to GitHub using an installation token.
 func (s *GithubService) PushBranch(ctx context.Context, orgID int64, worktreeDir, owner, repo, branch string) error {
-	installation, err := s.GetInstallationByOrgID(ctx, orgID)
+	installation, err := s.q.GetInstallationByOrgID(ctx, orgID)
 	if err != nil {
 		return fmt.Errorf("get installation: %w", err)
 	}
@@ -368,7 +292,7 @@ func (s *GithubService) PushBranch(ctx context.Context, orgID int64, worktreeDir
 // OpenPR creates a pull request on GitHub using the App installation client.
 // It ensures the "ai-generated" label exists on the repo and applies it to the PR.
 func (s *GithubService) OpenPR(ctx context.Context, orgID int64, owner, repo, branch, title, body string) (string, error) {
-	installation, err := s.GetInstallationByOrgID(ctx, orgID)
+	installation, err := s.q.GetInstallationByOrgID(ctx, orgID)
 	if err != nil {
 		return "", fmt.Errorf("get installation: %w", err)
 	}
