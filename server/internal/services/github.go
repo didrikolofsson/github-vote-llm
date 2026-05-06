@@ -24,7 +24,7 @@ import (
 
 var (
 	ErrInstallationNotFound  = errors.New("github app installation not found")
-	ErrInstallationNotActive = errors.New("github app installation is not active")
+	ErrInstallationSuspended = errors.New("github app installation is suspended")
 )
 
 type appInstallStateClaims struct {
@@ -124,7 +124,6 @@ func (s *GithubService) HandleAppInstallCallback(ctx context.Context, installati
 		GithubAccountType:    installation.GetAccount().GetType(),
 		RepositorySelection:  repoSelection,
 		SuspendedAt:          suspendedAt,
-		State:                store.GithubInstallationStateActive,
 		InstalledByUserID:    &userID,
 	})
 	if err != nil {
@@ -143,9 +142,10 @@ func (s *GithubService) HandleAppUpdateCallback(ctx context.Context, installatio
 		return 0, fmt.Errorf("get installation by id: %w", err)
 	}
 
-	if installation.State != store.GithubInstallationStateActive {
-		return 0, ErrInstallationNotActive
+	if installation.SuspendedAt.Valid {
+		return 0, ErrInstallationSuspended
 	}
+
 	return installation.OrganizationID, nil
 }
 
@@ -191,7 +191,6 @@ func (s *GithubService) GetInstallationByOrgID(ctx context.Context, orgID int64)
 		InstalledByUserID:    installation.InstalledByUserID,
 		CreatedAt:            installation.CreatedAt.Time,
 		UpdatedAt:            installation.UpdatedAt.Time,
-		State:                string(installation.State),
 	}, nil
 }
 
@@ -212,21 +211,21 @@ type InstallationWebhookPayload struct {
 
 // HandleInstallationWebhook syncs installation state from GitHub webhook events.
 func (s *GithubService) HandleInstallationWebhook(ctx context.Context, payload InstallationWebhookPayload) error {
-	githubID := payload.Installation.ID
+	installationID := payload.Installation.ID
 	switch payload.Action {
 	case "deleted":
-		return s.q.DeleteInstallationByGithubID(ctx, githubID)
+		return s.q.DeleteInstallationByInstallationID(ctx, installationID)
 
 	case "suspend":
 		t := pgtype.Timestamptz{Time: time.Now(), Valid: true}
-		return s.q.SetInstallationSuspendedByGithubID(ctx, store.SetInstallationSuspendedByGithubIDParams{
-			GithubInstallationID: githubID,
+		return s.q.SetInstallationSuspendedByInstallationID(ctx, store.SetInstallationSuspendedByInstallationIDParams{
+			GithubInstallationID: installationID,
 			SuspendedAt:          t,
 		})
 
 	case "unsuspend":
-		return s.q.SetInstallationSuspendedByGithubID(ctx, store.SetInstallationSuspendedByGithubIDParams{
-			GithubInstallationID: githubID,
+		return s.q.SetInstallationSuspendedByInstallationID(ctx, store.SetInstallationSuspendedByInstallationIDParams{
+			GithubInstallationID: installationID,
 			SuspendedAt:          pgtype.Timestamptz{Valid: false},
 		})
 	}

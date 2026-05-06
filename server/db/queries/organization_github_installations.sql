@@ -8,8 +8,7 @@ INSERT INTO
         github_account_type,
         repository_selection,
         suspended_at,
-        installed_by_user_id,
-        state
+        installed_by_user_id
     )
 VALUES (
         $1,
@@ -19,8 +18,7 @@ VALUES (
         $5,
         $6,
         $7,
-        $8,
-        $9
+        $8
     )
 ON CONFLICT (organization_id) DO
 UPDATE
@@ -32,7 +30,6 @@ SET
     repository_selection = EXCLUDED.repository_selection,
     suspended_at = EXCLUDED.suspended_at,
     installed_by_user_id = EXCLUDED.installed_by_user_id,
-    state = EXCLUDED.state,
     updated_at = now()
 RETURNING
     *;
@@ -43,20 +40,18 @@ FROM
     INNER JOIN users u ON gi.installed_by_user_id = u.id
 WHERE
     gi.organization_id = $1;
--- name: GetInstallationByGithubID :one
+-- name: GetInstallationByInstallationID :one
 SELECT * FROM github_installations WHERE github_installation_id = $1;
--- name: SetInstallationSuspendedByGithubID :exec
+-- name: SetInstallationSuspendedByInstallationID :exec
 UPDATE github_installations
 SET
     suspended_at = $2,
     updated_at = now()
 WHERE
     github_installation_id = $1;
--- name: DeleteInstallationByGithubID :exec
+-- name: DeleteInstallationByInstallationID :exec
 DELETE FROM github_installations WHERE github_installation_id = $1;
 -- name: DeleteInstallationByOrgID :exec
 DELETE FROM github_installations WHERE organization_id = $1;
 -- name: DeleteInstallationByID :exec
 DELETE FROM github_installations WHERE id = $1;
--- name: GetInstallationByInstallationID :one
-SELECT * FROM github_installations WHERE github_installation_id = $1;

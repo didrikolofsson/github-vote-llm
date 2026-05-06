@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -141,38 +142,73 @@ func (h *GithubHandlers) HandleWebhook(c *gin.Context) {
 	}
 
 	sig := c.GetHeader("X-Hub-Signature-256")
-	if !verifyWebhookSignature(body, sig, h.webhookSecret) {
+	if err := verifyWebhookSignature(body, sig, h.webhookSecret); err != nil {
+		h.l.Errorw("Failed to verify webhook signature", "error", err, "signature", sig, "request_id", request.GetRequestID(c))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid signature"})
 		return
 	}
 
-	event := c.GetHeader("X-GitHub-Event")
-	if event != "installation" {
-		c.Status(http.StatusNoContent)
+	eventHeader := c.GetHeader("X-GitHub-Event")
+	event, err := validateWebhookEvent(eventHeader)
+	if err != nil {
+		h.l.Errorw("Failed to validate webhook event", "error", err, "event_header", eventHeader, "request_id", request.GetRequestID(c))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid webhook event"})
 		return
 	}
 
-	var payload services.InstallationWebhookPayload
-	if err := json.Unmarshal(body, &payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+	if event == WebhookEventInstallation {
+		var payload services.InstallationWebhookPayload
+		if err := json.Unmarshal(body, &payload); err != nil {
+			h.l.Errorw("Failed to unmarshal installation webhook payload", "error", err, "request_id", request.GetRequestID(c))
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+			return
+		}
+		if err := h.s.HandleInstallationWebhook(c.Request.Context(), payload); err != nil {
+			h.l.Errorw("Failed to handle installation webhook", "error", err, "action", payload.Action, "installation_id", payload.Installation.ID)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+		c.Status(http.StatusOK)
 		return
 	}
 
-	if err := h.s.HandleInstallationWebhook(c.Request.Context(), payload); err != nil {
-		h.l.Errorw("Failed to handle installation webhook", "error", err, "action", payload.Action, "installation_id", payload.Installation.ID)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
-		return
-	}
-
-	c.Status(http.StatusNoContent)
+	h.l.Errorw("Invalid webhook event", "event", event, "request_id", request.GetRequestID(c))
+	c.JSON(http.StatusBadRequest, gin.H{"error": "invalid webhook event"})
 }
 
-func verifyWebhookSignature(body []byte, signature, secret string) bool {
+func verifyWebhookSignature(body []byte, signature, secret string) error {
 	if len(signature) < 7 || signature[:7] != "sha256=" {
-		return false
+		return errors.New("invalid signature")
 	}
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write(body)
 	expected := "sha256=" + hex.EncodeToString(mac.Sum(nil))
-	return hmac.Equal([]byte(signature), []byte(expected))
+	if !hmac.Equal([]byte(signature), []byte(expected)) {
+		return errors.New("invalid signature")
+	}
+	return nil
+}
+
+type WebhookEvent string
+
+const (
+	WebhookEventInstallation WebhookEvent = "installation"
+	WebhookEventSuspend      WebhookEvent = "suspend"
+	WebhookEventUnsuspend    WebhookEvent = "unsuspend"
+	WebhookEventDeleted      WebhookEvent = "deleted"
+)
+
+func validateWebhookEvent(event string) (WebhookEvent, error) {
+	switch event {
+	case "installation":
+		return WebhookEventInstallation, nil
+	case "suspend":
+		return WebhookEventSuspend, nil
+	case "unsuspend":
+		return WebhookEventUnsuspend, nil
+	case "deleted":
+		return WebhookEventDeleted, nil
+	default:
+		return "", fmt.Errorf("invalid webhook event: %s", event)
+	}
 }

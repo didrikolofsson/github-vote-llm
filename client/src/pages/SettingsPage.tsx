@@ -30,7 +30,6 @@ import {
 import {
   deleteUser,
   formatApiError,
-  getGithubAppInstallStatus,
   getGithubAppInstallURL,
   getMe,
   listMyOrganizations,
@@ -45,7 +44,7 @@ import { useAuth } from "@/lib/auth";
 import { useOrgSetup } from "@/hooks/use-org-setup";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, Github, MoreHorizontal } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { userRoleToBadgeColor } from "@/lib/utils";
 
 export default function SettingsPage() {
@@ -344,7 +343,7 @@ function GithubAppStatusCard({ orgId }: { orgId: number | undefined }) {
     useOrgSetup(orgId);
 
   const manageURL =
-    targetLogin && accountType === "organization"
+    targetLogin && accountType === "Organization"
       ? `https://github.com/organizations/${targetLogin}/settings/installations`
       : "https://github.com/settings/installations";
 

@@ -43,5 +43,4 @@ type AppInstallation struct {
 	InstalledByUserID    *int64     `json:"installed_by_user_id,omitempty"`
 	CreatedAt            time.Time  `json:"created_at"`
 	UpdatedAt            time.Time  `json:"updated_at"`
-	State                string     `json:"state"`
 }

@@ -379,7 +379,6 @@ type GithubInstallation struct {
 	InstalledByUserID    *int64
 	CreatedAt            pgtype.Timestamptz
 	UpdatedAt            pgtype.Timestamptz
-	State                GithubInstallationState
 }
 
 type Organization struct {

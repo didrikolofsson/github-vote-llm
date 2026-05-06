@@ -12,9 +12,10 @@ export function useOrgSetup(orgId: number | undefined) {
   if (data?.installed) {
     return {
       installed: true,
-      isSuspended: data?.suspendedAt != null,
-      targetLogin: data?.targetLogin,
-      accountType: data?.accountType,
+      isSuspended: data?.suspended_at != null,
+      targetLogin: data?.target_login,
+      accountType: data?.account_type,
+      installedByUserName: data?.installed_by_user_name,
       isLoading,
     };
   }
@@ -23,6 +24,7 @@ export function useOrgSetup(orgId: number | undefined) {
     isSuspended: false,
     targetLogin: null,
     accountType: null,
+    installedByUserName: null,
     isLoading,
   };
 }

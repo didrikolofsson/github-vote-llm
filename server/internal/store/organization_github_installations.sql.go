@@ -11,21 +11,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const deleteInstallationByGithubID = `-- name: DeleteInstallationByGithubID :exec
-DELETE FROM github_installations WHERE github_installation_id = $1
-`
-
-func (q *Queries) DeleteInstallationByGithubID(ctx context.Context, githubInstallationID int64) error {
-	_, err := q.db.Exec(ctx, deleteInstallationByGithubID, githubInstallationID)
-	return err
-}
-
 const deleteInstallationByID = `-- name: DeleteInstallationByID :exec
 DELETE FROM github_installations WHERE id = $1
 `
 
 func (q *Queries) DeleteInstallationByID(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, deleteInstallationByID, id)
+	return err
+}
+
+const deleteInstallationByInstallationID = `-- name: DeleteInstallationByInstallationID :exec
+DELETE FROM github_installations WHERE github_installation_id = $1
+`
+
+func (q *Queries) DeleteInstallationByInstallationID(ctx context.Context, githubInstallationID int64) error {
+	_, err := q.db.Exec(ctx, deleteInstallationByInstallationID, githubInstallationID)
 	return err
 }
 
@@ -38,32 +38,8 @@ func (q *Queries) DeleteInstallationByOrgID(ctx context.Context, organizationID 
 	return err
 }
 
-const getInstallationByGithubID = `-- name: GetInstallationByGithubID :one
-SELECT id, organization_id, github_installation_id, github_account_login, github_account_id, github_account_type, repository_selection, suspended_at, installed_by_user_id, created_at, updated_at, state FROM github_installations WHERE github_installation_id = $1
-`
-
-func (q *Queries) GetInstallationByGithubID(ctx context.Context, githubInstallationID int64) (GithubInstallation, error) {
-	row := q.db.QueryRow(ctx, getInstallationByGithubID, githubInstallationID)
-	var i GithubInstallation
-	err := row.Scan(
-		&i.ID,
-		&i.OrganizationID,
-		&i.GithubInstallationID,
-		&i.GithubAccountLogin,
-		&i.GithubAccountID,
-		&i.GithubAccountType,
-		&i.RepositorySelection,
-		&i.SuspendedAt,
-		&i.InstalledByUserID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.State,
-	)
-	return i, err
-}
-
 const getInstallationByInstallationID = `-- name: GetInstallationByInstallationID :one
-SELECT id, organization_id, github_installation_id, github_account_login, github_account_id, github_account_type, repository_selection, suspended_at, installed_by_user_id, created_at, updated_at, state FROM github_installations WHERE github_installation_id = $1
+SELECT id, organization_id, github_installation_id, github_account_login, github_account_id, github_account_type, repository_selection, suspended_at, installed_by_user_id, created_at, updated_at FROM github_installations WHERE github_installation_id = $1
 `
 
 func (q *Queries) GetInstallationByInstallationID(ctx context.Context, githubInstallationID int64) (GithubInstallation, error) {
@@ -81,13 +57,12 @@ func (q *Queries) GetInstallationByInstallationID(ctx context.Context, githubIns
 		&i.InstalledByUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.State,
 	)
 	return i, err
 }
 
 const getInstallationByOrgID = `-- name: GetInstallationByOrgID :one
-SELECT gi.id, gi.organization_id, gi.github_installation_id, gi.github_account_login, gi.github_account_id, gi.github_account_type, gi.repository_selection, gi.suspended_at, gi.installed_by_user_id, gi.created_at, gi.updated_at, gi.state, u.username AS installed_by_user_name
+SELECT gi.id, gi.organization_id, gi.github_installation_id, gi.github_account_login, gi.github_account_id, gi.github_account_type, gi.repository_selection, gi.suspended_at, gi.installed_by_user_id, gi.created_at, gi.updated_at, u.username AS installed_by_user_name
 FROM
     github_installations gi
     INNER JOIN users u ON gi.installed_by_user_id = u.id
@@ -107,7 +82,6 @@ type GetInstallationByOrgIDRow struct {
 	InstalledByUserID    *int64
 	CreatedAt            pgtype.Timestamptz
 	UpdatedAt            pgtype.Timestamptz
-	State                GithubInstallationState
 	InstalledByUserName  *string
 }
 
@@ -126,13 +100,12 @@ func (q *Queries) GetInstallationByOrgID(ctx context.Context, organizationID int
 		&i.InstalledByUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.State,
 		&i.InstalledByUserName,
 	)
 	return i, err
 }
 
-const setInstallationSuspendedByGithubID = `-- name: SetInstallationSuspendedByGithubID :exec
+const setInstallationSuspendedByInstallationID = `-- name: SetInstallationSuspendedByInstallationID :exec
 UPDATE github_installations
 SET
     suspended_at = $2,
@@ -141,13 +114,13 @@ WHERE
     github_installation_id = $1
 `
 
-type SetInstallationSuspendedByGithubIDParams struct {
+type SetInstallationSuspendedByInstallationIDParams struct {
 	GithubInstallationID int64
 	SuspendedAt          pgtype.Timestamptz
 }
 
-func (q *Queries) SetInstallationSuspendedByGithubID(ctx context.Context, arg SetInstallationSuspendedByGithubIDParams) error {
-	_, err := q.db.Exec(ctx, setInstallationSuspendedByGithubID, arg.GithubInstallationID, arg.SuspendedAt)
+func (q *Queries) SetInstallationSuspendedByInstallationID(ctx context.Context, arg SetInstallationSuspendedByInstallationIDParams) error {
+	_, err := q.db.Exec(ctx, setInstallationSuspendedByInstallationID, arg.GithubInstallationID, arg.SuspendedAt)
 	return err
 }
 
@@ -161,8 +134,7 @@ INSERT INTO
         github_account_type,
         repository_selection,
         suspended_at,
-        installed_by_user_id,
-        state
+        installed_by_user_id
     )
 VALUES (
         $1,
@@ -172,8 +144,7 @@ VALUES (
         $5,
         $6,
         $7,
-        $8,
-        $9
+        $8
     )
 ON CONFLICT (organization_id) DO
 UPDATE
@@ -185,10 +156,9 @@ SET
     repository_selection = EXCLUDED.repository_selection,
     suspended_at = EXCLUDED.suspended_at,
     installed_by_user_id = EXCLUDED.installed_by_user_id,
-    state = EXCLUDED.state,
     updated_at = now()
 RETURNING
-    id, organization_id, github_installation_id, github_account_login, github_account_id, github_account_type, repository_selection, suspended_at, installed_by_user_id, created_at, updated_at, state
+    id, organization_id, github_installation_id, github_account_login, github_account_id, github_account_type, repository_selection, suspended_at, installed_by_user_id, created_at, updated_at
 `
 
 type UpsertInstallationParams struct {
@@ -200,7 +170,6 @@ type UpsertInstallationParams struct {
 	RepositorySelection  string
 	SuspendedAt          pgtype.Timestamptz
 	InstalledByUserID    *int64
-	State                GithubInstallationState
 }
 
 func (q *Queries) UpsertInstallation(ctx context.Context, arg UpsertInstallationParams) (GithubInstallation, error) {
@@ -213,7 +182,6 @@ func (q *Queries) UpsertInstallation(ctx context.Context, arg UpsertInstallation
 		arg.RepositorySelection,
 		arg.SuspendedAt,
 		arg.InstalledByUserID,
-		arg.State,
 	)
 	var i GithubInstallation
 	err := row.Scan(
@@ -228,7 +196,6 @@ func (q *Queries) UpsertInstallation(ctx context.Context, arg UpsertInstallation
 		&i.InstalledByUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.State,
 	)
 	return i, err
 }
