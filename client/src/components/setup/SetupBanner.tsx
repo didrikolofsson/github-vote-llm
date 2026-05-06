@@ -8,9 +8,15 @@ interface SetupBannerProps {
 }
 
 export function SetupBanner({ orgId }: SetupBannerProps) {
-  const { isReady, isSuspended, isLoading } = useOrgSetup(orgId);
+  const { isReady, isSuspended, isLoading, accountType, targetLogin } =
+    useOrgSetup(orgId);
 
   if (isLoading || isReady) return null;
+
+  const manageURL =
+    accountType === "Organization"
+      ? `https://github.com/organizations/${targetLogin}/settings/installations`
+      : "https://github.com/settings/installations";
 
   return (
     <Alert variant="warning" className="mb-4">
@@ -20,7 +26,7 @@ export function SetupBanner({ orgId }: SetupBannerProps) {
           <>
             The GitHub App is suspended on GitHub. Agent runs are disabled.{" "}
             <a
-              href="https://github.com/settings/installations"
+              href={manageURL}
               target="_blank"
               rel="noopener noreferrer"
               className="font-medium"

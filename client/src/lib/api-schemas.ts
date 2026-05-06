@@ -120,18 +120,13 @@ export const AppInstallURLResponseSchema = z.object({
 
 export const GithubAccountTypeSchema = z.enum(["User", "Organization"]);
 
-export const AppInstallationStatusSchema = z.discriminatedUnion("installed", [
-  z.object({
-    installed: z.literal(true),
-    suspended_at: z.string().datetime().nullable(),
-    installed_by_user_name: z.string(),
-    target_login: z.string(),
-    account_type: GithubAccountTypeSchema,
-  }),
-  z.object({
-    installed: z.literal(false),
-  }),
-]);
+export const AppInstallationStatusSchema = z.object({
+  installed: z.boolean(),
+  suspended_at: z.string().nullish(),
+  installed_by_user_name: z.string().optional(),
+  target_login: z.string().optional(),
+  account_type: GithubAccountTypeSchema.optional(),
+});
 
 // ─── Exported types ───────────────────────────────────────────────────────────
 

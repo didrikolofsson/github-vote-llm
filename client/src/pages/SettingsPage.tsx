@@ -451,10 +451,10 @@ function useInstallGithubApp(orgId: number | undefined) {
 }
 
 function GithubAppCard({ orgId }: { orgId: number | undefined }) {
-  const { installed, isLoading } = useOrgSetup(orgId);
+  const { installed, isSuspended, isLoading } = useOrgSetup(orgId);
   const { installing, handleInstall } = useInstallGithubApp(orgId);
 
-  if (isLoading || installed) return null;
+  if (isLoading || installed || isSuspended) return null;
 
   return (
     <Card variant="cta" gradient={"warning"}>

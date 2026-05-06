@@ -9,22 +9,16 @@ export function useOrgSetup(orgId: number | undefined) {
     staleTime: 60_000,
   });
 
-  if (data?.installed) {
-    return {
-      installed: true,
-      isSuspended: data?.suspended_at != null,
-      targetLogin: data?.target_login,
-      accountType: data?.account_type,
-      installedByUserName: data?.installed_by_user_name,
-      isLoading,
-    };
-  }
+  const isSuspended = data?.installed === true && data?.suspended_at != null;
+  const installed = data?.installed === true && !isSuspended;
+
   return {
-    installed: false,
-    isSuspended: false,
-    targetLogin: null,
-    accountType: null,
-    installedByUserName: null,
+    installed,
+    isSuspended,
+    isReady: installed,
+    targetLogin: data?.target_login ?? null,
+    accountType: data?.account_type ?? null,
+    installedByUserName: data?.installed_by_user_name ?? null,
     isLoading,
   };
 }

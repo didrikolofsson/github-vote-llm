@@ -162,12 +162,23 @@ func (s *GithubService) GetInstallationStatus(ctx context.Context, orgID int64) 
 		return dtos.AppInstallationStatus{}, err
 	}
 
+	var suspendedAt *time.Time
+	if installation.SuspendedAt.Valid {
+		t := installation.SuspendedAt.Time
+		suspendedAt = &t
+	}
+
+	installedByUserName := ""
+	if installation.InstalledByUserName != nil {
+		installedByUserName = *installation.InstalledByUserName
+	}
+
 	return dtos.AppInstallationStatus{
 		Installed:           true,
-		SuspendedAt:         &installation.SuspendedAt.Time,
+		SuspendedAt:         suspendedAt,
 		TargetLogin:         installation.GithubAccountLogin,
 		AccountType:         dtos.GithubAccountType(installation.GithubAccountType),
-		InstalledByUserName: *installation.InstalledByUserName,
+		InstalledByUserName: installedByUserName,
 	}, nil
 }
 
