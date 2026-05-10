@@ -3,11 +3,14 @@ package middleware
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/dtos"
+	"github.com/didrikolofsson/github-vote-llm/internal/helpers"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
+	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -120,5 +123,26 @@ func LogRequests(logger *logger.Logger) gin.HandlerFunc {
 			"latency_ms", time.Since(start).Milliseconds(),
 			"request_id", c.GetString("request_id"),
 		)
+	}
+}
+
+func RequireOrgMember(q *store.Queries) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		orgID, err := strconv.ParseInt(ctx.Param("id"), 10, 64)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization ID"})
+			return
+		}
+		userID, ok := GetUserID(ctx)
+		if !ok {
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+
+		if err := helpers.VerifyOrgMember(ctx.Request.Context(), q, orgID, userID); err != nil {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "not a member of this organization"})
+			return
+		}
+		ctx.Next()
 	}
 }

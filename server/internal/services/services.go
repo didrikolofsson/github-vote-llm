@@ -26,7 +26,7 @@ type Services struct {
 	AuthService         *AuthService
 	OrganizationService *OrganizationService
 	GithubService       *GithubService
-	RepositoriesService *RepositoriesService
+	RepoService         *RepoService
 	MembersService      *MembersService
 	RunService          *RunService
 	FeaturesService     *FeaturesService
@@ -47,10 +47,14 @@ func New(
 			AppClient: deps.AppClient,
 			Hub:       deps.Hub,
 		}),
-		RepositoriesService: NewRepositoriesService(deps.DB, deps.Queries),
-		MembersService:      NewMembersService(deps.Queries),
-		RunService:          NewRunService(deps.DB, deps.Queries, deps.Env, deps.JobClient, deps.AgentRunner),
-		FeaturesService:     NewFeaturesService(deps.DB, deps.Queries, deps.Hub),
-		PortalService:       NewPortalService(deps.DB, deps.Queries),
+		RepoService: NewRepoService(RepoServiceDeps{
+			DB:        deps.DB,
+			Queries:   deps.Queries,
+			AppClient: deps.AppClient,
+		}),
+		MembersService:  NewMembersService(deps.Queries),
+		RunService:      NewRunService(deps.DB, deps.Queries, deps.Env, deps.JobClient, deps.AgentRunner),
+		FeaturesService: NewFeaturesService(deps.DB, deps.Queries, deps.Hub),
+		PortalService:   NewPortalService(deps.DB, deps.Queries),
 	}
 }

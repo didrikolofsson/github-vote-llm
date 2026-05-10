@@ -34,7 +34,7 @@ func New(
 		Auth:         NewAuthHandlers(deps.Services.AuthService),
 		Organization: NewOrganizationHandlers(deps.Services.OrganizationService, deps.Logger),
 		Github:       NewGithubHandlers(deps.Services.GithubService, deps.Logger, deps.Hub, deps.Env.GITHUB_APP_WEBHOOK_SECRET),
-		Repository:   NewRepositoryHandlers(deps.Services.RepositoriesService, deps.Logger),
+		Repository:   NewRepositoryHandlers(deps.Services.RepoService, deps.Logger),
 		Runs:         NewRunsHandlers(deps.Services.RunService, deps.Logger),
 		Members:      NewMembersHandlers(deps.Services.MembersService, deps.Logger),
 		Feature:      NewFeatureHandlers(deps.Services.FeaturesService, deps.Logger),

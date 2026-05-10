@@ -246,3 +246,48 @@ func validateWebhookEvent(event string) (WebhookEvent, error) {
 		return "", fmt.Errorf("invalid webhook event: %s", event)
 	}
 }
+
+func (h *GithubHandlers) ListInstallationRepositories(c *gin.Context) {
+	orgIDStr, exists := c.Params.Get("id")
+	if !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization id"})
+		return
+	}
+
+	orgID, err := strconv.ParseInt(orgIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization id"})
+		return
+	}
+
+	pageStr := c.Query("page")
+	if pageStr == "" {
+		pageStr = "1"
+	}
+	page, err := strconv.ParseInt(pageStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page"})
+		return
+	}
+
+	repos, hasMore, err := h.s.ListInstallationRepositories(c.Request.Context(), orgID, page)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrInstallationNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "GitHub App is not installed for this organization"})
+			return
+		case errors.Is(err, services.ErrInstallationSuspended):
+			c.JSON(http.StatusForbidden, gin.H{"error": "GitHub App installation is suspended"})
+			return
+		default:
+			h.l.Errorw("Failed to list installation repositories", "error", err, "organization_id", orgID, "page", page, "request_id", request.GetRequestID(c))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, dtos.GitHubRepositoryListResponse{
+		Repositories: repos,
+		HasMore:      hasMore,
+	})
+}

@@ -32,9 +32,6 @@ func NewMembersService(q *store.Queries) *MembersService {
 }
 
 func (s *MembersService) ListMembers(ctx context.Context, orgID, requestingUserID int64) ([]MemberWithEmail, error) {
-	if err := s.verifyOrgMember(ctx, orgID, requestingUserID); err != nil {
-		return nil, err
-	}
 	rows, err := s.q.GetOrganizationMembersWithUser(ctx, orgID)
 	if err != nil {
 		return nil, err
@@ -47,10 +44,6 @@ func (s *MembersService) ListMembers(ctx context.Context, orgID, requestingUserI
 }
 
 func (s *MembersService) InviteByEmail(ctx context.Context, orgID, requestingUserID int64, email string) error {
-	if err := s.verifyOrgOwner(ctx, orgID, requestingUserID); err != nil {
-		return err
-	}
-
 	user, err := s.q.GetUserByEmail(ctx, email)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrInviteUserNotFound
@@ -75,10 +68,6 @@ func (s *MembersService) InviteByEmail(ctx context.Context, orgID, requestingUse
 }
 
 func (s *MembersService) RemoveMember(ctx context.Context, orgID, requestingUserID int64, userID int64) error {
-	if err := s.verifyOrgOwner(ctx, orgID, requestingUserID); err != nil {
-		return err
-	}
-
 	members, err := s.q.GetOrganizationMembers(ctx, orgID)
 	if err != nil {
 		return err
@@ -108,9 +97,6 @@ func (s *MembersService) RemoveMember(ctx context.Context, orgID, requestingUser
 }
 
 func (s *MembersService) UpdateRole(ctx context.Context, orgID, requestingUserID int64, userID int64, role string) error {
-	if err := s.verifyOrgOwner(ctx, orgID, requestingUserID); err != nil {
-		return err
-	}
 	if requestingUserID == userID {
 		return ErrCannotChangeOwnRole
 	}
@@ -148,30 +134,4 @@ func (s *MembersService) UpdateRole(ctx context.Context, orgID, requestingUserID
 		return ErrMemberNotFound
 	}
 	return err
-}
-
-func (s *MembersService) verifyOrgMember(ctx context.Context, orgID, userID int64) error {
-	members, err := s.q.GetOrganizationMembers(ctx, orgID)
-	if err != nil {
-		return err
-	}
-	for _, m := range members {
-		if m.UserID == userID {
-			return nil
-		}
-	}
-	return ErrNotOrgMember
-}
-
-func (s *MembersService) verifyOrgOwner(ctx context.Context, orgID, userID int64) error {
-	members, err := s.q.GetOrganizationMembers(ctx, orgID)
-	if err != nil {
-		return err
-	}
-	for _, m := range members {
-		if m.UserID == userID && m.Role == store.OrganizationMemberRoleOwner {
-			return nil
-		}
-	}
-	return ErrNotOrgMember
 }

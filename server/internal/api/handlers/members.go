@@ -7,8 +7,9 @@ import (
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api/middleware"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/request"
-	"github.com/didrikolofsson/github-vote-llm/internal/services"
+	"github.com/didrikolofsson/github-vote-llm/internal/helpers"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
+	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/gin-gonic/gin"
 )
 
@@ -35,7 +36,7 @@ func (h *MembersHandlers) List(c *gin.Context) {
 	}
 
 	members, err := h.s.ListMembers(c.Request.Context(), orgID, userID)
-	if errors.Is(err, services.ErrNotOrgMember) {
+	if errors.Is(err, helpers.ErrNotOrgMember) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "not a member of this organization"})
 		return
 	}
@@ -71,7 +72,7 @@ func (h *MembersHandlers) Invite(c *gin.Context) {
 	}
 
 	err = h.s.InviteByEmail(c.Request.Context(), orgID, userID, req.Email)
-	if errors.Is(err, services.ErrNotOrgMember) {
+	if errors.Is(err, helpers.ErrNotOrgMember) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "only owners can invite members"})
 		return
 	}
@@ -111,7 +112,7 @@ func (h *MembersHandlers) Remove(c *gin.Context) {
 	}
 
 	err = h.s.RemoveMember(c.Request.Context(), orgID, userID, memberUserID)
-	if errors.Is(err, services.ErrNotOrgMember) {
+	if errors.Is(err, helpers.ErrNotOrgMember) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "only owners can remove members"})
 		return
 	}
@@ -157,7 +158,7 @@ func (h *MembersHandlers) UpdateRole(c *gin.Context) {
 	}
 
 	err = h.s.UpdateRole(c.Request.Context(), orgID, userID, memberUserID, req.Role)
-	if errors.Is(err, services.ErrNotOrgMember) {
+	if errors.Is(err, helpers.ErrNotOrgMember) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "only owners can change roles"})
 		return
 	}

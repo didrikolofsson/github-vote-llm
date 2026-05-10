@@ -3,8 +3,11 @@ package dtos
 import "time"
 
 type GitHubRepository struct {
-	Owner string `json:"owner"`
-	Repo  string `json:"repo"`
+	GithubRepositoryID int64  `json:"github_repository_id"`
+	Owner              string `json:"owner"`
+	Name               string `json:"name"`
+	FullName           string `json:"full_name"`
+	Private            bool   `json:"private"`
 }
 
 type GitHubRepositoryListResponse struct {

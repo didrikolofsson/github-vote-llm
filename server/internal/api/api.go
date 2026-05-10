@@ -6,19 +6,25 @@ import (
 	handlers "github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/middleware"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
+	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
 )
 
+type ApiDeps struct {
+	Handlers  handlers.Handlers
+	Logger    *logger.Logger
+	Queries   *store.Queries
+	JwtSecret string
+}
+
 func New(
-	h handlers.Handlers,
-	logger *logger.Logger,
-	jwtSecret string,
+	deps ApiDeps,
 ) *gin.Engine {
 	router := gin.New()
 
 	_ = router.SetTrustedProxies(nil)
 	router.Use(middleware.AddRequestID)
-	router.Use(middleware.LogRequests(logger))
+	router.Use(middleware.LogRequests(deps.Logger))
 
 	api := router.Group("/v1/")
 	api.GET("/health", func(c *gin.Context) {
@@ -27,81 +33,85 @@ func New(
 
 	// Authentication endpoints
 	auth := api.Group("/auth")
-	auth.POST("/authorize", h.Auth.Authorize)
-	auth.POST("/token", h.Auth.Token)
-	auth.POST("/revoke", h.Auth.Revoke)
+	auth.POST("/authorize", deps.Handlers.Auth.Authorize)
+	auth.POST("/token", deps.Handlers.Auth.Token)
+	auth.POST("/revoke", deps.Handlers.Auth.Revoke)
 
 	// GitHub endpoints
 	github := api.Group("/github")
-	github.GET("/app/callback", h.Github.AppInstallCallback)
-	github.POST("/webhooks", h.Github.HandleWebhook)
-	github.Use(middleware.RequireAuth(jwtSecret))
+	github.GET("/app/callback", deps.Handlers.Github.AppInstallCallback)
+	github.POST("/webhooks", deps.Handlers.Github.HandleWebhook)
+	github.Use(middleware.RequireAuth(deps.JwtSecret))
 
 	// User endpoints
 	users := api.Group("/users")
-	users.POST("/signup", h.User.SignupUser)
-	users.Use(middleware.RequireAuth(jwtSecret))
-	users.GET("/me", h.User.GetMe)
-	users.PATCH("/me/username", h.User.UpdateUsername)
-	users.DELETE("/:id", h.User.DeleteUser)
+	users.POST("/signup", deps.Handlers.User.SignupUser)
+	users.Use(middleware.RequireAuth(deps.JwtSecret))
+	users.GET("/me", deps.Handlers.User.GetMe)
+	users.PATCH("/me/username", deps.Handlers.User.UpdateUsername)
+	users.DELETE("/:id", deps.Handlers.User.DeleteUser)
 
 	// Public portal routes (no auth)
 	portal := api.Group("/portal/:orgSlug/:repoName")
-	portal.GET("", h.Portal.GetPortalPage)
-	portal.GET("/events", h.Portal.Subscribe)
-	portal.POST("/features/:featureId/vote", h.Portal.ToggleVote)
-	portal.GET("/features/:featureId/comments", h.Portal.ListComments)
-	portal.POST("/features/:featureId/comments", h.Portal.CreateComment)
+	portal.GET("", deps.Handlers.Portal.GetPortalPage)
+	portal.GET("/events", deps.Handlers.Portal.Subscribe)
+	portal.POST("/features/:featureId/vote", deps.Handlers.Portal.ToggleVote)
+	portal.GET("/features/:featureId/comments", deps.Handlers.Portal.ListComments)
+	portal.POST("/features/:featureId/comments", deps.Handlers.Portal.CreateComment)
 
 	// Organization endpoints
 	organizations := api.Group("/organizations")
-	organizations.Use(middleware.RequireAuth(jwtSecret))
-	organizations.GET("", h.Organization.ListMyOrganizations)
-	organizations.POST("", h.Organization.CreateOrganization)
-	organizations.GET("/:id", h.Organization.GetOrganization)
-	organizations.PUT("/:id", h.Organization.UpdateOrganization)
-	organizations.PATCH("/:id/slug", h.Organization.UpdateSlug)
-	organizations.DELETE("/:id", h.Organization.DeleteOrganization)
+	organizations.Use(middleware.RequireAuth(deps.JwtSecret))
+	organizations.GET("", deps.Handlers.Organization.ListMyOrganizations)
+	organizations.POST("", deps.Handlers.Organization.CreateOrganization)
+	organizations.Use(middleware.RequireOrgMember(deps.Queries))
+	organizations.GET("/:id", deps.Handlers.Organization.GetOrganization)
+	organizations.PUT("/:id", deps.Handlers.Organization.UpdateOrganization)
+	organizations.PATCH("/:id/slug", deps.Handlers.Organization.UpdateSlug)
+	organizations.DELETE("/:id", deps.Handlers.Organization.DeleteOrganization)
 
 	// GitHub App installation (per org)
-	organizations.GET("/:id/github-app/install-url", h.Github.GetAppInstallURL)
-	organizations.GET("/:id/github-app/status", h.Github.GetAppInstallationStatus)
-
-	// Org-scoped SSE — auth via ?access_token= since EventSource cannot send headers
-	api.GET("/organizations/:id/events", middleware.RequireAuthFromQueryOrHeader(jwtSecret), h.Github.Events)
+	organizations.GET("/:id/github-app/install-url", deps.Handlers.Github.GetAppInstallURL)
+	organizations.GET("/:id/github-app/status", deps.Handlers.Github.GetAppInstallationStatus)
 
 	// Organization repositories
-	organizations.GET("/:id/repositories", h.Repository.List)
-	organizations.POST("/:id/repositories", h.Repository.Add)
-	organizations.DELETE("/:id/repositories/:repoId", h.Repository.Remove)
+	organizations.GET("/:id/repositories", deps.Handlers.Repository.List)
+	organizations.POST("/:id/repositories", deps.Handlers.Repository.Add)
+	organizations.DELETE("/:id/repositories/:repoId", deps.Handlers.Repository.Remove)
+
+	// Org-scoped GitHub repositories
+	organizations.GET("/:id/github/repositories", deps.Handlers.Github.ListInstallationRepositories)
 
 	// Organization members
-	organizations.GET("/:id/members", h.Members.List)
-	organizations.POST("/:id/members", h.Members.Invite)
-	organizations.DELETE("/:id/members/:user_id", h.Members.Remove)
-	organizations.PATCH("/:id/members/:user_id", h.Members.UpdateRole)
+	organizations.GET("/:id/members", deps.Handlers.Members.List)
+	organizations.POST("/:id/members", deps.Handlers.Members.Invite)
+	organizations.DELETE("/:id/members/:user_id", deps.Handlers.Members.Remove)
+	organizations.PATCH("/:id/members/:user_id", deps.Handlers.Members.UpdateRole)
+
+	// Org-scoped SSE — auth via ?access_token= since EventSource cannot send headers
+	api.GET("/organizations/:id/events", middleware.RequireAuthFromQueryOrHeader(deps.JwtSecret), deps.Handlers.Github.Events)
 
 	// Repository features (all private for now)
 	repos := api.Group("/repositories/:repoId")
-	repos.Use(middleware.RequireAuth(jwtSecret))
-	repos.GET("/roadmap", h.Feature.GetRoadmap)
-	repos.GET("/meta", h.Repository.GetRepoMeta)
-	repos.GET("/features", h.Feature.ListFeatures)
-	repos.GET("/features/:featureId", h.Feature.GetFeature)
-	repos.POST("/features", h.Feature.CreateFeature)
-	repos.DELETE("/features/:featureId", h.Feature.DeleteFeature)
-	repos.GET("/features/:featureId/comments", h.Feature.ListComments)
-	repos.POST("/features/:featureId/comments", h.Feature.CreateComment)
-	repos.POST("/features/:featureId/vote", h.Feature.ToggleVote)
-	repos.PATCH("/features/:featureId", h.Feature.PatchFeature)
-	repos.PATCH("/features/:featureId/position", h.Feature.UpdatePosition)
-	repos.POST("/features/:featureId/dependencies", h.Feature.AddDependency)
-	repos.DELETE("/features/:featureId/dependencies/:dependsOn", h.Feature.RemoveDependency)
-	repos.PATCH("/portal", h.Repository.UpdatePortalVisibility)
+	repos.Use(middleware.RequireAuth(deps.JwtSecret))
+	repos.GET("/roadmap", deps.Handlers.Feature.GetRoadmap)
+	repos.GET("/meta", deps.Handlers.Repository.GetRepoMeta)
+	repos.GET("/features", deps.Handlers.Feature.ListFeatures)
+	repos.GET("/features/:featureId", deps.Handlers.Feature.GetFeature)
+	repos.POST("/features", deps.Handlers.Feature.CreateFeature)
+	repos.DELETE("/features/:featureId", deps.Handlers.Feature.DeleteFeature)
+	repos.GET("/features/:featureId/comments", deps.Handlers.Feature.ListComments)
+	repos.POST("/features/:featureId/comments", deps.Handlers.Feature.CreateComment)
+	repos.POST("/features/:featureId/vote", deps.Handlers.Feature.ToggleVote)
+	repos.PATCH("/features/:featureId", deps.Handlers.Feature.PatchFeature)
+	repos.PATCH("/features/:featureId/position", deps.Handlers.Feature.UpdatePosition)
+	repos.POST("/features/:featureId/dependencies", deps.Handlers.Feature.AddDependency)
+	repos.DELETE("/features/:featureId/dependencies/:dependsOn", deps.Handlers.Feature.RemoveDependency)
+	repos.PATCH("/portal", deps.Handlers.Repository.UpdatePortalVisibility)
 
 	// Feature runs
 	featureRuns := api.Group("/features/:featureId/runs")
-	featureRuns.POST("", h.Runs.Create)
+	featureRuns.POST("", deps.Handlers.Runs.Create)
 
 	return router
 }

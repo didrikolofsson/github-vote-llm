@@ -174,6 +174,7 @@ import {
   OrganizationWithMembersSchema,
   AppInstallURLResponseSchema,
   AppInstallationStatusSchema,
+  GitHubInstallationRepoListResponseSchema,
   RepoMetaSchema,
   RepositoryListResponseSchema,
   RepositorySchema,
@@ -183,6 +184,7 @@ import {
 
 export type {
   AppInstallationStatus,
+  GitHubInstallationRepo,
   Feature,
   FeatureBuildStatus,
   FeatureComment,
@@ -550,4 +552,16 @@ export async function getGithubAppInstallStatus(orgId: number) {
   return requestWithRefresh(`/organizations/${orgId}/github-app/status`, {
     schema: AppInstallationStatusSchema,
   });
+}
+
+/** Lists repositories the GitHub App can access for this org (installation-scoped). */
+export async function listGithubAppInstallationRepos(
+  orgId: number,
+  page = 1,
+) {
+  const data = await requestWithRefresh(
+    `/organizations/${orgId}/github/repositories?page=${page}`,
+    { schema: GitHubInstallationRepoListResponseSchema },
+  );
+  return data.repositories;
 }

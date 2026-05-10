@@ -12,9 +12,11 @@ import (
 )
 
 const createOrganization = `-- name: CreateOrganization :one
-INSERT INTO organizations (name, slug)
+INSERT INTO
+    organizations (name, slug)
 VALUES ($1, $2)
-RETURNING id,
+RETURNING
+    id,
     name,
     slug,
     created_at,
@@ -48,8 +50,7 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 }
 
 const deleteOrganization = `-- name: DeleteOrganization :exec
-DELETE FROM organizations
-WHERE id = $1
+DELETE FROM organizations WHERE id = $1
 `
 
 func (q *Queries) DeleteOrganization(ctx context.Context, id int64) error {
@@ -58,8 +59,7 @@ func (q *Queries) DeleteOrganization(ctx context.Context, id int64) error {
 }
 
 const deleteOrganizationByID = `-- name: DeleteOrganizationByID :exec
-DELETE FROM organizations
-WHERE id = $1
+DELETE FROM organizations WHERE id = $1
 `
 
 func (q *Queries) DeleteOrganizationByID(ctx context.Context, id int64) error {
@@ -68,13 +68,15 @@ func (q *Queries) DeleteOrganizationByID(ctx context.Context, id int64) error {
 }
 
 const getOrganizationByID = `-- name: GetOrganizationByID :one
-SELECT id,
+SELECT
+    id,
     name,
     slug,
     created_at,
     updated_at
 FROM organizations
-WHERE id = $1
+WHERE
+    id = $1
 `
 
 type GetOrganizationByIDRow struct {
@@ -99,13 +101,15 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id int64) (GetOrganiz
 }
 
 const getOrganizationBySlug = `-- name: GetOrganizationBySlug :one
-SELECT id,
+SELECT
+    id,
     name,
     slug,
     created_at,
     updated_at
 FROM organizations
-WHERE slug = $1
+WHERE
+    slug = $1
 `
 
 type GetOrganizationBySlugRow struct {
@@ -129,15 +133,35 @@ func (q *Queries) GetOrganizationBySlug(ctx context.Context, slug string) (GetOr
 	return i, err
 }
 
+const isOrgMember = `-- name: IsOrgMember :one
+SELECT EXISTS (
+        SELECT 1
+        FROM organization_members
+        WHERE
+            organization_id = $1
+            AND user_id = $2
+    )
+`
+
+type IsOrgMemberParams struct {
+	OrganizationID int64
+	UserID         int64
+}
+
+func (q *Queries) IsOrgMember(ctx context.Context, arg IsOrgMemberParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isOrgMember, arg.OrganizationID, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const listOrganizationsForUser = `-- name: ListOrganizationsForUser :many
-SELECT o.id,
-    o.name,
-    o.slug,
-    o.created_at,
-    o.updated_at
-FROM organizations o
-JOIN organization_members om ON om.organization_id = o.id
-WHERE om.user_id = $1
+SELECT o.id, o.name, o.slug, o.created_at, o.updated_at
+FROM
+    organizations o
+    JOIN organization_members om ON om.organization_id = o.id
+WHERE
+    om.user_id = $1
 ORDER BY o.name
 `
 
@@ -177,9 +201,12 @@ func (q *Queries) ListOrganizationsForUser(ctx context.Context, userID int64) ([
 
 const updateOrganizationByID = `-- name: UpdateOrganizationByID :one
 UPDATE organizations
-SET name = $2
-WHERE id = $1
-RETURNING id,
+SET
+    name = $2
+WHERE
+    id = $1
+RETURNING
+    id,
     name,
     slug,
     created_at,
@@ -214,10 +241,13 @@ func (q *Queries) UpdateOrganizationByID(ctx context.Context, arg UpdateOrganiza
 
 const updateOrganizationSlug = `-- name: UpdateOrganizationSlug :one
 UPDATE organizations
-SET slug = $2,
+SET
+    slug = $2,
     updated_at = now()
-WHERE id = $1
-RETURNING id,
+WHERE
+    id = $1
+RETURNING
+    id,
     name,
     slug,
     created_at,

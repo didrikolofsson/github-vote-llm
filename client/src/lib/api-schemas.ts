@@ -128,6 +128,20 @@ export const AppInstallationStatusSchema = z.object({
   account_type: GithubAccountTypeSchema.optional(),
 });
 
+/** Repositories visible to the org's GitHub App installation (GET .../github/repositories). */
+export const GitHubInstallationRepoSchema = z.object({
+  github_repository_id: z.number(),
+  owner: z.string(),
+  name: z.string(),
+  full_name: z.string(),
+  private: z.boolean(),
+});
+
+export const GitHubInstallationRepoListResponseSchema = z.object({
+  repositories: z.array(GitHubInstallationRepoSchema),
+  has_more: z.boolean(),
+});
+
 // ─── Exported types ───────────────────────────────────────────────────────────
 
 export type Organization = z.infer<typeof OrganizationSchema>;
@@ -146,3 +160,6 @@ export type FeatureComment = z.infer<typeof FeatureCommentSchema>;
 export type FeatureDependency = z.infer<typeof FeatureDependencySchema>;
 export type Roadmap = z.infer<typeof RoadmapSchema>;
 export type AppInstallationStatus = z.infer<typeof AppInstallationStatusSchema>;
+export type GitHubInstallationRepo = z.infer<
+  typeof GitHubInstallationRepoSchema
+>;

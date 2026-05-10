@@ -383,3 +383,58 @@ func ensureLabel(ctx context.Context, client *gh.Client, owner, repo, name, colo
 	})
 	return createErr
 }
+
+func (s *GithubService) ListInstallationRepositories(ctx context.Context, orgID int64, page int64) ([]dtos.GitHubRepository, bool, error) {
+	installation, err := s.q.GetInstallationByOrgID(ctx, orgID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, false, ErrInstallationNotFound
+		}
+		return nil, false, fmt.Errorf("get installation by id: %w", err)
+	}
+
+	if installation.SuspendedAt.Valid {
+		return nil, false, ErrInstallationSuspended
+	}
+
+	client, err := s.appClient.InstallationClient(ctx, installation.GithubInstallationID)
+	if err != nil {
+		// Need a logger on this
+		return nil, false, fmt.Errorf("create installation client: %w", err)
+	}
+
+	if page == 0 {
+		page = 1
+	}
+
+	// Installation tokens must use /installation/repositories, not /user/repos.
+	list, resp, err := client.Apps.ListRepos(ctx, &gh.ListOptions{
+		PerPage: 100,
+		Page:    int(page),
+	})
+	if err != nil {
+		return nil, false, fmt.Errorf("list installation repositories: %w", err)
+	}
+
+	hasMore := resp != nil && resp.NextPage != 0
+	var repos []*gh.Repository
+	if list != nil {
+		repos = list.Repositories
+	}
+
+	return githubReposToDTOs(repos), hasMore, nil
+}
+
+func githubReposToDTOs(repos []*gh.Repository) []dtos.GitHubRepository {
+	out := make([]dtos.GitHubRepository, len(repos))
+	for i, r := range repos {
+		out[i] = dtos.GitHubRepository{
+			GithubRepositoryID: r.GetID(),
+			Owner:              r.GetOwner().GetLogin(),
+			Name:               r.GetName(),
+			FullName:           r.GetFullName(),
+			Private:            r.GetPrivate(),
+		}
+	}
+	return out
+}
