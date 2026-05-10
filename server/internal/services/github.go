@@ -304,6 +304,7 @@ func (s *GithubService) CloneRepoToWorkspace(ctx context.Context, runID int64) e
 	cloneURL := fmt.Sprintf("https://x-access-token:%s@github.com/%s/%s.git",
 		token, run.RepositoryOwner, run.RepositoryName)
 
+	//nolint:gosec // git clone URL embeds installation-scoped token; destination is workspace-bound repoDir.
 	cmd := exec.CommandContext(ctx, "git", "clone", cloneURL, repoDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git clone: %w: %s", err, out)
@@ -324,6 +325,7 @@ func (s *GithubService) PushBranch(ctx context.Context, orgID int64, worktreeDir
 	}
 
 	remote := fmt.Sprintf("https://x-access-token:%s@github.com/%s/%s.git", token, owner, repo)
+	//nolint:gosec // git arguments come from server-controlled workspace paths and GitHub metadata.
 	cmd := exec.CommandContext(ctx, "git", "-C", worktreeDir, "push", remote, branch)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git push: %w: %s", err, out)

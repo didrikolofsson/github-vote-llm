@@ -41,10 +41,11 @@ type runLog struct {
 func (rl *runLog) writeLine(stream, line string) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
-	fmt.Fprintf(rl.file, "[%s] %s\n", stream, line)
+	fmt.Fprintf(rl.file, "[%s] %s\n", stream, line) //nolint:errcheck
 }
 
 func (r *ClaudeRunner) Run(ctx context.Context, prompt string, workDir string) error {
+	//nolint:gosec // Fixed binary "claude"; prompt is supplied by authenticated API flows.
 	cmd := exec.CommandContext(ctx, "claude", "-p", prompt, "--verbose", "--dangerously-skip-permissions")
 	cmd.Env = append(os.Environ(), "ANTHROPIC_API_KEY="+r.apiKey)
 	cmd.Dir = workDir
@@ -62,11 +63,12 @@ func (r *ClaudeRunner) Run(ctx context.Context, prompt string, workDir string) e
 	//   tail -f <workDir>.log
 	logPath := workDir + ".log"
 	var rl *runLog
+	//nolint:gosec // Log path is workspace-relative (workDir + suffix), not user-controlled arbitrary paths.
 	if f, err := os.Create(logPath); err != nil {
 		r.log.Warnw("failed to create run log file", "path", logPath, "err", err)
 	} else {
 		rl = &runLog{file: f}
-		defer f.Close()
+		defer f.Close() //nolint:errcheck
 		r.log.Infow("claude start", "dir", workDir, "log", logPath, "prompt_chars", len(prompt))
 	}
 

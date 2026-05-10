@@ -16,7 +16,7 @@ func New(
 ) *gin.Engine {
 	router := gin.New()
 
-	router.SetTrustedProxies(nil)
+	_ = router.SetTrustedProxies(nil)
 	router.Use(middleware.AddRequestID)
 	router.Use(middleware.LogRequests(logger))
 

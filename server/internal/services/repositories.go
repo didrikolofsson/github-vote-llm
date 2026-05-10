@@ -77,11 +77,11 @@ func (s *RepositoriesService) GetRepositoryMeta(ctx context.Context, repoID int6
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer tx.Rollback(ctx) //nolint:errcheck
 
 	qtx := s.q.WithTx(tx)
 
-	var description string = ""
+	description := ""
 	repo, err := qtx.GetRepository(ctx, repoID)
 	if err != nil {
 		return nil, err

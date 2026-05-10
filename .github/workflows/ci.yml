@@ -25,6 +25,12 @@ jobs:
         with:
           version: 10.18.3
 
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
+          working-directory: server
+
       - name: Test
         run: pnpm test-server
 
