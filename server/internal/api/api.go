@@ -67,6 +67,9 @@ func New(
 	organizations.GET("/:id/github-app/install-url", h.Github.GetAppInstallURL)
 	organizations.GET("/:id/github-app/status", h.Github.GetAppInstallationStatus)
 
+	// Org-scoped SSE — auth via ?access_token= since EventSource cannot send headers
+	api.GET("/organizations/:id/events", middleware.RequireAuthFromQueryOrHeader(jwtSecret), h.Github.Events)
+
 	// Organization repositories
 	organizations.GET("/:id/repositories", h.Repository.List)
 	organizations.POST("/:id/repositories", h.Repository.Add)

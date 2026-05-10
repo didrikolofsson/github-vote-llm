@@ -14,6 +14,7 @@ import (
 	"github.com/didrikolofsson/github-vote-llm/internal/api/middleware"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/request"
 	"github.com/didrikolofsson/github-vote-llm/internal/dtos"
+	"github.com/didrikolofsson/github-vote-llm/internal/hub"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
 	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/gin-gonic/gin"
@@ -22,11 +23,12 @@ import (
 type GithubHandlers struct {
 	s             *services.GithubService
 	l             *logger.Logger
+	hub           hub.Hub
 	webhookSecret string
 }
 
-func NewGithubHandlers(s *services.GithubService, l *logger.Logger, webhookSecret string) *GithubHandlers {
-	return &GithubHandlers{s: s, l: l, webhookSecret: webhookSecret}
+func NewGithubHandlers(s *services.GithubService, l *logger.Logger, h hub.Hub, webhookSecret string) *GithubHandlers {
+	return &GithubHandlers{s: s, l: l, hub: h, webhookSecret: webhookSecret}
 }
 
 // GetAppInstallURL returns the GitHub App installation URL for the given org.
@@ -197,6 +199,38 @@ const (
 	WebhookEventUnsuspend    WebhookEvent = "unsuspend"
 	WebhookEventDeleted      WebhookEvent = "deleted"
 )
+
+// Events streams installation-status events for an org over Server-Sent Events.
+// EventSource cannot send a Bearer header, so this route must use
+// middleware.RequireAuthFromQueryOrHeader (token via ?access_token=).
+func (h *GithubHandlers) Events(c *gin.Context) {
+	orgID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization id"})
+		return
+	}
+
+	ch := h.hub.SubscribeOrg(orgID)
+	defer h.hub.UnsubscribeOrg(orgID, ch)
+
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+
+	c.SSEvent("event", "connected")
+	c.Writer.Flush()
+
+	for {
+		select {
+		case <-c.Request.Context().Done():
+			return
+		case msg := <-ch:
+			c.SSEvent("event", msg)
+			c.Writer.Flush()
+		}
+	}
+}
 
 func validateWebhookEvent(event string) (WebhookEvent, error) {
 	switch event {

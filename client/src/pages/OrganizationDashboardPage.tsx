@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOrgSetup } from "@/hooks/use-org-setup";
+import { useOrgInstallationEvents } from "@/hooks/use-org-installation-events";
 import {
   listMyOrganizations,
   listOrgMembers,
@@ -68,6 +69,8 @@ export default function OrganizationDashboardPage() {
     isLoading: appLoading,
   } = useOrgSetup(orgId);
 
+  useOrgInstallationEvents(orgId);
+
   if (orgsLoading) {
     return (
       <div className="flex flex-col gap-6">
@@ -88,14 +91,14 @@ export default function OrganizationDashboardPage() {
         "animate-slide-up flex flex-col gap-8 p-8 max-w-[1280px] mx-auto w-full",
       )}
     >
-      <SetupBanner orgId={orgId} />
-
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Overview of {org?.name ?? "your organization"}
         </p>
       </div>
+
+      <SetupBanner orgId={orgId} />
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

@@ -64,6 +64,40 @@ func RequireAuth(jwtSecret string) gin.HandlerFunc {
 	}
 }
 
+// RequireAuthFromQueryOrHeader is a variant of RequireAuth that also accepts the JWT
+// via the `access_token` query parameter. Use only for SSE/EventSource endpoints, since
+// EventSource cannot send custom Authorization headers.
+func RequireAuthFromQueryOrHeader(jwtSecret string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var tokenStr string
+		if authHeader := c.GetHeader("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+			tokenStr = strings.TrimPrefix(authHeader, "Bearer ")
+		} else {
+			tokenStr = c.Query("access_token")
+		}
+		if tokenStr == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing or invalid authorization"})
+			return
+		}
+
+		claims := &dtos.Claims{}
+		token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+			}
+			return []byte(jwtSecret), nil
+		})
+		if err != nil || !token.Valid {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+			return
+		}
+
+		c.Set("user_id", claims.UserID)
+		c.Set("email", claims.Email)
+		c.Next()
+	}
+}
+
 // GetUserID returns the user_id from context (set by RequireAuth). ok is false if not present.
 func GetUserID(c *gin.Context) (int64, bool) {
 	v, exists := c.Get("user_id")

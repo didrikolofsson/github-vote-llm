@@ -14,6 +14,7 @@ import (
 	appgithub "github.com/didrikolofsson/github-vote-llm/internal/github"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
+	"github.com/didrikolofsson/github-vote-llm/internal/hub"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/golang-jwt/jwt/v5"
 	gh "github.com/google/go-github/v84/github"
@@ -38,6 +39,7 @@ type GithubService struct {
 	q         *store.Queries
 	env       *config.Environment
 	appClient *appgithub.AppClient
+	hub       hub.Hub
 }
 
 type GithubServiceDeps struct {
@@ -45,6 +47,7 @@ type GithubServiceDeps struct {
 	Queries   *store.Queries
 	Env       *config.Environment
 	AppClient *appgithub.AppClient
+	Hub       hub.Hub
 }
 
 func NewGithubService(deps GithubServiceDeps) *GithubService {
@@ -53,6 +56,7 @@ func NewGithubService(deps GithubServiceDeps) *GithubService {
 		q:         deps.Queries,
 		env:       deps.Env,
 		appClient: deps.AppClient,
+		hub:       deps.Hub,
 	}
 }
 
@@ -130,6 +134,10 @@ func (s *GithubService) HandleAppInstallCallback(ctx context.Context, installati
 		return 0, fmt.Errorf("upsert installation: %w", err)
 	}
 
+	if !suspendedAt.Valid {
+		s.hub.PublishOrg(orgID, hub.EventInstallationActive)
+	}
+
 	return orgID, nil
 }
 
@@ -145,6 +153,8 @@ func (s *GithubService) HandleAppUpdateCallback(ctx context.Context, installatio
 	if installation.SuspendedAt.Valid {
 		return 0, ErrInstallationSuspended
 	}
+
+	s.hub.PublishOrg(installation.OrganizationID, hub.EventInstallationActive)
 
 	return installation.OrganizationID, nil
 }
@@ -223,22 +233,44 @@ type InstallationWebhookPayload struct {
 // HandleInstallationWebhook syncs installation state from GitHub webhook events.
 func (s *GithubService) HandleInstallationWebhook(ctx context.Context, payload InstallationWebhookPayload) error {
 	installationID := payload.Installation.ID
+
+	existing, err := s.q.GetInstallationByInstallationID(ctx, installationID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return fmt.Errorf("get installation by id: %w", err)
+	}
+	orgID := existing.OrganizationID
+
 	switch payload.Action {
 	case "deleted":
-		return s.q.DeleteInstallationByInstallationID(ctx, installationID)
+		if err := s.q.DeleteInstallationByInstallationID(ctx, installationID); err != nil {
+			return err
+		}
+		s.hub.PublishOrg(orgID, hub.EventInstallationRemoved)
+		return nil
 
 	case "suspend":
 		t := pgtype.Timestamptz{Time: time.Now(), Valid: true}
-		return s.q.SetInstallationSuspendedByInstallationID(ctx, store.SetInstallationSuspendedByInstallationIDParams{
+		if err := s.q.SetInstallationSuspendedByInstallationID(ctx, store.SetInstallationSuspendedByInstallationIDParams{
 			GithubInstallationID: installationID,
 			SuspendedAt:          t,
-		})
+		}); err != nil {
+			return err
+		}
+		s.hub.PublishOrg(orgID, hub.EventInstallationSuspended)
+		return nil
 
 	case "unsuspend":
-		return s.q.SetInstallationSuspendedByInstallationID(ctx, store.SetInstallationSuspendedByInstallationIDParams{
+		if err := s.q.SetInstallationSuspendedByInstallationID(ctx, store.SetInstallationSuspendedByInstallationIDParams{
 			GithubInstallationID: installationID,
 			SuspendedAt:          pgtype.Timestamptz{Valid: false},
-		})
+		}); err != nil {
+			return err
+		}
+		s.hub.PublishOrg(orgID, hub.EventInstallationActive)
+		return nil
 	}
 	// "created" and "new_permissions_accepted" are handled by the redirect callback flow.
 	return nil

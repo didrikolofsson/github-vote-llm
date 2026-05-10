@@ -42,10 +42,12 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useOrgSetup } from "@/hooks/use-org-setup";
+import { useOrgInstallationEvents } from "@/hooks/use-org-installation-events";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Github, MoreHorizontal } from "lucide-react";
+import { ExternalLink, Github, MoreHorizontal, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { userRoleToBadgeColor } from "@/lib/utils";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function SettingsPage() {
   return (
@@ -85,6 +87,8 @@ function OrganizationTab() {
 
   const org = orgs[0];
   const orgId = org?.id;
+
+  useOrgInstallationEvents(orgId);
 
   const [orgName, setOrgName] = useState(org?.name ?? "");
   const [orgSlug, setOrgSlug] = useState(org?.slug ?? "");
@@ -454,11 +458,26 @@ function GithubAppCard({ orgId }: { orgId: number | undefined }) {
   const { installed, isSuspended, isLoading } = useOrgSetup(orgId);
   const { installing, handleInstall } = useInstallGithubApp(orgId);
 
-  if (isLoading || installed || isSuspended) return null;
+  // if (isLoading || installed || isSuspended) return null;
+
+  if (isLoading) return <Skeleton className="h-10 w-full" />;
+  if (installed) return null
+
+  if (isSuspended) return (
+    <Alert
+      variant="warning"
+      className="mb-4"
+    >
+      <TriangleAlert className="size-4" />
+      <AlertDescription>
+        The GitHub App is suspended on GitHub. Agent runs are disabled until it is unsuspended.
+      </AlertDescription>
+    </Alert>
+  )
 
   return (
     <Card variant="cta" gradient={"warning"}>
-      <CardContent className="flex items-center justify-between gap-6 py-5">
+      <CardContent className="flex items-center justify-between gap-6 py-2">
         <div className="flex items-start gap-3">
           <Github className="size-5 mt-0.5 shrink-0 text-foreground" />
           <div>

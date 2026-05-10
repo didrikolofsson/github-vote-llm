@@ -16,6 +16,7 @@ import SettingsPage from "./pages/SettingsPage";
 import CompletePage from "./pages/setup/CompletePage";
 import PopupCompletePage from "./pages/setup/PopupCompletePage";
 import Layout from "./components/Layout";
+import { Toaster } from "./components/ui/sonner";
 
 function AppRoutes() {
   return (
@@ -77,11 +78,14 @@ export default function App() {
 
   if (!isAuthenticated) {
     return (
-      <BrowserRouter>
-        <Routes>
-          <Route path="*" element={<LoginPage />} />
-        </Routes>
-      </BrowserRouter>
+      <>
+        <BrowserRouter>
+          <Routes>
+            <Route path="*" element={<LoginPage />} />
+          </Routes>
+        </BrowserRouter>
+        <Toaster position="top-center"/>
+      </>
     );
   }
 
@@ -95,26 +99,32 @@ export default function App() {
 
   if (!hasOrgs) {
     return (
-      <BrowserRouter>
-        <Routes>
-          <Route
-            path="*"
-            element={
-              <CreateOrganizationPage
-                onCreated={() => {
-                  setHasOrgs(true);
-                }}
-              />
-            }
-          />
-        </Routes>
-      </BrowserRouter>
+      <>
+        <BrowserRouter>
+          <Routes>
+            <Route
+              path="*"
+              element={
+                <CreateOrganizationPage
+                  onCreated={() => {
+                    setHasOrgs(true);
+                  }}
+                />
+              }
+            />
+          </Routes>
+        </BrowserRouter>
+        <Toaster position="top-center"/>
+      </>
     );
   }
 
   return (
-    <BrowserRouter>
-      <AppRoutes />
-    </BrowserRouter>
+    <>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+      <Toaster position="top-center"/>
+    </>
   );
 }

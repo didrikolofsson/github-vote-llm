@@ -45,6 +45,7 @@ func New(
 			Queries:   deps.Queries,
 			Env:       deps.Env,
 			AppClient: deps.AppClient,
+			Hub:       deps.Hub,
 		}),
 		RepositoriesService: NewRepositoriesService(deps.DB, deps.Queries),
 		MembersService:      NewMembersService(deps.Queries),
