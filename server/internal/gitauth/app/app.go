@@ -56,7 +56,7 @@ func (c *GithubAppClient) GetInstallation(ctx context.Context, appID, privateKey
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("github api: unexpected status %d", resp.StatusCode)

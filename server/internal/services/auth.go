@@ -41,7 +41,7 @@ func (s *AuthService) Authorize(ctx context.Context, email, password, codeChalle
 	if err != nil {
 		return "", err
 	}
-	defer tx.Rollback(ctx)
+	defer tx.Rollback(ctx) //nolint:errcheck
 
 	qtx := s.q.WithTx(tx)
 	user, err := qtx.GetUserByEmailWithPassword(ctx, email)
@@ -81,7 +81,7 @@ func (s *AuthService) ExchangeCode(ctx context.Context, code, codeVerifier, redi
 	if err != nil {
 		return "", "", err
 	}
-	defer tx.Rollback(ctx)
+	defer tx.Rollback(ctx) //nolint:errcheck
 
 	qtx := s.q.WithTx(tx)
 	authCode, err := qtx.GetAuthCode(ctx, code)

@@ -51,7 +51,7 @@ func storeToRunDTO(run store.FeatureRun) *dtos.RunDTO {
 func CreateSandboxDir(workspace string, organizationID int64, repositoryID int64) (string, error) {
 	workspaceTrimmed := strings.TrimSuffix(workspace, "/")
 	dir := filepath.Join(workspaceTrimmed, fmt.Sprintf("%d/%d", organizationID, repositoryID))
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return "", err
 	}
 	return dir, nil
@@ -62,7 +62,7 @@ func (s *RunService) CreateRun(ctx context.Context, p CreateRunParams) (*dtos.Ru
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer tx.Rollback(ctx) //nolint:errcheck
 	qtx := s.q.WithTx(tx)
 
 	repo, err := qtx.GetRepositoryByFeatureID(ctx, p.FeatureID)
@@ -101,13 +101,14 @@ func (s *RunService) CreateRun(ctx context.Context, p CreateRunParams) (*dtos.Ru
 	return storeToRunDTO(run), nil
 }
 
+//nolint:gosec // Git subprocess arguments use server-managed clone dirs and internal branch names only.
 func prepareWorktree(ctx context.Context, repoDir, worktreeDir, branch string) error {
 	fetch := exec.CommandContext(ctx, "git", "-C", repoDir, "fetch", "origin", "main")
 	if out, err := fetch.CombinedOutput(); err != nil {
 		return fmt.Errorf("git fetch: %w: %s", err, out)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(worktreeDir), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(worktreeDir), 0750); err != nil {
 		return err
 	}
 
@@ -130,6 +131,7 @@ func prepareWorktree(ctx context.Context, repoDir, worktreeDir, branch string) e
 	return nil
 }
 
+//nolint:gosec // Git runs inside an isolated worktree; commit message is truncated server-side metadata.
 func commitWorktreeChanges(ctx context.Context, worktreeDir, prompt string) error {
 	add := exec.CommandContext(ctx, "git", "-C", worktreeDir, "add", "-A")
 	if out, err := add.CombinedOutput(); err != nil {

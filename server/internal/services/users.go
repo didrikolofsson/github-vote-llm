@@ -176,7 +176,7 @@ func (s *UserService) DeleteUser(ctx context.Context, requestingUserID, targetUs
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer tx.Rollback(ctx) //nolint:errcheck
 
 	qtx := s.q.WithTx(tx)
 	user, err := qtx.GetUserByID(ctx, targetUserID)

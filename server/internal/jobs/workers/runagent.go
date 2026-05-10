@@ -6,14 +6,12 @@ import (
 
 	"github.com/didrikolofsson/github-vote-llm/internal/jobs/args"
 	"github.com/didrikolofsson/github-vote-llm/internal/services"
-	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 )
 
 type RunAgentWorker struct {
 	river.WorkerDefaults[args.RunAgentArgs]
 	svc *services.RunService
-	jc  *river.Client[pgx.Tx]
 }
 
 func (w *RunAgentWorker) Timeout(*river.Job[args.RunAgentArgs]) time.Duration {

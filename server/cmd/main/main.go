@@ -28,7 +28,7 @@ import (
 
 func main() {
 	appLogger := logger.New().Named("main")
-	defer appLogger.Sync()
+	defer appLogger.Sync() //nolint:errcheck
 
 	if gin.Mode() == gin.DebugMode {
 		if err := godotenv.Load(); err != nil {
@@ -83,14 +83,15 @@ func main() {
 	}
 
 	apiLogger := logger.New().Named("api")
-	defer apiLogger.Sync()
+	defer apiLogger.Sync() //nolint:errcheck
 
 	h := handlers.New(handlers.NewHandlersDeps{Services: s, Logger: apiLogger, Hub: eventHub, Env: env})
 	router := api.New(h, apiLogger, env.JWT_SECRET)
 
 	srv := &http.Server{
-		Addr:    ":" + env.PORT,
-		Handler: router,
+		Addr:              ":" + env.PORT,
+		Handler:           router,
+		ReadHeaderTimeout: 30 * time.Second,
 	}
 
 	go func() {

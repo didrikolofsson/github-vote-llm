@@ -72,7 +72,7 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, params Cre
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer tx.Rollback(ctx) //nolint:errcheck
 
 	qtx := s.q.WithTx(tx)
 
@@ -113,7 +113,7 @@ func (s *OrganizationService) GetOrganizationByID(ctx context.Context, organizat
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer tx.Rollback(ctx) //nolint:errcheck
 
 	qtx := s.q.WithTx(tx)
 
