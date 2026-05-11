@@ -43,6 +43,7 @@ func New(
 		AppClient: deps.AppClient,
 		Hub:       deps.Hub,
 	})
+	runLogHub := hub.NewRunLogHub()
 	return &Services{
 		UserService:         NewUserService(deps.DB, deps.Queries),
 		AuthService:         NewAuthService(deps.DB, deps.Queries, deps.Env.JWT_SECRET),
@@ -54,7 +55,7 @@ func New(
 			AppClient: deps.AppClient,
 		}),
 		MembersService:  NewMembersService(deps.Queries),
-		RunService:      NewRunService(deps.DB, deps.Queries, deps.Env, deps.JobClient, deps.AgentRunner, deps.Hub, githubSvc),
+		RunService:      NewRunService(deps.DB, deps.Queries, deps.Env, deps.JobClient, deps.AgentRunner, deps.Hub, githubSvc, runLogHub),
 		FeaturesService: NewFeaturesService(deps.DB, deps.Queries, deps.Hub),
 		PortalService:   NewPortalService(deps.DB, deps.Queries),
 	}

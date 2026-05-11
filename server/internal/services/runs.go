@@ -42,11 +42,16 @@ type RunService struct {
 	env       *config.Environment
 	runner    *claude.ClaudeRunner
 	hub       hub.Hub
+	logHub    *hub.RunLogHub
 	githubSvc *GithubService
 }
 
-func NewRunService(db *pgxpool.Pool, q *store.Queries, env *config.Environment, jc *river.Client[pgx.Tx], runner *claude.ClaudeRunner, h hub.Hub, githubSvc *GithubService) *RunService {
-	return &RunService{db: db, q: q, env: env, jc: jc, runner: runner, hub: h, githubSvc: githubSvc}
+func NewRunService(db *pgxpool.Pool, q *store.Queries, env *config.Environment, jc *river.Client[pgx.Tx], runner *claude.ClaudeRunner, h hub.Hub, githubSvc *GithubService, logHub *hub.RunLogHub) *RunService {
+	return &RunService{db: db, q: q, env: env, jc: jc, runner: runner, hub: h, logHub: logHub, githubSvc: githubSvc}
+}
+
+func (s *RunService) LogHub() *hub.RunLogHub {
+	return s.logHub
 }
 
 func storeToRunDTO(run store.FeatureRun) *dtos.RunDTO {
@@ -290,11 +295,17 @@ func (s *RunService) RunAgent(ctx context.Context, runID int64) error {
 		_ = s.q.UpdateRunPID(storeCtx, store.UpdateRunPIDParams{Pid: &pid32, ID: runID})
 	}
 
-	if err := s.runner.Run(ctx, run.Prompt, worktreeDir, onStart); err != nil {
+	onLine := func(stream, line string) {
+		s.logHub.Publish(runID, fmt.Sprintf("[%s] %s", stream, line))
+	}
+
+	runErr := s.runner.Run(ctx, run.Prompt, worktreeDir, onStart, onLine)
+	s.logHub.Close(runID)
+	if runErr != nil {
 		if statusErr := s.updateRunStatus(ctx, runID, run.RepositoryID, store.FeatureRunStatusFailed); statusErr != nil {
 			return statusErr
 		}
-		return fmt.Errorf("failed to run agent: %w", err)
+		return fmt.Errorf("failed to run agent: %w", runErr)
 	}
 
 	if err := commitWorktreeChanges(ctx, worktreeDir, run.Prompt); err != nil {

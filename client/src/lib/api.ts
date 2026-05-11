@@ -566,6 +566,12 @@ export async function deleteRun(runId: number) {
   });
 }
 
+export async function getRun(runId: number) {
+  return requestWithRefresh(`/runs/${runId}`, {
+    schema: RunSchema,
+  });
+}
+
 // ─── GitHub App ───────────────────────────────────────────────────────────────
 
 export async function getGithubAppInstallURL(orgId: number) {

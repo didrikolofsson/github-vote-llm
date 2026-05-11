@@ -44,7 +44,7 @@ func (rl *runLog) writeLine(stream, line string) {
 	fmt.Fprintf(rl.file, "[%s] %s\n", stream, line) //nolint:errcheck
 }
 
-func (r *ClaudeRunner) Run(ctx context.Context, prompt string, workDir string, onStart func(pid int)) error {
+func (r *ClaudeRunner) Run(ctx context.Context, prompt string, workDir string, onStart func(pid int), onLine func(stream, line string)) error {
 	//nolint:gosec // Fixed binary "claude"; prompt is supplied by authenticated API flows.
 	cmd := exec.CommandContext(ctx, "claude", "-p", prompt, "--verbose", "--dangerously-skip-permissions")
 	cmd.Env = append(os.Environ(), "ANTHROPIC_API_KEY="+r.apiKey)
@@ -88,8 +88,8 @@ func (r *ClaudeRunner) Run(ctx context.Context, prompt string, workDir string, o
 
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go r.streamLines(&wg, stdout, "stdout", rl)
-	go r.streamLines(&wg, stderr, "stderr", rl)
+	go r.streamLines(&wg, stdout, "stdout", rl, onLine)
+	go r.streamLines(&wg, stderr, "stderr", rl, onLine)
 	wg.Wait()
 
 	err = cmd.Wait()
@@ -97,7 +97,7 @@ func (r *ClaudeRunner) Run(ctx context.Context, prompt string, workDir string, o
 	return err
 }
 
-func (r *ClaudeRunner) streamLines(wg *sync.WaitGroup, rc io.ReadCloser, stream string, rl *runLog) {
+func (r *ClaudeRunner) streamLines(wg *sync.WaitGroup, rc io.ReadCloser, stream string, rl *runLog, onLine func(stream, line string)) {
 	defer wg.Done()
 	scanner := bufio.NewScanner(rc)
 	scanner.Buffer(make([]byte, 64*1024), BUFFER_SIZE)
@@ -106,6 +106,9 @@ func (r *ClaudeRunner) streamLines(wg *sync.WaitGroup, rc io.ReadCloser, stream 
 		r.log.Infow(line, "stream", stream)
 		if rl != nil {
 			rl.writeLine(stream, line)
+		}
+		if onLine != nil {
+			onLine(stream, line)
 		}
 	}
 	if err := scanner.Err(); err != nil {

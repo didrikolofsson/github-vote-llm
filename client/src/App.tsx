@@ -12,6 +12,7 @@ import CreateOrganizationPage from "./pages/CreateOrganizationPage";
 import OrganizationDashboardPage from "./pages/OrganizationDashboardPage";
 import RepositoriesPage from "./pages/RepositoriesPage";
 import RepositoryDetailPage from "./pages/RepositoryDetailPage";
+import RunDetailPage from "./pages/RunDetailPage";
 import SettingsPage from "./pages/SettingsPage";
 import CompletePage from "./pages/setup/CompletePage";
 import PopupCompletePage from "./pages/setup/PopupCompletePage";
@@ -32,6 +33,10 @@ function AppRoutes() {
         <Route
           path="repositories/:repoId"
           element={<RepositoryDetailPage />}
+        />
+        <Route
+          path="repositories/:repoId/runs/:runId"
+          element={<RunDetailPage />}
         />
         <Route path="settings" element={<SettingsPage />} />
       </Route>

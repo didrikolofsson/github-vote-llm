@@ -21,8 +21,6 @@ import {
   listOrgRepositories,
   removeRepository,
   updateRepositoryPortalPublic,
-  cancelRun,
-  deleteRun,
 } from "@/lib/api";
 import type { Feature, Run, RunStatus } from "@/lib/api-schemas";
 import { useOrgSetup } from "@/hooks/use-org-setup";
@@ -45,16 +43,21 @@ import {
   Route,
   Sparkles,
   Trash2,
-  X,
 } from "lucide-react";
-import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 export default function RepositoryDetailPage() {
   const queryClient = useQueryClient();
   const { repoId } = useParams<{ repoId: string }>();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("details");
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") ?? "details");
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab) setActiveTab(tab);
+  }, [searchParams]);
   const repoIdNum = repoId ? parseInt(repoId, 10) : undefined;
 
   const { data: orgs = [] } = useQuery({
@@ -485,7 +488,6 @@ function RunsLedger({
   repoId: number | undefined;
   onOpenRoadmap: () => void;
 }) {
-  const queryClient = useQueryClient();
   const featureById = new Map(features.map((feature) => [feature.id, feature]));
   const counts = runs.reduce<Record<RunStatus, number>>(
     (acc, run) => {
@@ -494,24 +496,6 @@ function RunsLedger({
     },
     { pending: 0, running: 0, completed: 0, failed: 0, cancelled: 0 },
   );
-
-  const cancelMutation = useMutation({
-    mutationFn: (runId: number) => cancelRun(runId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["repositories", repoId, "runs"],
-      });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (runId: number) => deleteRun(runId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["repositories", repoId, "runs"],
-      });
-    },
-  });
 
   if (loading) {
     return (
@@ -588,11 +572,8 @@ function RunsLedger({
               <RunRow
                 key={run.id}
                 run={run}
+                repoId={repoId}
                 feature={featureById.get(run.feature_id)}
-                onCancel={() => cancelMutation.mutate(run.id)}
-                isCancelling={cancelMutation.isPending}
-                onDelete={() => deleteMutation.mutate(run.id)}
-                isDeleting={deleteMutation.isPending}
               />
             ))}
           </div>
@@ -604,25 +585,20 @@ function RunsLedger({
 
 function RunRow({
   run,
+  repoId,
   feature,
-  onCancel,
-  isCancelling,
-  onDelete,
-  isDeleting,
 }: {
   run: Run;
+  repoId: number | undefined;
   feature: Feature | undefined;
-  onCancel: () => void;
-  isCancelling: boolean;
-  onDelete: () => void;
-  isDeleting: boolean;
 }) {
   const meta = RUN_STATUS_META[run.status];
-  const canCancel = run.status === "pending" || run.status === "running";
-  const canDelete = run.status === "cancelled" || run.status === "failed";
 
   return (
-    <div className="group grid gap-4 p-4 transition-colors hover:bg-muted/30 lg:grid-cols-[1fr_180px_200px] lg:items-center">
+    <Link
+      to={`/repositories/${repoId}/runs/${run.id}`}
+      className="group grid gap-4 p-4 transition-colors hover:bg-muted/30 lg:grid-cols-[1fr_180px_200px] lg:items-center"
+    >
       <div className="min-w-0">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <Badge color={meta.color} small>
@@ -648,53 +624,16 @@ function RunRow({
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <ListChecks className="size-3.5 shrink-0" />
           <span>
-            {run.status === "completed" && run.pr_url ? (
-              <a
-                href={run.pr_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-info hover:underline inline-flex items-center gap-1"
-              >
-                View PR
-                <ArrowUpRight className="size-3" />
-              </a>
-            ) : run.completed_at ? (
-              `Finished ${formatRunDate(run.completed_at)}`
-            ) : run.status === "running" ? (
-              "Agent in progress"
-            ) : run.status === "cancelled" ? (
-              "Cancelled"
-            ) : (
-              "Awaiting result"
-            )}
+            {run.completed_at
+              ? `Finished ${formatRunDate(run.completed_at)}`
+              : run.status === "running"
+                ? "Agent in progress"
+                : "Awaiting result"}
           </span>
         </div>
-        {canCancel && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-6 shrink-0 text-muted-foreground hover:text-destructive"
-            onClick={onCancel}
-            disabled={isCancelling}
-            title="Cancel run"
-          >
-            <X className="size-3.5" />
-          </Button>
-        )}
-        {canDelete && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-6 shrink-0 text-muted-foreground hover:text-destructive"
-            onClick={onDelete}
-            disabled={isDeleting}
-            title="Delete run"
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        )}
+        <ArrowUpRight className="size-3.5 shrink-0 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
       </div>
-    </div>
+    </Link>
   );
 }
 

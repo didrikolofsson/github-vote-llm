@@ -118,6 +118,8 @@ func New(
 	// Run management
 	runs := api.Group("/runs/:runId")
 	runs.Use(middleware.RequireAuth(deps.JwtSecret))
+	runs.GET("", deps.Handlers.Runs.Get)
+	runs.GET("/logs", deps.Handlers.Runs.Logs)
 	runs.POST("/cancel", deps.Handlers.Runs.Cancel)
 	runs.DELETE("", deps.Handlers.Runs.Delete)
 
