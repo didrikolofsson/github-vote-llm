@@ -31,3 +31,6 @@ lint:
 lint-fix:
 	go build ./...
 	golangci-lint run --fix
+
+ngrok:
+	ngrok http 8080
