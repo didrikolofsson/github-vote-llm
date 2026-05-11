@@ -681,40 +681,48 @@ export function RoadmapCanvas({ repoId, orgId }: RoadmapCanvasProps) {
 
   return (
     <>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={NODE_TYPES}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeDragStop={onNodeDragStop}
-        onNodeClick={onNodeClick}
-        onConnect={onConnect}
-        fitView
-        fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
-        minZoom={0.2}
-        maxZoom={2}
-        deleteKeyCode="Delete"
-        className="bg-muted/20"
-      >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={24}
-          size={1}
-          color="var(--muted-foreground)"
-        />
-        <Panel position="top-left">
-          <div className="pointer-events-none flex items-center gap-2 rounded-xl border border-border bg-background/90 px-3 py-2 text-xs text-muted-foreground shadow-sm backdrop-blur">
-            <Compass className="size-3.5" />
-            <span className="font-mono tracking-[0.18em] uppercase">
-              Feature map
-            </span>
-          </div>
-        </Panel>
+      <div className="relative h-full">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={NODE_TYPES}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeDragStop={onNodeDragStop}
+          onNodeClick={onNodeClick}
+          onConnect={onConnect}
+          fitView
+          fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
+          minZoom={0.2}
+          maxZoom={2}
+          deleteKeyCode="Delete"
+          className="h-full bg-muted/20"
+        >
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={24}
+            size={1}
+            color="var(--muted-foreground)"
+          />
+          <Panel position="top-left">
+            <div className="pointer-events-none flex items-center gap-2 rounded-xl border border-border bg-background/90 px-3 py-2 text-xs text-muted-foreground shadow-sm backdrop-blur">
+              <Compass className="size-3.5" />
+              <span className="font-mono tracking-[0.18em] uppercase">
+                Feature map
+              </span>
+            </div>
+          </Panel>
+          <CanvasToolbar
+            onAdd={() => setAddOpen(true)}
+            onResetLayout={handleResetLayout}
+            resetting={resetting}
+          />
+        </ReactFlow>
+
         {nodes.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="relative max-w-sm rounded-2xl border border-border bg-background/90 p-6 text-center shadow-lg backdrop-blur">
-              <div className="absolute inset-x-10 -top-8 h-16 rounded-full bg-info/15 blur-2xl" />
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+            <div className="absolute h-32 w-[420px] rounded-full bg-info/15 blur-3xl" />
+            <div className="pointer-events-auto relative max-w-sm rounded-2xl border border-border bg-background p-6 text-center shadow-lg">
               <div className="relative mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl border border-border bg-muted">
                 <MapPinned className="size-5 text-muted-foreground" />
               </div>
@@ -736,12 +744,7 @@ export function RoadmapCanvas({ repoId, orgId }: RoadmapCanvasProps) {
             </div>
           </div>
         )}
-        <CanvasToolbar
-          onAdd={() => setAddOpen(true)}
-          onResetLayout={handleResetLayout}
-          resetting={resetting}
-        />
-      </ReactFlow>
+      </div>
 
       <FeatureDrawer
         repoId={repoId}
