@@ -96,6 +96,7 @@ func New(
 	repos.Use(middleware.RequireAuth(deps.JwtSecret))
 	repos.GET("/roadmap", deps.Handlers.Feature.GetRoadmap)
 	repos.GET("/meta", deps.Handlers.Repository.GetRepoMeta)
+	repos.GET("/runs", deps.Handlers.Runs.ListByRepository)
 	repos.GET("/features", deps.Handlers.Feature.ListFeatures)
 	repos.GET("/features/:featureId", deps.Handlers.Feature.GetFeature)
 	repos.POST("/features", deps.Handlers.Feature.CreateFeature)

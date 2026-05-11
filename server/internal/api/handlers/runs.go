@@ -19,6 +19,24 @@ func NewRunsHandlers(s *services.RunService, l *logger.Logger) *RunsHandlers {
 	return &RunsHandlers{s: s, l: l}
 }
 
+func (h *RunsHandlers) ListByRepository(c *gin.Context) {
+	repoID, err := strconv.ParseInt(c.Param("repoId"), 10, 64)
+	if err != nil {
+		h.l.Errorw("Invalid repository ID", "error", err, "request_id", request.GetRequestID(c))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid repository ID"})
+		return
+	}
+
+	runs, err := h.s.ListRunsByRepository(c.Request.Context(), repoID)
+	if err != nil {
+		h.l.Errorw("Failed to list runs", "error", err, "request_id", request.GetRequestID(c))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list runs"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"runs": runs})
+}
+
 type createRunBody struct {
 	Prompt          string `json:"prompt"`
 	CreatedByUserID int64  `json:"created_by_user_id"`

@@ -113,6 +113,10 @@ export const RunSchema = z.object({
   completed_at: z.string().datetime().nullable(),
 });
 
+export const RunListResponseSchema = z.object({
+  runs: z.array(RunSchema),
+});
+
 // ─── GitHub App ───────────────────────────────────────────────────────────────
 export const AppInstallURLResponseSchema = z.object({
   install_url: z.string(),
@@ -153,6 +157,7 @@ export type OrganizationMemberRole = z.infer<
 >;
 export type Repository = z.infer<typeof RepositorySchema>;
 export type RunStatus = z.infer<typeof RunStatusSchema>;
+export type Run = z.infer<typeof RunSchema>;
 export type Feature = z.infer<typeof FeatureSchema>;
 export type FeatureReviewStatus = z.infer<typeof FeatureReviewStatusSchema>;
 export type FeatureBuildStatus = z.infer<typeof FeatureBuildStatusSchema>;

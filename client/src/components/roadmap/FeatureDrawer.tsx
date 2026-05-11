@@ -11,7 +11,7 @@ import type {
   FeatureBuildStatus,
 } from "@/lib/api-schemas";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { Bot, Rocket, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +44,7 @@ import {
   useComboboxAnchor,
 } from "@/components/ui/combobox";
 import { useAuth } from "@/lib/auth";
+import { SetupGuard } from "@/components/setup/SetupGuard";
 
 const STATUS_OPTIONS: { value: FeatureBuildStatus; label: string }[] = [
   { value: "pending", label: "Pending" },
@@ -106,6 +107,7 @@ function DepsCombobox({
 
 interface FeatureDrawerProps {
   repoId: number;
+  orgId?: number;
   feature: Feature | null;
   allFeatures: Feature[];
   dependencies: FeatureDependency[];
@@ -114,6 +116,7 @@ interface FeatureDrawerProps {
 
 export function FeatureDrawer({
   repoId,
+  orgId,
   feature,
   allFeatures,
   dependencies,
@@ -197,7 +200,22 @@ export function FeatureDrawer({
       createdByUserId,
     }: CreateFeatureRunParams) =>
       createFeatureRun(prompt, featureId, createdByUserId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["repositories", repoId, "runs"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["repository", repoId, "meta"],
+      });
+    },
   });
+
+  const runPrompt = feature
+    ? [
+        `Implement: ${feature.title}`,
+        feature.description ? `\n${feature.description}` : "",
+      ].join("")
+    : "";
 
   function handleDescriptionBlur() {
     if (descriptionDraft !== description) {
@@ -318,17 +336,32 @@ export function FeatureDrawer({
             </div>
 
             <DrawerFooter>
-              <Button
-                onClick={() =>
-                  createRun.mutate({
-                    prompt: feature.description,
-                    featureId: feature.id,
-                    createdByUserId: user?.id!,
-                  })
-                }
-              >
-                Create run
-              </Button>
+              <div className="rounded-xl border border-border bg-muted/30 p-3">
+                <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                  <Bot className="size-3.5" />
+                  Implementation prompt
+                </div>
+                <p className="line-clamp-3 text-xs leading-5 text-muted-foreground">
+                  {runPrompt || "Add a description to guide the agent run."}
+                </p>
+              </div>
+              <SetupGuard orgId={orgId}>
+                <Button
+                  onClick={() =>
+                    createRun.mutate({
+                      prompt: runPrompt || feature.title,
+                      featureId: feature.id,
+                      createdByUserId: user?.id ?? 0,
+                    })
+                  }
+                  disabled={createRun.isPending || !user?.id}
+                >
+                  <Rocket data-icon="inline-start" />
+                  {createRun.isPending
+                    ? "Starting run…"
+                    : "Start implementation run"}
+                </Button>
+              </SetupGuard>
               <Button
                 variant="danger"
                 size="sm"

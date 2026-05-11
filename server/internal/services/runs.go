@@ -40,11 +40,19 @@ func NewRunService(db *pgxpool.Pool, q *store.Queries, env *config.Environment, 
 }
 
 func storeToRunDTO(run store.FeatureRun) *dtos.RunDTO {
+	var completedAt *time.Time
+	if run.CompletedAt.Valid {
+		completedAt = &run.CompletedAt.Time
+	}
+
 	return &dtos.RunDTO{
-		ID:        run.ID,
-		Prompt:    run.Prompt,
-		FeatureID: run.FeatureID,
-		Status:    dtos.RunStatus(run.Status),
+		ID:              run.ID,
+		Prompt:          run.Prompt,
+		FeatureID:       run.FeatureID,
+		Status:          dtos.RunStatus(run.Status),
+		CreatedByUserID: run.CreatedByUserID,
+		CreatedAt:       run.CreatedAt.Time,
+		CompletedAt:     completedAt,
 	}
 }
 
@@ -99,6 +107,19 @@ func (s *RunService) CreateRun(ctx context.Context, p CreateRunParams) (*dtos.Ru
 		return nil, err
 	}
 	return storeToRunDTO(run), nil
+}
+
+func (s *RunService) ListRunsByRepository(ctx context.Context, repositoryID int64) ([]dtos.RunDTO, error) {
+	runs, err := s.q.ListRunsByRepository(ctx, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]dtos.RunDTO, len(runs))
+	for i, run := range runs {
+		out[i] = *storeToRunDTO(run)
+	}
+	return out, nil
 }
 
 //nolint:gosec // Git subprocess arguments use server-managed clone dirs and internal branch names only.

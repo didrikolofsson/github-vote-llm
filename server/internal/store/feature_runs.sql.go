@@ -105,6 +105,47 @@ func (q *Queries) GetRunByID(ctx context.Context, id int64) (GetRunByIDRow, erro
 	return i, err
 }
 
+const listRunsByRepository = `-- name: ListRunsByRepository :many
+SELECT
+    fr.id, fr.prompt, fr.feature_id, fr.status, fr.created_by_user_id, fr.created_at, fr.completed_at, fr.workspace
+FROM
+    feature_runs AS fr
+    INNER JOIN features AS f ON f.id = fr.feature_id
+WHERE
+    f.repository_id = $1
+ORDER BY
+    fr.created_at DESC
+`
+
+func (q *Queries) ListRunsByRepository(ctx context.Context, repositoryID int64) ([]FeatureRun, error) {
+	rows, err := q.db.Query(ctx, listRunsByRepository, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FeatureRun
+	for rows.Next() {
+		var i FeatureRun
+		if err := rows.Scan(
+			&i.ID,
+			&i.Prompt,
+			&i.FeatureID,
+			&i.Status,
+			&i.CreatedByUserID,
+			&i.CreatedAt,
+			&i.CompletedAt,
+			&i.Workspace,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateRunStatus = `-- name: UpdateRunStatus :exec
 UPDATE feature_runs SET status = $1 WHERE id = $2
 `

@@ -24,7 +24,15 @@ import {
 import type { Feature, FeatureDependency } from "@/lib/api-schemas";
 import ELK from "elkjs/lib/elk.bundled.js";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayoutGrid, Maximize2, Plus, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  Compass,
+  LayoutGrid,
+  MapPinned,
+  Maximize2,
+  Plus,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import {
   Tooltip,
@@ -482,9 +490,10 @@ function AddFeatureDialog({
 
 interface RoadmapCanvasProps {
   repoId: number;
+  orgId?: number;
 }
 
-export function RoadmapCanvas({ repoId }: RoadmapCanvasProps) {
+export function RoadmapCanvas({ repoId, orgId }: RoadmapCanvasProps) {
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const [selectedFeatureId, setSelectedFeatureId] = useState<number | null>(
@@ -688,16 +697,42 @@ export function RoadmapCanvas({ repoId }: RoadmapCanvasProps) {
         deleteKeyCode="Delete"
         className="bg-muted/20"
       >
-        <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={24}
+          size={1}
+          color="var(--muted-foreground)"
+        />
+        <Panel position="top-left">
+          <div className="pointer-events-none flex items-center gap-2 rounded-xl border border-border bg-background/90 px-3 py-2 text-xs text-muted-foreground shadow-sm backdrop-blur">
+            <Compass className="size-3.5" />
+            <span className="font-mono tracking-[0.18em] uppercase">
+              Feature map
+            </span>
+          </div>
+        </Panel>
         {nodes.length === 0 && (
-          <div className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center">
-            <div className="relative text-center">
-              <p className="text-sm font-medium text-muted-foreground">
-                No features yet
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="relative max-w-sm rounded-2xl border border-border bg-background/90 p-6 text-center shadow-lg backdrop-blur">
+              <div className="absolute inset-x-10 -top-8 h-16 rounded-full bg-info/15 blur-2xl" />
+              <div className="relative mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl border border-border bg-muted">
+                <MapPinned className="size-5 text-muted-foreground" />
+              </div>
+              <p className="relative text-sm font-semibold">
+                Start the roadmap
               </p>
-              <p className="text-xs text-muted-foreground/70 mt-1">
-                Add your first feature to start building the roadmap.
+              <p className="relative mt-2 text-xs leading-5 text-muted-foreground">
+                Add the first feature, then connect dependencies to turn loose
+                requests into an implementation route.
               </p>
+              <Button
+                className="relative mt-4"
+                size="sm"
+                onClick={() => setAddOpen(true)}
+              >
+                <Plus data-icon="inline-start" />
+                Add first feature
+              </Button>
             </div>
           </div>
         )}
@@ -710,6 +745,7 @@ export function RoadmapCanvas({ repoId }: RoadmapCanvasProps) {
 
       <FeatureDrawer
         repoId={repoId}
+        orgId={orgId}
         feature={data?.features.find((f) => f.id === selectedFeatureId) ?? null}
         allFeatures={data?.features ?? []}
         dependencies={data?.dependencies ?? []}

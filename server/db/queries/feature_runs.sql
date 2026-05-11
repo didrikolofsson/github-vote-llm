@@ -23,5 +23,17 @@ FROM
     INNER JOIN feature_runs AS fr ON fr.feature_id = f.id
 WHERE
     fr.id = $1;
+
+-- name: ListRunsByRepository :many
+SELECT
+    fr.*
+FROM
+    feature_runs AS fr
+    INNER JOIN features AS f ON f.id = fr.feature_id
+WHERE
+    f.repository_id = $1
+ORDER BY
+    fr.created_at DESC;
+
 -- name: UpdateRunStatus :exec
 UPDATE feature_runs SET status = $1 WHERE id = $2;

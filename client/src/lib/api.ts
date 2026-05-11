@@ -179,6 +179,7 @@ import {
   RepositoryListResponseSchema,
   RepositorySchema,
   RoadmapSchema,
+  RunListResponseSchema,
   RunSchema,
 } from "./api-schemas";
 
@@ -195,6 +196,8 @@ export type {
   OrganizationWithMembers,
   Repository,
   Roadmap,
+  Run,
+  RunStatus,
 } from "./api-schemas";
 
 export const UserProfileSchema = z.object({
@@ -421,6 +424,8 @@ export async function updateFeature(
     title?: string;
     description?: string;
     status?: string;
+    build_status?: string | null;
+    review_status?: string;
     area?: string;
   },
 ) {
@@ -538,6 +543,13 @@ export async function createRun(
     body: JSON.stringify({ prompt, created_by_user_id: createdByUserId }),
     schema: RunSchema,
   });
+}
+
+export async function listRepositoryRuns(repoId: number) {
+  const data = await requestWithRefresh(`/repositories/${repoId}/runs`, {
+    schema: RunListResponseSchema,
+  });
+  return data.runs;
 }
 
 // ─── GitHub App ───────────────────────────────────────────────────────────────
