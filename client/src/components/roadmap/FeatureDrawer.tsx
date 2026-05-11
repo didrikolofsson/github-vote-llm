@@ -9,9 +9,10 @@ import type {
   Feature,
   FeatureDependency,
   FeatureBuildStatus,
+  Run,
 } from "@/lib/api-schemas";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bot, Rocket, Trash2 } from "lucide-react";
+import { ArrowUpRight, Bot, CircleDot, Rocket, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -111,8 +112,25 @@ interface FeatureDrawerProps {
   feature: Feature | null;
   allFeatures: Feature[];
   dependencies: FeatureDependency[];
+  latestRun?: Run;
   onClose: () => void;
 }
+
+const RUN_STATUS_DOT: Record<Run["status"], string> = {
+  pending: "bg-amber-400",
+  running: "bg-cyan-400 animate-pulse",
+  completed: "bg-lime-400",
+  failed: "bg-red-400",
+  cancelled: "bg-zinc-400",
+};
+
+const RUN_STATUS_LABEL: Record<Run["status"], string> = {
+  pending: "Pending",
+  running: "Running",
+  completed: "Completed",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
 
 export function FeatureDrawer({
   repoId,
@@ -120,6 +138,7 @@ export function FeatureDrawer({
   feature,
   allFeatures,
   dependencies,
+  latestRun,
   onClose,
 }: FeatureDrawerProps) {
   const { user } = useAuth();
@@ -336,6 +355,35 @@ export function FeatureDrawer({
             </div>
 
             <DrawerFooter>
+              {latestRun && (
+                <div className="rounded-xl border border-border bg-muted/30 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                      <CircleDot className="size-3.5" />
+                      Latest run
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`size-1.5 rounded-full ${RUN_STATUS_DOT[latestRun.status]}`}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {RUN_STATUS_LABEL[latestRun.status]}
+                      </span>
+                    </div>
+                  </div>
+                  {latestRun.status === "completed" && latestRun.pr_url && (
+                    <a
+                      href={latestRun.pr_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-info hover:underline"
+                    >
+                      View pull request
+                      <ArrowUpRight className="size-3" />
+                    </a>
+                  )}
+                </div>
+              )}
               <div className="rounded-xl border border-border bg-muted/30 p-3">
                 <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
                   <Bot className="size-3.5" />

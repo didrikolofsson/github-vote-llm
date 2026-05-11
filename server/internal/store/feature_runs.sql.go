@@ -22,7 +22,7 @@ INSERT INTO
     )
 VALUES ($1, $2, $3, $4, $5)
 RETURNING
-    id, prompt, feature_id, status, created_by_user_id, created_at, completed_at, workspace
+    id, prompt, feature_id, status, created_by_user_id, created_at, completed_at, workspace, pr_url, pid
 `
 
 type CreateRunParams struct {
@@ -51,13 +51,24 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (FeatureRu
 		&i.CreatedAt,
 		&i.CompletedAt,
 		&i.Workspace,
+		&i.PrUrl,
+		&i.Pid,
 	)
 	return i, err
 }
 
+const deleteCancelledRun = `-- name: DeleteCancelledRun :exec
+DELETE FROM feature_runs WHERE id = $1 AND status IN ('cancelled', 'failed')
+`
+
+func (q *Queries) DeleteCancelledRun(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteCancelledRun, id)
+	return err
+}
+
 const getRunByID = `-- name: GetRunByID :one
 SELECT
-    fr.id, fr.prompt, fr.feature_id, fr.status, fr.created_by_user_id, fr.created_at, fr.completed_at, fr.workspace,
+    fr.id, fr.prompt, fr.feature_id, fr.status, fr.created_by_user_id, fr.created_at, fr.completed_at, fr.workspace, fr.pr_url, fr.pid,
     r.id AS repository_id,
     r.organization_id AS organization_id,
     r.name AS repository_name,
@@ -79,6 +90,8 @@ type GetRunByIDRow struct {
 	CreatedAt       pgtype.Timestamptz
 	CompletedAt     pgtype.Timestamptz
 	Workspace       string
+	PrUrl           *string
+	Pid             *int32
 	RepositoryID    int64
 	OrganizationID  int64
 	RepositoryName  string
@@ -97,6 +110,8 @@ func (q *Queries) GetRunByID(ctx context.Context, id int64) (GetRunByIDRow, erro
 		&i.CreatedAt,
 		&i.CompletedAt,
 		&i.Workspace,
+		&i.PrUrl,
+		&i.Pid,
 		&i.RepositoryID,
 		&i.OrganizationID,
 		&i.RepositoryName,
@@ -107,7 +122,14 @@ func (q *Queries) GetRunByID(ctx context.Context, id int64) (GetRunByIDRow, erro
 
 const listRunsByRepository = `-- name: ListRunsByRepository :many
 SELECT
-    fr.id, fr.prompt, fr.feature_id, fr.status, fr.created_by_user_id, fr.created_at, fr.completed_at, fr.workspace
+    fr.id,
+    fr.prompt,
+    fr.feature_id,
+    fr.status,
+    fr.created_by_user_id,
+    fr.created_at,
+    fr.completed_at,
+    NULL::TEXT AS pr_url
 FROM
     feature_runs AS fr
     INNER JOIN features AS f ON f.id = fr.feature_id
@@ -117,15 +139,26 @@ ORDER BY
     fr.created_at DESC
 `
 
-func (q *Queries) ListRunsByRepository(ctx context.Context, repositoryID int64) ([]FeatureRun, error) {
+type ListRunsByRepositoryRow struct {
+	ID              int64
+	Prompt          string
+	FeatureID       int64
+	Status          FeatureRunStatus
+	CreatedByUserID int64
+	CreatedAt       pgtype.Timestamptz
+	CompletedAt     pgtype.Timestamptz
+	PrUrl           *string
+}
+
+func (q *Queries) ListRunsByRepository(ctx context.Context, repositoryID int64) ([]ListRunsByRepositoryRow, error) {
 	rows, err := q.db.Query(ctx, listRunsByRepository, repositoryID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []FeatureRun
+	var items []ListRunsByRepositoryRow
 	for rows.Next() {
-		var i FeatureRun
+		var i ListRunsByRepositoryRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Prompt,
@@ -134,7 +167,7 @@ func (q *Queries) ListRunsByRepository(ctx context.Context, repositoryID int64) 
 			&i.CreatedByUserID,
 			&i.CreatedAt,
 			&i.CompletedAt,
-			&i.Workspace,
+			&i.PrUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -146,8 +179,45 @@ func (q *Queries) ListRunsByRepository(ctx context.Context, repositoryID int64) 
 	return items, nil
 }
 
+const setRunCancelled = `-- name: SetRunCancelled :exec
+UPDATE feature_runs SET status = 'cancelled', completed_at = now() WHERE id = $1
+`
+
+func (q *Queries) SetRunCancelled(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, setRunCancelled, id)
+	return err
+}
+
+const updateRunPID = `-- name: UpdateRunPID :exec
+UPDATE feature_runs SET pid = $1 WHERE id = $2
+`
+
+type UpdateRunPIDParams struct {
+	Pid *int32
+	ID  int64
+}
+
+func (q *Queries) UpdateRunPID(ctx context.Context, arg UpdateRunPIDParams) error {
+	_, err := q.db.Exec(ctx, updateRunPID, arg.Pid, arg.ID)
+	return err
+}
+
+const updateRunPRURL = `-- name: UpdateRunPRURL :exec
+UPDATE feature_runs SET pr_url = $1 WHERE id = $2
+`
+
+type UpdateRunPRURLParams struct {
+	PrUrl *string
+	ID    int64
+}
+
+func (q *Queries) UpdateRunPRURL(ctx context.Context, arg UpdateRunPRURLParams) error {
+	_, err := q.db.Exec(ctx, updateRunPRURL, arg.PrUrl, arg.ID)
+	return err
+}
+
 const updateRunStatus = `-- name: UpdateRunStatus :exec
-UPDATE feature_runs SET status = $1 WHERE id = $2
+UPDATE feature_runs SET status = $1, completed_at = CASE WHEN $1::feature_run_status IN ('completed', 'failed', 'cancelled') THEN now() ELSE completed_at END WHERE id = $2
 `
 
 type UpdateRunStatusParams struct {

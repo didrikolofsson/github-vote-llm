@@ -9,6 +9,7 @@ const (
 	RunStatusRunning   RunStatus = "running"
 	RunStatusCompleted RunStatus = "completed"
 	RunStatusFailed    RunStatus = "failed"
+	RunStatusCancelled RunStatus = "cancelled"
 )
 
 type RunDTO struct {
@@ -19,4 +20,5 @@ type RunDTO struct {
 	CreatedByUserID int64      `json:"created_by_user_id"`
 	CreatedAt       time.Time  `json:"created_at"`
 	CompletedAt     *time.Time `json:"completed_at"`
+	PRURL           *string    `json:"pr_url"`
 }

@@ -18,10 +18,11 @@ import {
   addFeatureDependency,
   createFeature,
   getRoadmap,
+  listRepositoryRuns,
   removeFeatureDependency,
   updateFeaturePosition,
 } from "@/lib/api";
-import type { Feature, FeatureDependency } from "@/lib/api-schemas";
+import type { Feature, FeatureDependency, Run } from "@/lib/api-schemas";
 import ELK from "elkjs/lib/elk.bundled.js";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -41,7 +42,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useCallback, useEffect, useState } from "react";
-import { FeatureNode } from "./FeatureNode";
+import { FeatureNode, type FeatureNodeData } from "./FeatureNode";
 import { FeatureDrawer } from "./FeatureDrawer";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,6 +72,11 @@ import { Textarea } from "@/components/ui/textarea";
 // Must be defined outside the component — a new object reference on every
 // render causes React Flow to remount all nodes.
 const NODE_TYPES = { feature: FeatureNode };
+
+// Stable empty array — avoids triggering the runs badge effect on every render
+// when the query hasn't resolved yet (destructuring default `= []` creates a
+// new reference each render, which would fire the effect in a tight loop).
+const EMPTY_RUNS: Run[] = [];
 
 const EDGE_STYLE = {
   stroke: "var(--border)",
@@ -206,7 +212,8 @@ async function computeLayout(
 function featuresToNodes(
   features: Feature[],
   autoPositions: Map<number, { x: number; y: number }>,
-): Node<Feature>[] {
+  latestRunByFeature: Map<number, Run>,
+): Node<FeatureNodeData>[] {
   return features.map((f) => ({
     id: String(f.id),
     type: "feature",
@@ -214,7 +221,7 @@ function featuresToNodes(
       f.roadmap_x != null && f.roadmap_y != null
         ? { x: f.roadmap_x, y: f.roadmap_y }
         : (autoPositions.get(f.id) ?? { x: 0, y: 0 }),
-    data: f,
+    data: { ...f, _latestRun: latestRunByFeature.get(f.id) },
   }));
 }
 
@@ -508,21 +515,49 @@ export function RoadmapCanvas({ repoId, orgId }: RoadmapCanvasProps) {
     enabled: !!repoId,
   });
 
-  // Sync nodes + edges whenever server data changes.
+  const { data: runs = EMPTY_RUNS } = useQuery({
+    queryKey: ["repositories", repoId, "runs"],
+    queryFn: () => listRepositoryRuns(repoId),
+    enabled: !!repoId,
+  });
+
+  const latestRunByFeature = runs.reduce((map, run) => {
+    const existing = map.get(run.feature_id);
+    if (!existing || new Date(run.created_at) > new Date(existing.created_at)) {
+      map.set(run.feature_id, run);
+    }
+    return map;
+  }, new Map<number, Run>());
+
+  // Sync nodes + edges whenever server roadmap data changes (features/dependencies).
   // computeLayout is async (ELK), so we use .then() inside the effect.
   // After layout, persist ELK-computed positions so they survive navigation.
   useEffect(() => {
     if (!data) return;
     computeLayout(data.features, data.dependencies).then((positions) => {
-      setNodes(featuresToNodes(data.features, positions));
+      setNodes(featuresToNodes(data.features, positions, latestRunByFeature));
       setEdges(depsToEdges(data.dependencies));
       for (const [featureId, { x, y }] of positions) {
         savePosition.mutate({ featureId, x, y });
       }
     });
-    // setNodes/setEdges/savePosition are stable references — omitting them is safe.
+    // setNodes/setEdges/savePosition/latestRunByFeature are stable or computed inline
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
+
+  // Patch run badges into existing nodes without re-running layout or touching edges.
+  useEffect(() => {
+    setNodes((nds) =>
+      nds.map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          _latestRun: latestRunByFeature.get(parseInt(node.id, 10)),
+        },
+      })),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runs]);
 
   // ── Node / edge change handlers ──────────────────────────────────────────────
 
@@ -662,7 +697,7 @@ export function RoadmapCanvas({ repoId, orgId }: RoadmapCanvasProps) {
       roadmap_y: null,
     }));
     const positions = await computeLayout(unpositioned, data.dependencies);
-    setNodes(featuresToNodes(unpositioned, positions));
+    setNodes(featuresToNodes(unpositioned, positions, latestRunByFeature));
     for (const [featureId, { x, y }] of positions) {
       await savePosition.mutateAsync({ featureId, x, y });
     }
@@ -752,6 +787,11 @@ export function RoadmapCanvas({ repoId, orgId }: RoadmapCanvasProps) {
         feature={data?.features.find((f) => f.id === selectedFeatureId) ?? null}
         allFeatures={data?.features ?? []}
         dependencies={data?.dependencies ?? []}
+        latestRun={
+          selectedFeatureId != null
+            ? latestRunByFeature.get(selectedFeatureId)
+            : undefined
+        }
         onClose={() => setSelectedFeatureId(null)}
       />
 

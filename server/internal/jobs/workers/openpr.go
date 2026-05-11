@@ -12,8 +12,9 @@ import (
 
 type OpenPRWorker struct {
 	river.WorkerDefaults[args.OpenRepoPullRequestArgs]
-	svc *services.GithubService
-	log *logger.Logger
+	svc    *services.GithubService
+	runSvc *services.RunService
+	log    *logger.Logger
 }
 
 func (w *OpenPRWorker) Work(ctx context.Context, job *river.Job[args.OpenRepoPullRequestArgs]) error {
@@ -32,6 +33,10 @@ func (w *OpenPRWorker) Work(ctx context.Context, job *river.Job[args.OpenRepoPul
 	prURL, err := w.svc.OpenPR(ctx, a.OrganizationID, a.Owner, a.Name, a.BranchName, title, body)
 	if err != nil {
 		return fmt.Errorf("open PR: %w", err)
+	}
+
+	if err := w.runSvc.SetRunPRURL(ctx, a.RunID, prURL); err != nil {
+		w.log.Warnw("failed to store PR URL", "run_id", a.RunID, "url", prURL, "err", err)
 	}
 
 	w.log.Infow("PR opened", "url", prURL, "run_id", a.RunID, "branch", a.BranchName)

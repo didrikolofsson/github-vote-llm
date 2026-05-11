@@ -44,7 +44,7 @@ func (rl *runLog) writeLine(stream, line string) {
 	fmt.Fprintf(rl.file, "[%s] %s\n", stream, line) //nolint:errcheck
 }
 
-func (r *ClaudeRunner) Run(ctx context.Context, prompt string, workDir string) error {
+func (r *ClaudeRunner) Run(ctx context.Context, prompt string, workDir string, onStart func(pid int)) error {
 	//nolint:gosec // Fixed binary "claude"; prompt is supplied by authenticated API flows.
 	cmd := exec.CommandContext(ctx, "claude", "-p", prompt, "--verbose", "--dangerously-skip-permissions")
 	cmd.Env = append(os.Environ(), "ANTHROPIC_API_KEY="+r.apiKey)
@@ -80,6 +80,10 @@ func (r *ClaudeRunner) Run(ctx context.Context, prompt string, workDir string) e
 
 	if err := cmd.Start(); err != nil {
 		return err
+	}
+
+	if onStart != nil {
+		onStart(cmd.Process.Pid)
 	}
 
 	var wg sync.WaitGroup

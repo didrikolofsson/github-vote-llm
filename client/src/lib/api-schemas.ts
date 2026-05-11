@@ -102,15 +102,23 @@ export const RoadmapSchema = z.object({
 });
 
 // ─── Run ──────────────────────────────────────────────────────────────────────
-const RunStatusSchema = z.enum(["pending", "running", "completed", "failed"]);
+export const RunStatusSchema = z.enum([
+  "pending",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
 export const RunSchema = z.object({
   id: z.number(),
   prompt: z.string(),
   feature_id: z.number(),
   status: RunStatusSchema,
   created_by_user_id: z.number(),
-  created_at: z.string().datetime(),
-  completed_at: z.string().datetime().nullable(),
+  created_at: z.string().datetime({ offset: true }),
+  completed_at: z.string().datetime({ offset: true }).nullable(),
+  pr_url: z.string().nullable().optional(),
 });
 
 export const RunListResponseSchema = z.object({

@@ -7,6 +7,7 @@ type EventType string
 const (
 	EventFeatureCreated        EventType = "feature_created"
 	EventFeatureUpdated        EventType = "feature_updated"
+	EventRunUpdated            EventType = "run_updated"
 	EventInstallationActive    EventType = "installation_active"
 	EventInstallationSuspended EventType = "installation_suspended"
 	EventInstallationRemoved   EventType = "installation_removed"

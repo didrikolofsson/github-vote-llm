@@ -63,6 +63,7 @@ const (
 	FeatureRunStatusRunning   FeatureRunStatus = "running"
 	FeatureRunStatusCompleted FeatureRunStatus = "completed"
 	FeatureRunStatusFailed    FeatureRunStatus = "failed"
+	FeatureRunStatusCancelled FeatureRunStatus = "cancelled"
 )
 
 func (e *FeatureRunStatus) Scan(src interface{}) error {
@@ -356,6 +357,8 @@ type FeatureRun struct {
 	CreatedAt       pgtype.Timestamptz
 	CompletedAt     pgtype.Timestamptz
 	Workspace       string
+	PrUrl           *string
+	Pid             *int32
 }
 
 type FeatureVote struct {

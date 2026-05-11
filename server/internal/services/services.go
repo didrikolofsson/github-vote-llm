@@ -36,24 +36,25 @@ type Services struct {
 func New(
 	deps ServicesDeps,
 ) *Services {
+	githubSvc := NewGithubService(GithubServiceDeps{
+		DB:        deps.DB,
+		Queries:   deps.Queries,
+		Env:       deps.Env,
+		AppClient: deps.AppClient,
+		Hub:       deps.Hub,
+	})
 	return &Services{
 		UserService:         NewUserService(deps.DB, deps.Queries),
 		AuthService:         NewAuthService(deps.DB, deps.Queries, deps.Env.JWT_SECRET),
 		OrganizationService: NewOrganizationService(deps.DB, deps.Queries),
-		GithubService: NewGithubService(GithubServiceDeps{
-			DB:        deps.DB,
-			Queries:   deps.Queries,
-			Env:       deps.Env,
-			AppClient: deps.AppClient,
-			Hub:       deps.Hub,
-		}),
+		GithubService:       githubSvc,
 		RepoService: NewRepoService(RepoServiceDeps{
 			DB:        deps.DB,
 			Queries:   deps.Queries,
 			AppClient: deps.AppClient,
 		}),
 		MembersService:  NewMembersService(deps.Queries),
-		RunService:      NewRunService(deps.DB, deps.Queries, deps.Env, deps.JobClient, deps.AgentRunner),
+		RunService:      NewRunService(deps.DB, deps.Queries, deps.Env, deps.JobClient, deps.AgentRunner, deps.Hub, githubSvc),
 		FeaturesService: NewFeaturesService(deps.DB, deps.Queries, deps.Hub),
 		PortalService:   NewPortalService(deps.DB, deps.Queries),
 	}

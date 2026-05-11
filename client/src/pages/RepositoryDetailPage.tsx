@@ -21,9 +21,12 @@ import {
   listOrgRepositories,
   removeRepository,
   updateRepositoryPortalPublic,
+  cancelRun,
+  deleteRun,
 } from "@/lib/api";
 import type { Feature, Run, RunStatus } from "@/lib/api-schemas";
 import { useOrgSetup } from "@/hooks/use-org-setup";
+import { useRunsSSE } from "@/hooks/use-runs-sse";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -42,6 +45,7 @@ import {
   Route,
   Sparkles,
   Trash2,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -85,7 +89,17 @@ export default function RepositoryDetailPage() {
     queryKey: ["repositories", repoIdNum, "runs"],
     queryFn: () => listRepositoryRuns(repoIdNum!),
     enabled: !!repoIdNum,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data) return false;
+      const hasActive = data.some(
+        (r) => r.status === "pending" || r.status === "running",
+      );
+      return hasActive ? 5000 : false;
+    },
   });
+
+  useRunsSSE(repoIdNum);
 
   const removeRepo = useMutation({
     mutationFn: () => removeRepository(orgId!, repoIdNum!),
@@ -286,6 +300,7 @@ export default function RepositoryDetailPage() {
             loading={runsLoading}
             features={roadmap?.features ?? []}
             orgId={orgId}
+            repoId={repoIdNum}
             onOpenRoadmap={() => setActiveTab("roadmap")}
           />
         </TabsContent>
@@ -442,6 +457,7 @@ const RUN_STATUS_META: Record<
   running: { label: "Running", color: "cyan", dot: "bg-cyan-400" },
   completed: { label: "Completed", color: "lime", dot: "bg-lime-400" },
   failed: { label: "Failed", color: "red", dot: "bg-red-400" },
+  cancelled: { label: "Cancelled", color: "zinc", dot: "bg-zinc-400" },
 };
 
 function formatRunDate(value: string | null) {
@@ -459,22 +475,43 @@ function RunsLedger({
   loading,
   features,
   orgId,
+  repoId,
   onOpenRoadmap,
 }: {
   runs: Run[];
   loading: boolean;
   features: Feature[];
   orgId: number | undefined;
+  repoId: number | undefined;
   onOpenRoadmap: () => void;
 }) {
+  const queryClient = useQueryClient();
   const featureById = new Map(features.map((feature) => [feature.id, feature]));
   const counts = runs.reduce<Record<RunStatus, number>>(
     (acc, run) => {
-      acc[run.status] += 1;
+      acc[run.status] = (acc[run.status] ?? 0) + 1;
       return acc;
     },
-    { pending: 0, running: 0, completed: 0, failed: 0 },
+    { pending: 0, running: 0, completed: 0, failed: 0, cancelled: 0 },
   );
+
+  const cancelMutation = useMutation({
+    mutationFn: (runId: number) => cancelRun(runId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["repositories", repoId, "runs"],
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (runId: number) => deleteRun(runId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["repositories", repoId, "runs"],
+      });
+    },
+  });
 
   if (loading) {
     return (
@@ -552,6 +589,10 @@ function RunsLedger({
                 key={run.id}
                 run={run}
                 feature={featureById.get(run.feature_id)}
+                onCancel={() => cancelMutation.mutate(run.id)}
+                isCancelling={cancelMutation.isPending}
+                onDelete={() => deleteMutation.mutate(run.id)}
+                isDeleting={deleteMutation.isPending}
               />
             ))}
           </div>
@@ -561,11 +602,27 @@ function RunsLedger({
   );
 }
 
-function RunRow({ run, feature }: { run: Run; feature: Feature | undefined }) {
+function RunRow({
+  run,
+  feature,
+  onCancel,
+  isCancelling,
+  onDelete,
+  isDeleting,
+}: {
+  run: Run;
+  feature: Feature | undefined;
+  onCancel: () => void;
+  isCancelling: boolean;
+  onDelete: () => void;
+  isDeleting: boolean;
+}) {
   const meta = RUN_STATUS_META[run.status];
+  const canCancel = run.status === "pending" || run.status === "running";
+  const canDelete = run.status === "cancelled" || run.status === "failed";
 
   return (
-    <div className="group grid gap-4 p-4 transition-colors hover:bg-muted/30 lg:grid-cols-[1fr_180px_160px] lg:items-center">
+    <div className="group grid gap-4 p-4 transition-colors hover:bg-muted/30 lg:grid-cols-[1fr_180px_200px] lg:items-center">
       <div className="min-w-0">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <Badge color={meta.color} small>
@@ -587,15 +644,55 @@ function RunRow({ run, feature }: { run: Run; feature: Feature | undefined }) {
         <Clock3 className="size-3.5" />
         <span>Started {formatRunDate(run.created_at)}</span>
       </div>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <ListChecks className="size-3.5" />
-        <span>
-          {run.completed_at
-            ? `Finished ${formatRunDate(run.completed_at)}`
-            : run.status === "running"
-              ? "Agent in progress"
-              : "Awaiting result"}
-        </span>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <ListChecks className="size-3.5 shrink-0" />
+          <span>
+            {run.status === "completed" && run.pr_url ? (
+              <a
+                href={run.pr_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-info hover:underline inline-flex items-center gap-1"
+              >
+                View PR
+                <ArrowUpRight className="size-3" />
+              </a>
+            ) : run.completed_at ? (
+              `Finished ${formatRunDate(run.completed_at)}`
+            ) : run.status === "running" ? (
+              "Agent in progress"
+            ) : run.status === "cancelled" ? (
+              "Cancelled"
+            ) : (
+              "Awaiting result"
+            )}
+          </span>
+        </div>
+        {canCancel && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6 shrink-0 text-muted-foreground hover:text-destructive"
+            onClick={onCancel}
+            disabled={isCancelling}
+            title="Cancel run"
+          >
+            <X className="size-3.5" />
+          </Button>
+        )}
+        {canDelete && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6 shrink-0 text-muted-foreground hover:text-destructive"
+            onClick={onDelete}
+            disabled={isDeleting}
+            title="Delete run"
+          >
+            <Trash2 className="size-3.5" />
+          </Button>
+        )}
       </div>
     </div>
   );

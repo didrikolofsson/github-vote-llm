@@ -552,6 +552,20 @@ export async function listRepositoryRuns(repoId: number) {
   return data.runs;
 }
 
+export async function cancelRun(runId: number) {
+  return requestWithRefresh(`/runs/${runId}/cancel`, {
+    method: "POST",
+    schema: z.unknown(),
+  });
+}
+
+export async function deleteRun(runId: number) {
+  return requestWithRefresh(`/runs/${runId}`, {
+    method: "DELETE",
+    schema: z.unknown(),
+  });
+}
+
 // ─── GitHub App ───────────────────────────────────────────────────────────────
 
 export async function getGithubAppInstallURL(orgId: number) {

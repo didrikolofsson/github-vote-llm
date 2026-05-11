@@ -97,6 +97,7 @@ func New(
 	repos.GET("/roadmap", deps.Handlers.Feature.GetRoadmap)
 	repos.GET("/meta", deps.Handlers.Repository.GetRepoMeta)
 	repos.GET("/runs", deps.Handlers.Runs.ListByRepository)
+	repos.GET("/runs/events", deps.Handlers.Runs.Events)
 	repos.GET("/features", deps.Handlers.Feature.ListFeatures)
 	repos.GET("/features/:featureId", deps.Handlers.Feature.GetFeature)
 	repos.POST("/features", deps.Handlers.Feature.CreateFeature)
@@ -113,6 +114,12 @@ func New(
 	// Feature runs
 	featureRuns := api.Group("/features/:featureId/runs")
 	featureRuns.POST("", deps.Handlers.Runs.Create)
+
+	// Run management
+	runs := api.Group("/runs/:runId")
+	runs.Use(middleware.RequireAuth(deps.JwtSecret))
+	runs.POST("/cancel", deps.Handlers.Runs.Cancel)
+	runs.DELETE("", deps.Handlers.Runs.Delete)
 
 	return router
 }

@@ -276,22 +276,27 @@ func (s *GithubService) HandleInstallationWebhook(ctx context.Context, payload I
 	return nil
 }
 
+// AuthenticatedRepoURL returns a fresh https://x-access-token:<token>@github.com/... URL
+// for the given org's GitHub App installation. Callers should use this immediately — tokens
+// expire after 1 hour.
+func (s *GithubService) AuthenticatedRepoURL(ctx context.Context, orgID int64, owner, repo string) (string, error) {
+	installation, err := s.q.GetInstallationByOrgID(ctx, orgID)
+	if err != nil {
+		return "", fmt.Errorf("get installation for org %d: %w", orgID, err)
+	}
+	token, err := s.appClient.InstallationToken(ctx, installation.GithubInstallationID)
+	if err != nil {
+		return "", fmt.Errorf("get installation token: %w", err)
+	}
+	return fmt.Sprintf("https://x-access-token:%s@github.com/%s/%s.git", token, owner, repo), nil
+}
+
 // CloneRepoToWorkspace clones a GitHub repository using an installation token.
 // It is idempotent — if the repo directory already exists it is skipped.
 func (s *GithubService) CloneRepoToWorkspace(ctx context.Context, runID int64) error {
 	run, err := s.q.GetRunByID(ctx, runID)
 	if err != nil {
 		return fmt.Errorf("get run: %w", err)
-	}
-
-	installation, err := s.q.GetInstallationByOrgID(ctx, run.OrganizationID)
-	if err != nil {
-		return fmt.Errorf("get installation for org %d: %w", run.OrganizationID, err)
-	}
-
-	token, err := s.appClient.InstallationToken(ctx, installation.GithubInstallationID)
-	if err != nil {
-		return fmt.Errorf("get installation token: %w", err)
 	}
 
 	repoDir := filepath.Join(run.Workspace, run.RepositoryName)
@@ -301,8 +306,10 @@ func (s *GithubService) CloneRepoToWorkspace(ctx context.Context, runID int64) e
 		return nil
 	}
 
-	cloneURL := fmt.Sprintf("https://x-access-token:%s@github.com/%s/%s.git",
-		token, run.RepositoryOwner, run.RepositoryName)
+	cloneURL, err := s.AuthenticatedRepoURL(ctx, run.OrganizationID, run.RepositoryOwner, run.RepositoryName)
+	if err != nil {
+		return err
+	}
 
 	//nolint:gosec // git clone URL embeds installation-scoped token; destination is workspace-bound repoDir.
 	cmd := exec.CommandContext(ctx, "git", "clone", cloneURL, repoDir)

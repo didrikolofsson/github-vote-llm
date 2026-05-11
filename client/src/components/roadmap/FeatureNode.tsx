@@ -1,6 +1,6 @@
 import { Handle, Node, Position, type NodeProps } from "@xyflow/react";
-import { ThumbsUp } from "lucide-react";
-import { Feature, type FeatureBuildStatus } from "@/lib/api-schemas";
+import { ExternalLink, ThumbsUp } from "lucide-react";
+import { Feature, Run, type FeatureBuildStatus } from "@/lib/api-schemas";
 
 const STATUS_DOT: Record<NonNullable<FeatureBuildStatus>, string> = {
   pending: "bg-zinc-400",
@@ -18,11 +18,30 @@ const STATUS_LABEL: Record<NonNullable<FeatureBuildStatus>, string> = {
   rejected: "Rejected",
 };
 
-type FeatureNodeProps = NodeProps<Node<Feature>>;
+const RUN_DOT: Record<Run["status"], string> = {
+  pending: "bg-amber-400",
+  running: "bg-cyan-400 animate-pulse",
+  completed: "bg-lime-400",
+  failed: "bg-red-400",
+  cancelled: "bg-zinc-400",
+};
+
+const RUN_LABEL: Record<Run["status"], string> = {
+  pending: "Queued",
+  running: "Running",
+  completed: "Implemented",
+  failed: "Run failed",
+  cancelled: "Cancelled",
+};
+
+export type FeatureNodeData = Feature & { _latestRun?: Run };
+
+type FeatureNodeProps = NodeProps<Node<FeatureNodeData>>;
 
 export function FeatureNode({ data: feature, selected }: FeatureNodeProps) {
   const dotClass = STATUS_DOT[feature.build_status ?? "pending"];
   const statusLabel = STATUS_LABEL[feature.build_status ?? "pending"];
+  const run = feature._latestRun;
 
   return (
     <div
@@ -66,10 +85,35 @@ export function FeatureNode({ data: feature, selected }: FeatureNodeProps) {
           </p>
         )}
 
-        {/* Footer: votes */}
-        <div className="flex items-center gap-1 text-xs text-muted-foreground pt-0.5 border-t border-border/50">
-          <ThumbsUp className="size-3" />
-          <span>{feature.vote_count ?? 0}</span>
+        {/* Footer: votes + run badge */}
+        <div className="flex items-center justify-between gap-1 text-xs text-muted-foreground pt-0.5 border-t border-border/50">
+          <div className="flex items-center gap-1">
+            <ThumbsUp className="size-3" />
+            <span>{feature.vote_count ?? 0}</span>
+          </div>
+          {run && run.status !== "cancelled" && (
+            <div className="flex items-center gap-1">
+              {run.status === "completed" && run.pr_url ? (
+                <a
+                  href={run.pr_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-1 text-info hover:underline"
+                >
+                  <ExternalLink className="size-3" />
+                  <span className="text-[10px]">PR</span>
+                </a>
+              ) : (
+                <>
+                  <span
+                    className={`size-1.5 rounded-full shrink-0 ${RUN_DOT[run.status]}`}
+                  />
+                  <span className="text-[10px]">{RUN_LABEL[run.status]}</span>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

@@ -6,6 +6,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { Fragment } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -215,16 +216,18 @@ export default function Layout() {
           <Breadcrumb>
             <BreadcrumbList>
               {breadcrumb.map((crumb, i) => (
-                <BreadcrumbItem key={crumb.key}>
+                <Fragment key={crumb.key}>
                   {i > 0 && <BreadcrumbSeparator />}
-                  {crumb.href ? (
-                    <BreadcrumbLink asChild>
-                      <Link to={crumb.href}>{crumb.label}</Link>
-                    </BreadcrumbLink>
-                  ) : (
-                    <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
-                  )}
-                </BreadcrumbItem>
+                  <BreadcrumbItem>
+                    {crumb.href ? (
+                      <BreadcrumbLink asChild>
+                        <Link to={crumb.href}>{crumb.label}</Link>
+                      </BreadcrumbLink>
+                    ) : (
+                      <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                    )}
+                  </BreadcrumbItem>
+                </Fragment>
               ))}
             </BreadcrumbList>
           </Breadcrumb>

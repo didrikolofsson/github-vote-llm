@@ -35,7 +35,11 @@ func New(
 		Organization: NewOrganizationHandlers(deps.Services.OrganizationService, deps.Logger),
 		Github:       NewGithubHandlers(deps.Services.GithubService, deps.Logger, deps.Hub, deps.Env.GITHUB_APP_WEBHOOK_SECRET),
 		Repository:   NewRepositoryHandlers(deps.Services.RepoService, deps.Logger),
-		Runs:         NewRunsHandlers(deps.Services.RunService, deps.Logger),
+		Runs: func() *RunsHandlers {
+			h := NewRunsHandlers(deps.Services.RunService, deps.Logger)
+			h.SetHub(deps.Hub)
+			return h
+		}(),
 		Members:      NewMembersHandlers(deps.Services.MembersService, deps.Logger),
 		Feature:      NewFeatureHandlers(deps.Services.FeaturesService, deps.Logger),
 		Portal:       NewPortalHandlers(deps.Services.PortalService, deps.Logger, deps.Hub),

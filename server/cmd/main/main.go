@@ -77,7 +77,7 @@ func main() {
 		AgentRunner: claudeRunner, AppClient: appClient,
 	})
 
-	workers.Register(w, workers.RegisterWorkersDeps{Services: s, Env: env, Logger: appLogger})
+	workers.Register(w, workers.RegisterWorkersDeps{Services: s, Env: env, Logger: appLogger, JobClient: jc})
 	if err := jc.Start(ctx); err != nil {
 		appLogger.Fatalf("failed to start job client: %v", err)
 	}

@@ -1,0 +1,3 @@
+ALTER TYPE feature_run_status ADD VALUE IF NOT EXISTS 'cancelled';
+ALTER TABLE feature_runs ADD COLUMN IF NOT EXISTS pr_url TEXT;
+ALTER TABLE feature_runs ADD COLUMN IF NOT EXISTS pid INT;

@@ -26,7 +26,14 @@ WHERE
 
 -- name: ListRunsByRepository :many
 SELECT
-    fr.*
+    fr.id,
+    fr.prompt,
+    fr.feature_id,
+    fr.status,
+    fr.created_by_user_id,
+    fr.created_at,
+    fr.completed_at,
+    NULL::TEXT AS pr_url
 FROM
     feature_runs AS fr
     INNER JOIN features AS f ON f.id = fr.feature_id
@@ -36,4 +43,16 @@ ORDER BY
     fr.created_at DESC;
 
 -- name: UpdateRunStatus :exec
-UPDATE feature_runs SET status = $1 WHERE id = $2;
+UPDATE feature_runs SET status = $1, completed_at = CASE WHEN $1::feature_run_status IN ('completed', 'failed', 'cancelled') THEN now() ELSE completed_at END WHERE id = $2;
+
+-- name: UpdateRunPRURL :exec
+UPDATE feature_runs SET pr_url = $1 WHERE id = $2;
+
+-- name: UpdateRunPID :exec
+UPDATE feature_runs SET pid = $1 WHERE id = $2;
+
+-- name: SetRunCancelled :exec
+UPDATE feature_runs SET status = 'cancelled', completed_at = now() WHERE id = $1;
+
+-- name: DeleteCancelledRun :exec
+DELETE FROM feature_runs WHERE id = $1 AND status IN ('cancelled', 'failed');
