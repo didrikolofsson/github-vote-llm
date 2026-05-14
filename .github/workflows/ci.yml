@@ -25,6 +25,9 @@ jobs:
         with:
           version: 10.18.3
 
+      - name: Install mockgen
+        run: go install go.uber.org/mock/mockgen@latest
+
       - name: Generate mocks
         run: cd server && make mocks
 
