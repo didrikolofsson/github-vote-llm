@@ -31,6 +31,9 @@ jobs:
           version: v2.12.2
           working-directory: server
 
+      - name: Generate mocks
+        run: cd server && make mocks
+
       - name: Test
         run: pnpm test-server
 

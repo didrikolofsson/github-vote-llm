@@ -21,3 +21,8 @@ tmp/**
 # Test coverage
 coverage.out
 *.test
+
+# Generated mocks
+internal/store/mock_querier.go
+internal/hub/mock_hub.go
+internal/github/mock_app_client.go
