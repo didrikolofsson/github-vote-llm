@@ -289,7 +289,7 @@ func (s *RunService) RunAgent(ctx context.Context, runID int64) error {
 	}
 
 	onStart := func(pid int) {
-		pid32 := int32(pid)
+		pid32 := int32(pid) //nolint:gosec // PID is stored by the server from cmd.Process.Pid; not user-controlled.
 		storeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		_ = s.q.UpdateRunPID(storeCtx, store.UpdateRunPIDParams{Pid: &pid32, ID: runID})
