@@ -14,7 +14,8 @@
     "install-client": "cd client && pnpm install",
     "build-client": "cd client && pnpm run build",
     "build-server": "cd server && make build",
-    "test": "pnpm run test-server",
+    "test": "pnpm run test-client && pnpm run test-server",
+    "test-client": "cd client && pnpm run test",
     "test-server": "cd server && make test",
     "lint": "pnpm run lint-server",
     "lint-server": "cd server && make lint"
