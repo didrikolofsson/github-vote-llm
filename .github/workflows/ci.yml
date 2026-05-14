@@ -6,8 +6,8 @@ on:
   pull_request:
 
 jobs:
-  ci-backend:
-    name: Test & Build (backend)
+  ci-server:
+    name: Test & Build (server)
     runs-on: ubuntu-latest
 
     steps:
@@ -41,7 +41,7 @@ jobs:
         run: pnpm build-server
 
   ci-client:
-    name: Build (client)
+    name: Test & Build (client)
     runs-on: ubuntu-latest
 
     steps:
