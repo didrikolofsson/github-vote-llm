@@ -54,3 +54,6 @@ RETURNING *;
 -- name: DeleteFeature :exec
 DELETE FROM features
 WHERE id = $1;
+
+-- name: SetFeatureBuildStatus :exec
+UPDATE features SET build_status = $1 WHERE id = $2;

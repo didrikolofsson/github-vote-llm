@@ -1,0 +1,2 @@
+ALTER TABLE feature_runs DROP COLUMN IF EXISTS pr_url;
+ALTER TABLE feature_runs DROP COLUMN IF EXISTS pid;

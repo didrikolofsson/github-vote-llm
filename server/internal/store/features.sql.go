@@ -249,6 +249,20 @@ func (q *Queries) PatchFeature(ctx context.Context, arg PatchFeatureParams) (Fea
 	return i, err
 }
 
+const setFeatureBuildStatus = `-- name: SetFeatureBuildStatus :exec
+UPDATE features SET build_status = $1 WHERE id = $2
+`
+
+type SetFeatureBuildStatusParams struct {
+	BuildStatus NullBuildStatusType
+	ID          int64
+}
+
+func (q *Queries) SetFeatureBuildStatus(ctx context.Context, arg SetFeatureBuildStatusParams) error {
+	_, err := q.db.Exec(ctx, setFeatureBuildStatus, arg.BuildStatus, arg.ID)
+	return err
+}
+
 const updateFeaturePosition = `-- name: UpdateFeaturePosition :one
 UPDATE features
 SET roadmap_x = $2,

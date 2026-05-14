@@ -172,13 +172,20 @@ import {
   OrganizationMemberRoleSchema,
   OrganizationSchema,
   OrganizationWithMembersSchema,
+  AppInstallURLResponseSchema,
+  AppInstallationStatusSchema,
+  GitHubInstallationRepoListResponseSchema,
   RepoMetaSchema,
   RepositoryListResponseSchema,
   RepositorySchema,
   RoadmapSchema,
+  RunListResponseSchema,
+  RunSchema,
 } from "./api-schemas";
 
 export type {
+  AppInstallationStatus,
+  GitHubInstallationRepo,
   Feature,
   FeatureBuildStatus,
   FeatureComment,
@@ -189,6 +196,8 @@ export type {
   OrganizationWithMembers,
   Repository,
   Roadmap,
+  Run,
+  RunStatus,
 } from "./api-schemas";
 
 export const UserProfileSchema = z.object({
@@ -278,42 +287,6 @@ export async function updateOrganizationSlug(orgId: number, slug: string) {
     method: "PATCH",
     body: JSON.stringify({ slug }),
     schema: OrganizationSchema,
-  });
-}
-
-// ─── GitHub ───────────────────────────────────────────────────────────────────
-
-export const GitHubStatusSchema = z.object({
-  connected: z.boolean(),
-  login: z.string().nullable().optional(),
-});
-export async function getGitHubStatus() {
-  return requestWithRefresh("/github/status", { schema: GitHubStatusSchema });
-}
-
-export const GitHubAuthorizeUrlSchema = z.object({
-  authorize_url: z.string(),
-});
-export async function getGitHubAuthorizeUrl() {
-  return requestWithRefresh("/github/authorize", {
-    schema: GitHubAuthorizeUrlSchema,
-  });
-}
-
-export async function disconnectGitHub(): Promise<void> {
-  return requestWithRefresh("/github/connection", {
-    method: "DELETE",
-    schema: z.void(),
-  });
-}
-
-export const AvailableRepositoriesSchema = z.object({
-  repositories: z.array(z.object({ owner: z.string(), repo: z.string() })),
-  has_more: z.boolean(),
-});
-export async function listAvailableRepositories(page = 1) {
-  return requestWithRefresh(`/github/repositories?page=${page}`, {
-    schema: AvailableRepositoriesSchema,
   });
 }
 
@@ -451,6 +424,8 @@ export async function updateFeature(
     title?: string;
     description?: string;
     status?: string;
+    build_status?: string | null;
+    review_status?: string;
     area?: string;
   },
 ) {
@@ -556,4 +531,69 @@ export async function createFeatureComment(
       schema: FeatureCommentSchema,
     },
   );
+}
+
+export async function createRun(
+  prompt: string,
+  featureId: number,
+  createdByUserId: number,
+) {
+  return requestWithRefresh(`/features/${featureId}/runs`, {
+    method: "POST",
+    body: JSON.stringify({ prompt, created_by_user_id: createdByUserId }),
+    schema: RunSchema,
+  });
+}
+
+export async function listRepositoryRuns(repoId: number) {
+  const data = await requestWithRefresh(`/repositories/${repoId}/runs`, {
+    schema: RunListResponseSchema,
+  });
+  return data.runs;
+}
+
+export async function cancelRun(runId: number) {
+  return requestWithRefresh(`/runs/${runId}/cancel`, {
+    method: "POST",
+    schema: z.unknown(),
+  });
+}
+
+export async function deleteRun(runId: number) {
+  return requestWithRefresh(`/runs/${runId}`, {
+    method: "DELETE",
+    schema: z.unknown(),
+  });
+}
+
+export async function getRun(runId: number) {
+  return requestWithRefresh(`/runs/${runId}`, {
+    schema: RunSchema,
+  });
+}
+
+// ─── GitHub App ───────────────────────────────────────────────────────────────
+
+export async function getGithubAppInstallURL(orgId: number) {
+  return requestWithRefresh(`/organizations/${orgId}/github-app/install-url`, {
+    schema: AppInstallURLResponseSchema,
+  });
+}
+
+export async function getGithubAppInstallStatus(orgId: number) {
+  return requestWithRefresh(`/organizations/${orgId}/github-app/status`, {
+    schema: AppInstallationStatusSchema,
+  });
+}
+
+/** Lists repositories the GitHub App can access for this org (installation-scoped). */
+export async function listGithubAppInstallationRepos(
+  orgId: number,
+  page = 1,
+) {
+  const data = await requestWithRefresh(
+    `/organizations/${orgId}/github/repositories?page=${page}`,
+    { schema: GitHubInstallationRepoListResponseSchema },
+  );
+  return data.repositories;
 }

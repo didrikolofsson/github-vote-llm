@@ -1,15 +1,23 @@
+import { SetupBanner } from "@/components/setup/SetupBanner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
-  getGitHubAuthorizeUrl,
-  getGitHubStatus,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useOrgSetup } from "@/hooks/use-org-setup";
+import { useOrgInstallationEvents } from "@/hooks/use-org-installation-events";
+import {
   listMyOrganizations,
   listOrgMembers,
   listOrgRepositories,
 } from "@/lib/api";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -41,12 +49,6 @@ export default function OrganizationDashboardPage() {
   const org = orgs[0];
   const orgId = org?.id;
 
-  const { data: ghStatus, isLoading: ghStatusLoading } = useQuery({
-    queryKey: ["github-status"],
-    queryFn: () => getGitHubStatus(),
-    enabled: !!orgId,
-  });
-
   const { data: repos = [], isLoading: reposLoading } = useQuery({
     queryKey: ["organizations", orgId, "repositories"],
     queryFn: () => listOrgRepositories(orgId!),
@@ -59,14 +61,15 @@ export default function OrganizationDashboardPage() {
     enabled: !!orgId,
   });
 
-  const connectGitHub = useMutation({
-    mutationFn: async () => {
-      const { authorize_url } = await getGitHubAuthorizeUrl();
-      window.location.href = authorize_url;
-    },
-  });
-
   const recentRepos = repos.slice(0, 3);
+  const {
+    isReady: appReady,
+    isSuspended: appSuspended,
+    targetLogin,
+    isLoading: appLoading,
+  } = useOrgSetup(orgId);
+
+  useOrgInstallationEvents(orgId);
 
   if (orgsLoading) {
     return (
@@ -83,13 +86,19 @@ export default function OrganizationDashboardPage() {
   }
 
   return (
-    <div className="animate-slide-up flex flex-col gap-8 p-8 max-w-[1280px] mx-auto w-full">
+    <div
+      className={cn(
+        "animate-slide-up flex flex-col gap-8 p-8 max-w-[1280px] mx-auto w-full",
+      )}
+    >
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Overview of {org?.name ?? "your organization"}
         </p>
       </div>
+
+      <SetupBanner orgId={orgId} />
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -106,9 +115,13 @@ export default function OrganizationDashboardPage() {
               {reposLoading ? (
                 <Skeleton className="h-8 w-12 mb-1" />
               ) : (
-                <div className="text-2xl font-semibold tabular-nums">{repos.length}</div>
+                <div className="text-2xl font-semibold tabular-nums">
+                  {repos.length}
+                </div>
               )}
-              <p className="text-sm text-muted-foreground mt-0.5">Repositories</p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Repositories
+              </p>
             </CardContent>
           </Card>
         </Link>
@@ -126,14 +139,16 @@ export default function OrganizationDashboardPage() {
               {membersLoading ? (
                 <Skeleton className="h-8 w-12 mb-1" />
               ) : (
-                <div className="text-2xl font-semibold tabular-nums">{members.length}</div>
+                <div className="text-2xl font-semibold tabular-nums">
+                  {members.length}
+                </div>
               )}
               <p className="text-sm text-muted-foreground mt-0.5">Members</p>
             </CardContent>
           </Card>
         </Link>
 
-        {/* GitHub stat */}
+        {/* GitHub App stat */}
         <Link to="/settings" tabIndex={-1}>
           <Card className="group hover:bg-muted/30 transition-colors cursor-pointer h-full">
             <CardContent className="p-5">
@@ -143,24 +158,18 @@ export default function OrganizationDashboardPage() {
                 </div>
                 <ArrowUpRight className="size-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
               </div>
-              {ghStatusLoading ? (
-                <>
-                  <Skeleton className="h-6 w-24 mb-1" />
-                  <Skeleton className="h-4 w-16 mt-1" />
-                </>
-              ) : ghStatus?.connected ? (
-                <>
-                  <Badge color="lime">Connected</Badge>
-                  {ghStatus.login && (
-                    <p className="text-sm text-muted-foreground mt-1.5">as @{ghStatus.login}</p>
-                  )}
-                </>
+              {appLoading ? (
+                <Skeleton className="h-5 w-20 mb-1" />
+              ) : appReady ? (
+                <Badge color="green">Connected</Badge>
+              ) : appSuspended ? (
+                <Badge color="yellow">Suspended</Badge>
               ) : (
-                <>
-                  <Badge color="red">Not connected</Badge>
-                  <p className="text-sm text-muted-foreground mt-1.5">GitHub</p>
-                </>
+                <Badge color="red">Not installed</Badge>
               )}
+              <p className="text-sm text-muted-foreground mt-1.5">
+                {appReady && targetLogin ? targetLogin : "GitHub App"}
+              </p>
             </CardContent>
           </Card>
         </Link>
@@ -190,17 +199,6 @@ export default function OrganizationDashboardPage() {
               Settings
             </Link>
           </Button>
-          {!ghStatus?.connected && !ghStatusLoading && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => connectGitHub.mutate()}
-              disabled={connectGitHub.isPending}
-            >
-              <Github />
-              Connect GitHub
-            </Button>
-          )}
         </div>
       </div>
 
@@ -238,7 +236,11 @@ export default function OrganizationDashboardPage() {
               <p className="text-xs text-muted-foreground/70 mt-1 mb-4">
                 Connect your first GitHub repository to get started.
               </p>
-              <Button variant="outline" size="sm" onClick={() => navigate("/repositories")}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate("/repositories")}
+              >
                 <Plus />
                 Add repository
               </Button>

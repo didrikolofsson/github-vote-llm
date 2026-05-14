@@ -1,0 +1,15 @@
+CREATE TABLE github_connections (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    access_token TEXT NOT NULL,
+    access_token_expires_at TIMESTAMPTZ NOT NULL,
+    refresh_token TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX github_connections_user_id_idx ON github_connections (user_id);
+
+CREATE TYPE github_installation_state AS ENUM ('pending', 'active', 'suspended');
+
+ALTER TABLE github_installations
+ADD COLUMN state github_installation_state NOT NULL DEFAULT 'pending';

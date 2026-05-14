@@ -6,6 +6,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { Fragment } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +38,7 @@ import { Building2, ChevronsUpDown } from "lucide-react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { cn } from "@/lib/utils";
+import { GithubPopupListener } from "@/components/setup/GithubPopupListener";
 
 /** Static path segment → display label (unknown segments get title-cased). */
 const SEGMENT_LABELS: Record<string, string> = {
@@ -111,6 +113,7 @@ export default function Layout() {
 
   return (
     <SidebarProvider>
+      <GithubPopupListener />
       <Sidebar>
         <SidebarHeader>
           <SidebarMenu>
@@ -213,16 +216,18 @@ export default function Layout() {
           <Breadcrumb>
             <BreadcrumbList>
               {breadcrumb.map((crumb, i) => (
-                <BreadcrumbItem key={crumb.key}>
+                <Fragment key={crumb.key}>
                   {i > 0 && <BreadcrumbSeparator />}
-                  {crumb.href ? (
-                    <BreadcrumbLink asChild>
-                      <Link to={crumb.href}>{crumb.label}</Link>
-                    </BreadcrumbLink>
-                  ) : (
-                    <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
-                  )}
-                </BreadcrumbItem>
+                  <BreadcrumbItem>
+                    {crumb.href ? (
+                      <BreadcrumbLink asChild>
+                        <Link to={crumb.href}>{crumb.label}</Link>
+                      </BreadcrumbLink>
+                    ) : (
+                      <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                    )}
+                  </BreadcrumbItem>
+                </Fragment>
               ))}
             </BreadcrumbList>
           </Breadcrumb>

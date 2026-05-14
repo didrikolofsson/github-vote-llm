@@ -2,51 +2,119 @@ package main
 
 import (
 	"context"
-	"log"
+	"errors"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
+	"github.com/didrikolofsson/github-vote-llm/internal/agents/claude"
 	"github.com/didrikolofsson/github-vote-llm/internal/api"
 	"github.com/didrikolofsson/github-vote-llm/internal/api/handlers"
 	"github.com/didrikolofsson/github-vote-llm/internal/config"
+	appgithub "github.com/didrikolofsson/github-vote-llm/internal/github"
+	"github.com/didrikolofsson/github-vote-llm/internal/hub"
+	"github.com/didrikolofsson/github-vote-llm/internal/jobs"
+	"github.com/didrikolofsson/github-vote-llm/internal/jobs/workers"
 	"github.com/didrikolofsson/github-vote-llm/internal/logger"
+	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/didrikolofsson/github-vote-llm/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	"github.com/riverqueue/river"
 )
 
 func main() {
+	appLogger := logger.New().Named("main")
+	defer appLogger.Sync() //nolint:errcheck
+
 	if gin.Mode() == gin.DebugMode {
 		if err := godotenv.Load(); err != nil {
-			log.Fatalf("failed to load .env file: %v", err)
+			appLogger.Fatalf("failed to load .env file: %v", err)
 		}
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	env, err := config.LoadEnv()
 	if err != nil {
-		log.Fatalf("failed to load environment: %v", err)
+		appLogger.Fatalf("failed to load environment: %v", err)
 	}
 
-	appLogger := logger.New().Named("main")
-	defer appLogger.Sync()
-
-	ctx := context.Background()
-	conn, err := pgxpool.New(ctx, env.DATABASE_URL)
+	db, err := pgxpool.New(ctx, env.DATABASE_URL)
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		appLogger.Fatalf("failed to create database pool: %v", err)
 	}
-	defer conn.Close()
+	defer db.Close()
+
+	if err := db.Ping(ctx); err != nil {
+		appLogger.Fatalf("failed to reach database: %v", err)
+	}
+
+	w := river.NewWorkers()
+	jc, err := jobs.NewClient(jobs.JobClientDeps{DB: db, Workers: w})
+	if err != nil {
+		appLogger.Fatalf("failed to create job client: %v", err)
+	}
+	claudeRunner := claude.NewClaudeRunner(claude.NewClaudeRunnerParams{
+		ApiKey: env.ANTHROPIC_API_KEY,
+		Logger: appLogger,
+	})
+
+	q := store.New(db)
+	eventHub := hub.NewHub()
+
+	appClient, err := appgithub.NewAppClient(env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY)
+	if err != nil {
+		appLogger.Fatalf("failed to create github app client: %v", err)
+	}
+
+	s := services.New(services.ServicesDeps{
+		DB: db, Queries: q, Env: env, JobClient: jc, Hub: eventHub,
+		AgentRunner: claudeRunner, AppClient: appClient,
+	})
+
+	workers.Register(w, workers.RegisterWorkersDeps{Services: s, Env: env, Logger: appLogger, JobClient: jc})
+	if err := jc.Start(ctx); err != nil {
+		appLogger.Fatalf("failed to start job client: %v", err)
+	}
 
 	apiLogger := logger.New().Named("api")
-	defer apiLogger.Sync()
+	defer apiLogger.Sync() //nolint:errcheck
 
-	q := store.New(conn)
-	handlers := handlers.NewHandlerCollection(conn, q, env, apiLogger)
+	h := handlers.New(handlers.NewHandlersDeps{Services: s, Logger: apiLogger, Hub: eventHub, Env: env})
+	router := api.New(api.ApiDeps{Handlers: h, Logger: apiLogger, Queries: q, JwtSecret: env.JWT_SECRET})
 
-	router := api.NewRestApiRouter(
-		env,
-		apiLogger,
-		handlers,
-	).Create()
+	srv := &http.Server{
+		Addr:              ":" + env.PORT,
+		Handler:           router,
+		ReadHeaderTimeout: 30 * time.Second,
+	}
 
-	router.Run(":" + env.PORT)
+	go func() {
+		appLogger.Infof("listening on :%s", env.PORT)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			appLogger.Fatalf("server error: %v", err)
+		}
+	}()
+
+	<-ctx.Done()
+	stop()
+	appLogger.Info("shutting down...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		appLogger.Errorf("HTTP shutdown error: %v", err)
+	}
+
+	if err := jc.Stop(shutdownCtx); err != nil {
+		appLogger.Errorf("job client shutdown error: %v", err)
+	}
+
+	appLogger.Info("shutdown complete")
 }

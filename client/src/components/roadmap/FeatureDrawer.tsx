@@ -1,5 +1,6 @@
 import {
   addFeatureDependency,
+  createRun as createFeatureRun,
   deleteFeature,
   removeFeatureDependency,
   updateFeature,
@@ -8,9 +9,10 @@ import type {
   Feature,
   FeatureDependency,
   FeatureBuildStatus,
+  Run,
 } from "@/lib/api-schemas";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { ArrowUpRight, Bot, CircleDot, Rocket, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +44,8 @@ import {
   ComboboxValue,
   useComboboxAnchor,
 } from "@/components/ui/combobox";
+import { useAuth } from "@/lib/auth";
+import { SetupGuard } from "@/components/setup/SetupGuard";
 
 const STATUS_OPTIONS: { value: FeatureBuildStatus; label: string }[] = [
   { value: "pending", label: "Pending" },
@@ -104,19 +108,40 @@ function DepsCombobox({
 
 interface FeatureDrawerProps {
   repoId: number;
+  orgId?: number;
   feature: Feature | null;
   allFeatures: Feature[];
   dependencies: FeatureDependency[];
+  latestRun?: Run;
   onClose: () => void;
 }
 
+const RUN_STATUS_DOT: Record<Run["status"], string> = {
+  pending: "bg-amber-400",
+  running: "bg-cyan-400 animate-pulse",
+  completed: "bg-lime-400",
+  failed: "bg-red-400",
+  cancelled: "bg-zinc-400",
+};
+
+const RUN_STATUS_LABEL: Record<Run["status"], string> = {
+  pending: "Pending",
+  running: "Running",
+  completed: "Completed",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
+
 export function FeatureDrawer({
   repoId,
+  orgId,
   feature,
   allFeatures,
   dependencies,
+  latestRun,
   onClose,
 }: FeatureDrawerProps) {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
@@ -181,6 +206,35 @@ export function FeatureDrawer({
       onClose();
     },
   });
+
+  type CreateFeatureRunParams = {
+    prompt: string;
+    featureId: number;
+    createdByUserId: number;
+  };
+  const createRun = useMutation({
+    mutationFn: ({
+      prompt,
+      featureId,
+      createdByUserId,
+    }: CreateFeatureRunParams) =>
+      createFeatureRun(prompt, featureId, createdByUserId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["repositories", repoId, "runs"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["repository", repoId, "meta"],
+      });
+    },
+  });
+
+  const runPrompt = feature
+    ? [
+        `Implement: ${feature.title}`,
+        feature.description ? `\n${feature.description}` : "",
+      ].join("")
+    : "";
 
   function handleDescriptionBlur() {
     if (descriptionDraft !== description) {
@@ -301,8 +355,63 @@ export function FeatureDrawer({
             </div>
 
             <DrawerFooter>
+              {latestRun && (
+                <div className="rounded-xl border border-border bg-muted/30 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                      <CircleDot className="size-3.5" />
+                      Latest run
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`size-1.5 rounded-full ${RUN_STATUS_DOT[latestRun.status]}`}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {RUN_STATUS_LABEL[latestRun.status]}
+                      </span>
+                    </div>
+                  </div>
+                  {latestRun.status === "completed" && latestRun.pr_url && (
+                    <a
+                      href={latestRun.pr_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-info hover:underline"
+                    >
+                      View pull request
+                      <ArrowUpRight className="size-3" />
+                    </a>
+                  )}
+                </div>
+              )}
+              <div className="rounded-xl border border-border bg-muted/30 p-3">
+                <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                  <Bot className="size-3.5" />
+                  Implementation prompt
+                </div>
+                <p className="line-clamp-3 text-xs leading-5 text-muted-foreground">
+                  {runPrompt || "Add a description to guide the agent run."}
+                </p>
+              </div>
+              <SetupGuard orgId={orgId}>
+                <Button
+                  onClick={() =>
+                    createRun.mutate({
+                      prompt: runPrompt || feature.title,
+                      featureId: feature.id,
+                      createdByUserId: user?.id ?? 0,
+                    })
+                  }
+                  disabled={createRun.isPending || !user?.id}
+                >
+                  <Rocket data-icon="inline-start" />
+                  {createRun.isPending
+                    ? "Starting run…"
+                    : "Start implementation run"}
+                </Button>
+              </SetupGuard>
               <Button
-                variant="destructive"
+                variant="danger"
                 size="sm"
                 className="w-full"
                 onClick={() => deleteMutation.mutate()}

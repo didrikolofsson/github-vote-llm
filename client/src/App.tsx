@@ -1,14 +1,48 @@
-import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './lib/auth';
-import { listMyOrganizations } from './lib/api';
-import LoginPage from './pages/LoginPage';
-import CreateOrganizationPage from './pages/CreateOrganizationPage';
-import OrganizationDashboardPage from './pages/OrganizationDashboardPage';
-import RepositoriesPage from './pages/RepositoriesPage';
-import RepositoryDetailPage from './pages/RepositoryDetailPage';
-import SettingsPage from './pages/SettingsPage';
-import Layout from './components/Layout';
+import { useState, useEffect } from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import { useAuth } from "./lib/auth";
+import { listMyOrganizations } from "./lib/api";
+import LoginPage from "./pages/LoginPage";
+import CreateOrganizationPage from "./pages/CreateOrganizationPage";
+import OrganizationDashboardPage from "./pages/OrganizationDashboardPage";
+import RepositoriesPage from "./pages/RepositoriesPage";
+import RepositoryDetailPage from "./pages/RepositoryDetailPage";
+import RunDetailPage from "./pages/RunDetailPage";
+import SettingsPage from "./pages/SettingsPage";
+import CompletePage from "./pages/setup/CompletePage";
+import PopupCompletePage from "./pages/setup/PopupCompletePage";
+import Layout from "./components/Layout";
+import { Toaster } from "./components/ui/sonner";
+
+function AppRoutes() {
+  return (
+    <Routes>
+      {/* Callback landing pages */}
+      <Route path="setup/complete" element={<CompletePage />} />
+      <Route path="setup/popup-complete" element={<PopupCompletePage />} />
+
+      <Route element={<Layout />}>
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="dashboard" element={<OrganizationDashboardPage />} />
+        <Route path="repositories" element={<RepositoriesPage />} />
+        <Route
+          path="repositories/:repoId"
+          element={<RepositoryDetailPage />}
+        />
+        <Route
+          path="repositories/:repoId/runs/:runId"
+          element={<RunDetailPage />}
+        />
+        <Route path="settings" element={<SettingsPage />} />
+      </Route>
+    </Routes>
+  );
+}
 
 export default function App() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -49,11 +83,14 @@ export default function App() {
 
   if (!isAuthenticated) {
     return (
-      <BrowserRouter>
-        <Routes>
-          <Route path="*" element={<LoginPage />} />
-        </Routes>
-      </BrowserRouter>
+      <>
+        <BrowserRouter>
+          <Routes>
+            <Route path="*" element={<LoginPage />} />
+          </Routes>
+        </BrowserRouter>
+        <Toaster position="top-center"/>
+      </>
     );
   }
 
@@ -67,34 +104,32 @@ export default function App() {
 
   if (!hasOrgs) {
     return (
-      <BrowserRouter>
-        <Routes>
-          <Route
-            path="*"
-            element={
-              <CreateOrganizationPage
-                onCreated={() => {
-                  setHasOrgs(true);
-                }}
-              />
-            }
-          />
-        </Routes>
-      </BrowserRouter>
+      <>
+        <BrowserRouter>
+          <Routes>
+            <Route
+              path="*"
+              element={
+                <CreateOrganizationPage
+                  onCreated={() => {
+                    setHasOrgs(true);
+                  }}
+                />
+              }
+            />
+          </Routes>
+        </BrowserRouter>
+        <Toaster position="top-center"/>
+      </>
     );
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<OrganizationDashboardPage />} />
-          <Route path="repositories" element={<RepositoriesPage />} />
-          <Route path="repositories/:repoId" element={<RepositoryDetailPage />} />
-          <Route path="settings" element={<SettingsPage />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+      <Toaster position="top-center"/>
+    </>
   );
 }

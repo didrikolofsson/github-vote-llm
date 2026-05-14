@@ -1,190 +1,293 @@
 package handlers
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
-	"net/url"
 	"strconv"
-	"strings"
-	"time"
 
 	"github.com/didrikolofsson/github-vote-llm/internal/api/middleware"
-	"github.com/didrikolofsson/github-vote-llm/internal/api/services"
-	"github.com/didrikolofsson/github-vote-llm/internal/config"
+	"github.com/didrikolofsson/github-vote-llm/internal/api/request"
+	"github.com/didrikolofsson/github-vote-llm/internal/dtos"
+	"github.com/didrikolofsson/github-vote-llm/internal/hub"
+	"github.com/didrikolofsson/github-vote-llm/internal/logger"
+	"github.com/didrikolofsson/github-vote-llm/internal/services"
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/oauth2/github"
 )
 
-var (
-	GitHubAuthURL = github.Endpoint.AuthURL
-)
-
-type GithubHandlers interface {
-	// Auth handlers
-	Authorize(c *gin.Context)
-	Callback(c *gin.Context)
-	Status(c *gin.Context)
-	ListReposByAuthenticatedUser(c *gin.Context)
-	Disconnect(c *gin.Context)
+type GithubHandlers struct {
+	s             *services.GithubService
+	l             *logger.Logger
+	hub           hub.Hub
+	webhookSecret string
 }
 
-type GithubHandlersImpl struct {
-	env *config.Environment
-	s   services.GithubService
+func NewGithubHandlers(s *services.GithubService, l *logger.Logger, h hub.Hub, webhookSecret string) *GithubHandlers {
+	return &GithubHandlers{s: s, l: l, hub: h, webhookSecret: webhookSecret}
 }
 
-func NewGithubHandlers(env *config.Environment, s services.GithubService) GithubHandlers {
-	return &GithubHandlersImpl{env: env, s: s}
-}
-
-// oauthStateClaims is signed into the GitHub `state` query param so /callback can bind the code to a user.
-type oauthStateClaims struct {
-	UserID int64 `json:"uid"`
-	jwt.RegisteredClaims
-}
-
-// Authorize lets the client initiate the OAuth2 flow by returning the GitHub authorization URL.
-// Requires JWT (see api router). Response matches client: { "authorize_url": "..." }.
-func (h *GithubHandlersImpl) Authorize(c *gin.Context) {
+// GetAppInstallURL returns the GitHub App installation URL for the given org.
+// The URL includes a short-lived signed state token that links the install back to the org.
+func (h *GithubHandlers) GetAppInstallURL(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-
-	stateTok := jwt.NewWithClaims(jwt.SigningMethodHS256, oauthStateClaims{
-		UserID: userID,
-		RegisteredClaims: jwt.RegisteredClaims{
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
-		},
-	})
-	stateStr, err := stateTok.SignedString([]byte(h.env.JWT_SECRET))
+	orgID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to build oauth state"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization id"})
 		return
 	}
 
-	v := url.Values{}
-	v.Set("client_id", h.env.GITHUB_CLIENT_ID)
-	v.Set("redirect_uri", h.env.SERVER_URL+"/v1/github/callback")
-	v.Set("scope", "repo read:org")
-	v.Set("state", stateStr)
-	v.Set("prompt", "select_account")
-
-	authorizeURL := GitHubAuthURL + "?" + v.Encode()
-	c.JSON(http.StatusOK, gin.H{"authorize_url": authorizeURL})
-}
-
-func (h *GithubHandlersImpl) Callback(c *gin.Context) {
-	if ghErr := c.Query("error"); ghErr != "" {
-		desc := c.Query("error_description")
-		q := url.Values{}
-		q.Set("github_error", "1")
-		if desc != "" {
-			q.Set("error_description", desc)
-		}
-		loc := strings.TrimSuffix(h.env.FRONTEND_URL, "/") + "?" + q.Encode()
-		c.Redirect(http.StatusTemporaryRedirect, loc)
-		return
-	}
-
-	code := c.Query("code")
-	if code == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "code is required"})
-		return
-	}
-
-	state := c.Query("state")
-	if state == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "state is required"})
-		return
-	}
-
-	var claims oauthStateClaims
-	tok, err := jwt.ParseWithClaims(state, &claims, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
-		return []byte(h.env.JWT_SECRET), nil
-	})
-	if err != nil || tok == nil || !tok.Valid {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired oauth state"})
-		return
-	}
-	userID := claims.UserID
-
-	if err := h.s.Callback(c.Request.Context(), code, userID, h.env.TOKEN_ENCRYPTION_KEY); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to complete github oauth"})
-		return
-	}
-
-	success := strings.TrimSuffix(h.env.FRONTEND_URL, "/") + "/settings?github_connected=1"
-	c.Redirect(http.StatusTemporaryRedirect, success)
-}
-
-func (h *GithubHandlersImpl) Status(c *gin.Context) {
-	userID, ok := middleware.GetUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
-	status, err := h.s.Status(c.Request.Context(), userID)
+	installURL, err := h.s.CreateAppInstallURL(c.Request.Context(), orgID, userID)
 	if err != nil {
-		if errors.Is(err, services.ErrGitHubNotConnected) {
-			c.JSON(http.StatusOK, gin.H{"connected": false})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check github status"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"connected": true,
-		"login":     status.Login,
-	})
-}
-
-func (h *GithubHandlersImpl) Disconnect(c *gin.Context) {
-	userID, ok := middleware.GetUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
-	if err := h.s.Disconnect(c.Request.Context(), userID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to disconnect github account"})
-		return
-	}
-
-	c.Status(http.StatusNoContent)
-}
-
-func (h *GithubHandlersImpl) ListReposByAuthenticatedUser(c *gin.Context) {
-	userID, ok := middleware.GetUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
-	page := 1
-	if p := c.Query("page"); p != "" {
-		if n, err := strconv.Atoi(p); err == nil && n > 0 {
-			page = n
-		}
-	}
-
-	repos, hasMore, err := h.s.ListReposByAuthenticatedUser(c.Request.Context(), userID, page)
-	if err != nil {
-		if errors.Is(err, services.ErrGitHubNotConnected) {
-			c.JSON(http.StatusPreconditionFailed, gin.H{"connected": false})
-			return
-		}
+		h.l.Errorw("Failed to create app install URL", "error", err, "org_id", orgID, "request_id", request.GetRequestID(c))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"repositories": repos, "has_more": hasMore})
+
+	c.JSON(http.StatusOK, dtos.AppInstallURLResponse{InstallURL: installURL})
+}
+
+// AppInstallCallback is the public endpoint GitHub redirects to after the user installs the App.
+// It validates the state JWT, fetches installation details from GitHub, and stores the record.
+func (h *GithubHandlers) AppInstallCallback(c *gin.Context) {
+	installationIDStr := c.Query("installation_id")
+	setupAction := c.Query("setup_action")
+	state := c.Query("state")
+
+	if setupAction == "" {
+		h.l.Errorw("Missing setup_action", "request_id", request.GetRequestID(c))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing setup_action"})
+		return
+	}
+
+	if installationIDStr == "" {
+		h.l.Errorw("Missing installation_id", "request_id", request.GetRequestID(c))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing installation_id"})
+		return
+	}
+
+	installationID, err := strconv.ParseInt(installationIDStr, 10, 64)
+	if err != nil {
+		h.l.Errorw("Failed to parse installation_id", "error", err, "installation_id", installationIDStr, "request_id", request.GetRequestID(c))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid installation_id"})
+		return
+	}
+
+	if setupAction == "update" {
+		orgID, err := h.s.HandleAppUpdateCallback(c.Request.Context(), installationID)
+		if err != nil {
+			h.l.Errorw("Failed to handle app update callback", "error", err, "installation_id", installationID, "request_id", request.GetRequestID(c))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+		h.l.Infow("GitHub App updated", "installation_id", installationID, "org_id", orgID)
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/setup/popup-complete?kind=app_update&ok=1&org_id=%d", h.s.FrontendURL(), orgID))
+		return
+	}
+
+	if setupAction == "install" {
+		orgID, err := h.s.HandleAppInstallCallback(c.Request.Context(), installationID, state)
+		if err != nil {
+			h.l.Errorw("Failed to handle app install callback", "error", err, "installation_id", installationID, "request_id", request.GetRequestID(c))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+
+		h.l.Infow("GitHub App installed", "installation_id", installationID, "org_id", orgID)
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/setup/popup-complete?kind=app_install&ok=1&org_id=%d", h.s.FrontendURL(), orgID))
+		return
+	}
+
+	h.l.Errorw("Invalid setup action", "setup_action", setupAction, "request_id", request.GetRequestID(c))
+	c.JSON(http.StatusBadRequest, gin.H{"error": "invalid setup action"})
+}
+
+// GetAppInstallationStatus returns the GitHub App installation status for the given org.
+// It performs a live verification against GitHub's API and self-heals stale records.
+func (h *GithubHandlers) GetAppInstallationStatus(c *gin.Context) {
+	orgID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization id"})
+		return
+	}
+
+	status, err := h.s.GetInstallationStatus(c.Request.Context(), orgID)
+	if err != nil {
+		h.l.Errorw("Failed to get installation status", "error", err, "org_id", orgID, "request_id", request.GetRequestID(c))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, dtos.AppInstallationStatus{
+		Installed:           status.Installed,
+		SuspendedAt:         status.SuspendedAt,
+		InstalledByUserName: status.InstalledByUserName,
+		TargetLogin:         status.TargetLogin,
+		AccountType:         status.AccountType,
+	})
+}
+
+// HandleWebhook receives GitHub App webhook events and syncs installation state.
+func (h *GithubHandlers) HandleWebhook(c *gin.Context) {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
+		return
+	}
+
+	sig := c.GetHeader("X-Hub-Signature-256")
+	if err := verifyWebhookSignature(body, sig, h.webhookSecret); err != nil {
+		h.l.Errorw("Failed to verify webhook signature", "error", err, "signature", sig, "request_id", request.GetRequestID(c))
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid signature"})
+		return
+	}
+
+	eventHeader := c.GetHeader("X-GitHub-Event")
+	event, err := validateWebhookEvent(eventHeader)
+	if err != nil {
+		h.l.Errorw("Failed to validate webhook event", "error", err, "event_header", eventHeader, "request_id", request.GetRequestID(c))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid webhook event"})
+		return
+	}
+
+	if event == WebhookEventInstallation {
+		var payload services.InstallationWebhookPayload
+		if err := json.Unmarshal(body, &payload); err != nil {
+			h.l.Errorw("Failed to unmarshal installation webhook payload", "error", err, "request_id", request.GetRequestID(c))
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+			return
+		}
+		if err := h.s.HandleInstallationWebhook(c.Request.Context(), payload); err != nil {
+			h.l.Errorw("Failed to handle installation webhook", "error", err, "action", payload.Action, "installation_id", payload.Installation.ID)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+		c.Status(http.StatusOK)
+		return
+	}
+
+	h.l.Errorw("Invalid webhook event", "event", event, "request_id", request.GetRequestID(c))
+	c.JSON(http.StatusBadRequest, gin.H{"error": "invalid webhook event"})
+}
+
+func verifyWebhookSignature(body []byte, signature, secret string) error {
+	if len(signature) < 7 || signature[:7] != "sha256=" {
+		return errors.New("invalid signature")
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	expected := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+	if !hmac.Equal([]byte(signature), []byte(expected)) {
+		return errors.New("invalid signature")
+	}
+	return nil
+}
+
+type WebhookEvent string
+
+const (
+	WebhookEventInstallation WebhookEvent = "installation"
+	WebhookEventSuspend      WebhookEvent = "suspend"
+	WebhookEventUnsuspend    WebhookEvent = "unsuspend"
+	WebhookEventDeleted      WebhookEvent = "deleted"
+)
+
+// Events streams installation-status events for an org over Server-Sent Events.
+// EventSource cannot send a Bearer header, so this route must use
+// middleware.RequireAuthFromQueryOrHeader (token via ?access_token=).
+func (h *GithubHandlers) Events(c *gin.Context) {
+	orgID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization id"})
+		return
+	}
+
+	ch := h.hub.SubscribeOrg(orgID)
+	defer h.hub.UnsubscribeOrg(orgID, ch)
+
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+
+	c.SSEvent("event", "connected")
+	c.Writer.Flush()
+
+	for {
+		select {
+		case <-c.Request.Context().Done():
+			return
+		case msg := <-ch:
+			c.SSEvent("event", msg)
+			c.Writer.Flush()
+		}
+	}
+}
+
+func validateWebhookEvent(event string) (WebhookEvent, error) {
+	switch event {
+	case "installation":
+		return WebhookEventInstallation, nil
+	case "suspend":
+		return WebhookEventSuspend, nil
+	case "unsuspend":
+		return WebhookEventUnsuspend, nil
+	case "deleted":
+		return WebhookEventDeleted, nil
+	default:
+		return "", fmt.Errorf("invalid webhook event: %s", event)
+	}
+}
+
+func (h *GithubHandlers) ListInstallationRepositories(c *gin.Context) {
+	orgIDStr, exists := c.Params.Get("id")
+	if !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization id"})
+		return
+	}
+
+	orgID, err := strconv.ParseInt(orgIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization id"})
+		return
+	}
+
+	pageStr := c.Query("page")
+	if pageStr == "" {
+		pageStr = "1"
+	}
+	page, err := strconv.ParseInt(pageStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page"})
+		return
+	}
+
+	repos, hasMore, err := h.s.ListInstallationRepositories(c.Request.Context(), orgID, page)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrInstallationNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "GitHub App is not installed for this organization"})
+			return
+		case errors.Is(err, services.ErrInstallationSuspended):
+			c.JSON(http.StatusForbidden, gin.H{"error": "GitHub App installation is suspended"})
+			return
+		default:
+			h.l.Errorw("Failed to list installation repositories", "error", err, "organization_id", orgID, "page", page, "request_id", request.GetRequestID(c))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, dtos.GitHubRepositoryListResponse{
+		Repositories: repos,
+		HasMore:      hasMore,
+	})
 }

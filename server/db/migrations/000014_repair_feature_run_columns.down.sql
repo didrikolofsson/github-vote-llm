@@ -1,0 +1,3 @@
+ALTER TABLE feature_runs DROP COLUMN IF EXISTS pid;
+ALTER TABLE feature_runs DROP COLUMN IF EXISTS pr_url;
+ALTER TABLE feature_runs DROP COLUMN IF EXISTS workspace;

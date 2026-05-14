@@ -1,0 +1,17 @@
+# golangci-lint v2 — pin CLI with CI (see .github/workflows/ci.yml).
+# Install locally: https://golangci-lint.run/welcome/install/
+version: "2"
+
+run:
+  timeout: 5m
+  relative-path-mode: gomod
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errcheck
+    - gosec
+    - misspell
+  exclusions:
+    generated: strict

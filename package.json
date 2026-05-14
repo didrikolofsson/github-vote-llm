@@ -17,7 +17,7 @@
     "test": "pnpm run test-server",
     "test-server": "cd server && make test",
     "lint": "pnpm run lint-server",
-    "lint-server": "cd server && make lint-openapi"
+    "lint-server": "cd server && make lint"
   },
   "keywords": [],
   "author": "",

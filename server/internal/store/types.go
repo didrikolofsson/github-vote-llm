@@ -56,6 +56,94 @@ func (ns NullBuildStatusType) Value() (driver.Value, error) {
 	return string(ns.BuildStatusType), nil
 }
 
+type FeatureRunStatus string
+
+const (
+	FeatureRunStatusPending   FeatureRunStatus = "pending"
+	FeatureRunStatusRunning   FeatureRunStatus = "running"
+	FeatureRunStatusCompleted FeatureRunStatus = "completed"
+	FeatureRunStatusFailed    FeatureRunStatus = "failed"
+	FeatureRunStatusCancelled FeatureRunStatus = "cancelled"
+)
+
+func (e *FeatureRunStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = FeatureRunStatus(s)
+	case string:
+		*e = FeatureRunStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for FeatureRunStatus: %T", src)
+	}
+	return nil
+}
+
+type NullFeatureRunStatus struct {
+	FeatureRunStatus FeatureRunStatus
+	Valid            bool // Valid is true if FeatureRunStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullFeatureRunStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.FeatureRunStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.FeatureRunStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullFeatureRunStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.FeatureRunStatus), nil
+}
+
+type GithubInstallationState string
+
+const (
+	GithubInstallationStatePending   GithubInstallationState = "pending"
+	GithubInstallationStateActive    GithubInstallationState = "active"
+	GithubInstallationStateSuspended GithubInstallationState = "suspended"
+)
+
+func (e *GithubInstallationState) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = GithubInstallationState(s)
+	case string:
+		*e = GithubInstallationState(s)
+	default:
+		return fmt.Errorf("unsupported scan type for GithubInstallationState: %T", src)
+	}
+	return nil
+}
+
+type NullGithubInstallationState struct {
+	GithubInstallationState GithubInstallationState
+	Valid                   bool // Valid is true if GithubInstallationState is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullGithubInstallationState) Scan(value interface{}) error {
+	if value == nil {
+		ns.GithubInstallationState, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.GithubInstallationState.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullGithubInstallationState) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.GithubInstallationState), nil
+}
+
 type OrganizationMemberRole string
 
 const (
@@ -141,6 +229,54 @@ func (ns NullReviewStatusType) Value() (driver.Value, error) {
 	return string(ns.ReviewStatusType), nil
 }
 
+type RiverJobState string
+
+const (
+	RiverJobStateAvailable RiverJobState = "available"
+	RiverJobStateCancelled RiverJobState = "cancelled"
+	RiverJobStateCompleted RiverJobState = "completed"
+	RiverJobStateDiscarded RiverJobState = "discarded"
+	RiverJobStatePending   RiverJobState = "pending"
+	RiverJobStateRetryable RiverJobState = "retryable"
+	RiverJobStateRunning   RiverJobState = "running"
+	RiverJobStateScheduled RiverJobState = "scheduled"
+)
+
+func (e *RiverJobState) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = RiverJobState(s)
+	case string:
+		*e = RiverJobState(s)
+	default:
+		return fmt.Errorf("unsupported scan type for RiverJobState: %T", src)
+	}
+	return nil
+}
+
+type NullRiverJobState struct {
+	RiverJobState RiverJobState
+	Valid         bool // Valid is true if RiverJobState is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullRiverJobState) Scan(value interface{}) error {
+	if value == nil {
+		ns.RiverJobState, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.RiverJobState.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullRiverJobState) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.RiverJobState), nil
+}
+
 type VoteUrgencyType string
 
 const (
@@ -184,17 +320,6 @@ func (ns NullVoteUrgencyType) Value() (driver.Value, error) {
 	return string(ns.VoteUrgencyType), nil
 }
 
-type AuthorizationCode struct {
-	ID            int64
-	Code          string
-	UserID        int64
-	CodeChallenge string
-	RedirectUri   string
-	Used          bool
-	ExpiresAt     pgtype.Timestamptz
-	CreatedAt     pgtype.Timestamptz
-}
-
 type Feature struct {
 	ID            int64
 	RepositoryID  int64
@@ -223,6 +348,19 @@ type FeatureDependency struct {
 	DependsOn int64
 }
 
+type FeatureRun struct {
+	ID              int64
+	Prompt          string
+	FeatureID       int64
+	Status          FeatureRunStatus
+	CreatedByUserID int64
+	CreatedAt       pgtype.Timestamptz
+	CompletedAt     pgtype.Timestamptz
+	Workspace       string
+	PrUrl           *string
+	Pid             *int32
+}
+
 type FeatureVote struct {
 	ID         int64
 	FeatureID  int64
@@ -232,13 +370,16 @@ type FeatureVote struct {
 	Urgency    NullVoteUrgencyType
 }
 
-type GithubConnection struct {
-	UserID               int64
-	AccessTokenEncrypted string
-	RefreshToken         *string
-	TokenExpiresAt       pgtype.Timestamptz
-	GithubUserID         *int64
-	GithubLogin          *string
+type GithubInstallation struct {
+	ID                   int64
+	OrganizationID       int64
+	GithubInstallationID int64
+	GithubAccountLogin   string
+	GithubAccountID      int64
+	GithubAccountType    string
+	RepositorySelection  string
+	SuspendedAt          pgtype.Timestamptz
+	InstalledByUserID    *int64
 	CreatedAt            pgtype.Timestamptz
 	UpdatedAt            pgtype.Timestamptz
 }
@@ -258,15 +399,7 @@ type OrganizationMember struct {
 	CreatedAt      pgtype.Timestamptz
 }
 
-type RefreshToken struct {
-	ID        int64
-	TokenHash string
-	UserID    int64
-	ExpiresAt pgtype.Timestamptz
-	CreatedAt pgtype.Timestamptz
-}
-
-type Repository struct {
+type OrganizationRepository struct {
 	ID             int64
 	OrganizationID int64
 	Owner          string
@@ -277,6 +410,61 @@ type Repository struct {
 	Description    *string
 }
 
+type RiverClient struct {
+	ID        string
+	CreatedAt pgtype.Timestamptz
+	Metadata  []byte
+	PausedAt  pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+type RiverClientQueue struct {
+	RiverClientID    string
+	Name             string
+	CreatedAt        pgtype.Timestamptz
+	MaxWorkers       int64
+	Metadata         []byte
+	NumJobsCompleted int64
+	NumJobsRunning   int64
+	UpdatedAt        pgtype.Timestamptz
+}
+
+type RiverJob struct {
+	ID           int64
+	State        RiverJobState
+	Attempt      int16
+	MaxAttempts  int16
+	AttemptedAt  pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+	FinalizedAt  pgtype.Timestamptz
+	ScheduledAt  pgtype.Timestamptz
+	Priority     int16
+	Args         []byte
+	AttemptedBy  []string
+	Errors       [][]byte
+	Kind         string
+	Metadata     []byte
+	Queue        string
+	Tags         []string
+	UniqueKey    []byte
+	UniqueStates pgtype.Bits
+}
+
+type RiverLeader struct {
+	ElectedAt pgtype.Timestamptz
+	ExpiresAt pgtype.Timestamptz
+	LeaderID  string
+	Name      string
+}
+
+type RiverQueue struct {
+	Name      string
+	CreatedAt pgtype.Timestamptz
+	Metadata  []byte
+	PausedAt  pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
 type User struct {
 	ID        int64
 	Email     string
@@ -284,4 +472,23 @@ type User struct {
 	Username  *string
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
+}
+
+type UserAuthorizationCode struct {
+	ID            int64
+	Code          string
+	UserID        int64
+	CodeChallenge string
+	RedirectUri   string
+	Used          bool
+	ExpiresAt     pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamptz
+}
+
+type UserRefreshToken struct {
+	ID        int64
+	TokenHash string
+	UserID    int64
+	ExpiresAt pgtype.Timestamptz
+	CreatedAt pgtype.Timestamptz
 }

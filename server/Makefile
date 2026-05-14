@@ -1,3 +1,5 @@
+.PHONY: dev build test generate generate-pkce migrate-new migrate-up migrate-down lint lint-fix
+
 dev:
 	air
 
@@ -21,3 +23,14 @@ migrate-up:
 
 migrate-down:
 	migrate -source file://db/migrations -database $$DATABASE_URL down 1
+
+lint:
+	go build ./...
+	golangci-lint run
+
+lint-fix:
+	go build ./...
+	golangci-lint run --fix
+
+ngrok:
+	ngrok http 8080

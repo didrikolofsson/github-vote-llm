@@ -1,0 +1,1 @@
+ALTER TABLE feature_runs DROP COLUMN workspace;

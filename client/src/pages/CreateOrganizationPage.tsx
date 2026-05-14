@@ -108,7 +108,7 @@ export default function CreateOrganizationPage({ onCreated }: CreateOrganization
                   />
                 </Field>
                 {error && (
-                  <Alert variant="destructive">
+                  <Alert variant="danger">
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}

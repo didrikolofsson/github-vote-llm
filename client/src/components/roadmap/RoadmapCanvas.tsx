@@ -18,13 +18,22 @@ import {
   addFeatureDependency,
   createFeature,
   getRoadmap,
+  listRepositoryRuns,
   removeFeatureDependency,
   updateFeaturePosition,
 } from "@/lib/api";
-import type { Feature, FeatureDependency } from "@/lib/api-schemas";
+import type { Feature, FeatureDependency, Run } from "@/lib/api-schemas";
 import ELK from "elkjs/lib/elk.bundled.js";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayoutGrid, Maximize2, Plus, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  Compass,
+  LayoutGrid,
+  MapPinned,
+  Maximize2,
+  Plus,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import {
   Tooltip,
@@ -33,7 +42,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useCallback, useEffect, useState } from "react";
-import { FeatureNode } from "./FeatureNode";
+import { FeatureNode, type FeatureNodeData } from "./FeatureNode";
 import { FeatureDrawer } from "./FeatureDrawer";
 import { Button } from "@/components/ui/button";
 import {
@@ -63,6 +72,11 @@ import { Textarea } from "@/components/ui/textarea";
 // Must be defined outside the component — a new object reference on every
 // render causes React Flow to remount all nodes.
 const NODE_TYPES = { feature: FeatureNode };
+
+// Stable empty array — avoids triggering the runs badge effect on every render
+// when the query hasn't resolved yet (destructuring default `= []` creates a
+// new reference each render, which would fire the effect in a tight loop).
+const EMPTY_RUNS: Run[] = [];
 
 const EDGE_STYLE = {
   stroke: "var(--border)",
@@ -198,7 +212,8 @@ async function computeLayout(
 function featuresToNodes(
   features: Feature[],
   autoPositions: Map<number, { x: number; y: number }>,
-): Node<Feature>[] {
+  latestRunByFeature: Map<number, Run>,
+): Node<FeatureNodeData>[] {
   return features.map((f) => ({
     id: String(f.id),
     type: "feature",
@@ -206,7 +221,7 @@ function featuresToNodes(
       f.roadmap_x != null && f.roadmap_y != null
         ? { x: f.roadmap_x, y: f.roadmap_y }
         : (autoPositions.get(f.id) ?? { x: 0, y: 0 }),
-    data: f,
+    data: { ...f, _latestRun: latestRunByFeature.get(f.id) },
   }));
 }
 
@@ -482,9 +497,10 @@ function AddFeatureDialog({
 
 interface RoadmapCanvasProps {
   repoId: number;
+  orgId?: number;
 }
 
-export function RoadmapCanvas({ repoId }: RoadmapCanvasProps) {
+export function RoadmapCanvas({ repoId, orgId }: RoadmapCanvasProps) {
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const [selectedFeatureId, setSelectedFeatureId] = useState<number | null>(
@@ -499,21 +515,49 @@ export function RoadmapCanvas({ repoId }: RoadmapCanvasProps) {
     enabled: !!repoId,
   });
 
-  // Sync nodes + edges whenever server data changes.
+  const { data: runs = EMPTY_RUNS } = useQuery({
+    queryKey: ["repositories", repoId, "runs"],
+    queryFn: () => listRepositoryRuns(repoId),
+    enabled: !!repoId,
+  });
+
+  const latestRunByFeature = runs.reduce((map, run) => {
+    const existing = map.get(run.feature_id);
+    if (!existing || new Date(run.created_at) > new Date(existing.created_at)) {
+      map.set(run.feature_id, run);
+    }
+    return map;
+  }, new Map<number, Run>());
+
+  // Sync nodes + edges whenever server roadmap data changes (features/dependencies).
   // computeLayout is async (ELK), so we use .then() inside the effect.
   // After layout, persist ELK-computed positions so they survive navigation.
   useEffect(() => {
     if (!data) return;
     computeLayout(data.features, data.dependencies).then((positions) => {
-      setNodes(featuresToNodes(data.features, positions));
+      setNodes(featuresToNodes(data.features, positions, latestRunByFeature));
       setEdges(depsToEdges(data.dependencies));
       for (const [featureId, { x, y }] of positions) {
         savePosition.mutate({ featureId, x, y });
       }
     });
-    // setNodes/setEdges/savePosition are stable references — omitting them is safe.
+    // setNodes/setEdges/savePosition/latestRunByFeature are stable or computed inline
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
+
+  // Patch run badges into existing nodes without re-running layout or touching edges.
+  useEffect(() => {
+    setNodes((nds) =>
+      nds.map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          _latestRun: latestRunByFeature.get(parseInt(node.id, 10)),
+        },
+      })),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runs]);
 
   // ── Node / edge change handlers ──────────────────────────────────────────────
 
@@ -653,7 +697,7 @@ export function RoadmapCanvas({ repoId }: RoadmapCanvasProps) {
       roadmap_y: null,
     }));
     const positions = await computeLayout(unpositioned, data.dependencies);
-    setNodes(featuresToNodes(unpositioned, positions));
+    setNodes(featuresToNodes(unpositioned, positions, latestRunByFeature));
     for (const [featureId, { x, y }] of positions) {
       await savePosition.mutateAsync({ featureId, x, y });
     }
@@ -672,47 +716,82 @@ export function RoadmapCanvas({ repoId }: RoadmapCanvasProps) {
 
   return (
     <>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={NODE_TYPES}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeDragStop={onNodeDragStop}
-        onNodeClick={onNodeClick}
-        onConnect={onConnect}
-        fitView
-        fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
-        minZoom={0.2}
-        maxZoom={2}
-        deleteKeyCode="Delete"
-        className="bg-muted/20"
-      >
-        <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
+      <div className="relative h-full">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={NODE_TYPES}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeDragStop={onNodeDragStop}
+          onNodeClick={onNodeClick}
+          onConnect={onConnect}
+          fitView
+          fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
+          minZoom={0.2}
+          maxZoom={2}
+          deleteKeyCode="Delete"
+          className="h-full bg-muted/20"
+        >
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={24}
+            size={1}
+            color="var(--muted-foreground)"
+          />
+          <Panel position="top-left">
+            <div className="pointer-events-none flex items-center gap-2 rounded-xl border border-border bg-background/90 px-3 py-2 text-xs text-muted-foreground shadow-sm backdrop-blur">
+              <Compass className="size-3.5" />
+              <span className="font-mono tracking-[0.18em] uppercase">
+                Feature map
+              </span>
+            </div>
+          </Panel>
+          <CanvasToolbar
+            onAdd={() => setAddOpen(true)}
+            onResetLayout={handleResetLayout}
+            resetting={resetting}
+          />
+        </ReactFlow>
+
         {nodes.length === 0 && (
-          <div className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center">
-            <div className="relative text-center">
-              <p className="text-sm font-medium text-muted-foreground">
-                No features yet
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+            <div className="absolute h-32 w-[420px] rounded-full bg-info/15 blur-3xl" />
+            <div className="pointer-events-auto relative max-w-sm rounded-2xl border border-border bg-background p-6 text-center shadow-lg">
+              <div className="relative mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl border border-border bg-muted">
+                <MapPinned className="size-5 text-muted-foreground" />
+              </div>
+              <p className="relative text-sm font-semibold">
+                Start the roadmap
               </p>
-              <p className="text-xs text-muted-foreground/70 mt-1">
-                Add your first feature to start building the roadmap.
+              <p className="relative mt-2 text-xs leading-5 text-muted-foreground">
+                Add the first feature, then connect dependencies to turn loose
+                requests into an implementation route.
               </p>
+              <Button
+                className="relative mt-4"
+                size="sm"
+                onClick={() => setAddOpen(true)}
+              >
+                <Plus data-icon="inline-start" />
+                Add first feature
+              </Button>
             </div>
           </div>
         )}
-        <CanvasToolbar
-          onAdd={() => setAddOpen(true)}
-          onResetLayout={handleResetLayout}
-          resetting={resetting}
-        />
-      </ReactFlow>
+      </div>
 
       <FeatureDrawer
         repoId={repoId}
+        orgId={orgId}
         feature={data?.features.find((f) => f.id === selectedFeatureId) ?? null}
         allFeatures={data?.features ?? []}
         dependencies={data?.dependencies ?? []}
+        latestRun={
+          selectedFeatureId != null
+            ? latestRunByFeature.get(selectedFeatureId)
+            : undefined
+        }
         onClose={() => setSelectedFeatureId(null)}
       />
 

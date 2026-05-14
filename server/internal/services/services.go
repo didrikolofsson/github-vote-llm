@@ -1,0 +1,62 @@
+package services
+
+import (
+	"github.com/didrikolofsson/github-vote-llm/internal/agents/claude"
+	"github.com/didrikolofsson/github-vote-llm/internal/config"
+	appgithub "github.com/didrikolofsson/github-vote-llm/internal/github"
+	"github.com/didrikolofsson/github-vote-llm/internal/hub"
+	"github.com/didrikolofsson/github-vote-llm/internal/store"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
+)
+
+type ServicesDeps struct {
+	DB          *pgxpool.Pool
+	Queries     *store.Queries
+	Env         *config.Environment
+	JobClient   *river.Client[pgx.Tx]
+	Hub         hub.Hub
+	AgentRunner *claude.ClaudeRunner
+	AppClient   *appgithub.AppClient
+}
+
+type Services struct {
+	UserService         *UserService
+	AuthService         *AuthService
+	OrganizationService *OrganizationService
+	GithubService       *GithubService
+	RepoService         *RepoService
+	MembersService      *MembersService
+	RunService          *RunService
+	FeaturesService     *FeaturesService
+	PortalService       *PortalService
+}
+
+func New(
+	deps ServicesDeps,
+) *Services {
+	githubSvc := NewGithubService(GithubServiceDeps{
+		DB:        deps.DB,
+		Queries:   deps.Queries,
+		Env:       deps.Env,
+		AppClient: deps.AppClient,
+		Hub:       deps.Hub,
+	})
+	runLogHub := hub.NewRunLogHub()
+	return &Services{
+		UserService:         NewUserService(deps.DB, deps.Queries),
+		AuthService:         NewAuthService(deps.DB, deps.Queries, deps.Env.JWT_SECRET),
+		OrganizationService: NewOrganizationService(deps.DB, deps.Queries),
+		GithubService:       githubSvc,
+		RepoService: NewRepoService(RepoServiceDeps{
+			DB:        deps.DB,
+			Queries:   deps.Queries,
+			AppClient: deps.AppClient,
+		}),
+		MembersService:  NewMembersService(deps.Queries),
+		RunService:      NewRunService(deps.DB, deps.Queries, deps.Env, deps.JobClient, deps.AgentRunner, deps.Hub, githubSvc, runLogHub),
+		FeaturesService: NewFeaturesService(deps.DB, deps.Queries, deps.Hub),
+		PortalService:   NewPortalService(deps.DB, deps.Queries),
+	}
+}

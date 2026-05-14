@@ -101,6 +101,59 @@ export const RoadmapSchema = z.object({
   dependencies: z.array(FeatureDependencySchema),
 });
 
+// ─── Run ──────────────────────────────────────────────────────────────────────
+export const RunStatusSchema = z.enum([
+  "pending",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
+export const RunSchema = z.object({
+  id: z.number(),
+  prompt: z.string(),
+  feature_id: z.number(),
+  status: RunStatusSchema,
+  created_by_user_id: z.number(),
+  created_at: z.string().datetime({ offset: true }),
+  completed_at: z.string().datetime({ offset: true }).nullable(),
+  pr_url: z.string().nullable().optional(),
+});
+
+export const RunListResponseSchema = z.object({
+  runs: z.array(RunSchema),
+});
+
+// ─── GitHub App ───────────────────────────────────────────────────────────────
+export const AppInstallURLResponseSchema = z.object({
+  install_url: z.string(),
+});
+
+export const GithubAccountTypeSchema = z.enum(["User", "Organization"]);
+
+export const AppInstallationStatusSchema = z.object({
+  installed: z.boolean(),
+  suspended_at: z.string().nullish(),
+  installed_by_user_name: z.string().optional(),
+  target_login: z.string().optional(),
+  account_type: GithubAccountTypeSchema.optional(),
+});
+
+/** Repositories visible to the org's GitHub App installation (GET .../github/repositories). */
+export const GitHubInstallationRepoSchema = z.object({
+  github_repository_id: z.number(),
+  owner: z.string(),
+  name: z.string(),
+  full_name: z.string(),
+  private: z.boolean(),
+});
+
+export const GitHubInstallationRepoListResponseSchema = z.object({
+  repositories: z.array(GitHubInstallationRepoSchema),
+  has_more: z.boolean(),
+});
+
 // ─── Exported types ───────────────────────────────────────────────────────────
 
 export type Organization = z.infer<typeof OrganizationSchema>;
@@ -111,9 +164,15 @@ export type OrganizationMemberRole = z.infer<
   typeof OrganizationMemberRoleSchema
 >;
 export type Repository = z.infer<typeof RepositorySchema>;
+export type RunStatus = z.infer<typeof RunStatusSchema>;
+export type Run = z.infer<typeof RunSchema>;
 export type Feature = z.infer<typeof FeatureSchema>;
 export type FeatureReviewStatus = z.infer<typeof FeatureReviewStatusSchema>;
 export type FeatureBuildStatus = z.infer<typeof FeatureBuildStatusSchema>;
 export type FeatureComment = z.infer<typeof FeatureCommentSchema>;
 export type FeatureDependency = z.infer<typeof FeatureDependencySchema>;
 export type Roadmap = z.infer<typeof RoadmapSchema>;
+export type AppInstallationStatus = z.infer<typeof AppInstallationStatusSchema>;
+export type GitHubInstallationRepo = z.infer<
+  typeof GitHubInstallationRepoSchema
+>;
