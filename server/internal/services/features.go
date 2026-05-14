@@ -70,11 +70,11 @@ type PatchFeatureParams struct {
 
 type FeaturesService struct {
 	db *pgxpool.Pool
-	q  *store.Queries
+	q  store.Querier
 	h  hub.Hub
 }
 
-func NewFeaturesService(db *pgxpool.Pool, q *store.Queries, h hub.Hub) *FeaturesService {
+func NewFeaturesService(db *pgxpool.Pool, q store.Querier, h hub.Hub) *FeaturesService {
 	return &FeaturesService{db: db, q: q, h: h}
 }
 

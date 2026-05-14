@@ -37,7 +37,8 @@ type CreateRunParams struct {
 
 type RunService struct {
 	db        *pgxpool.Pool
-	q         *store.Queries
+	q         store.Querier
+	withTx    func(tx pgx.Tx) store.Querier
 	jc        *river.Client[pgx.Tx]
 	env       *config.Environment
 	runner    *claude.ClaudeRunner
@@ -47,7 +48,17 @@ type RunService struct {
 }
 
 func NewRunService(db *pgxpool.Pool, q *store.Queries, env *config.Environment, jc *river.Client[pgx.Tx], runner *claude.ClaudeRunner, h hub.Hub, githubSvc *GithubService, logHub *hub.RunLogHub) *RunService {
-	return &RunService{db: db, q: q, env: env, jc: jc, runner: runner, hub: h, logHub: logHub, githubSvc: githubSvc}
+	return &RunService{
+		db:        db,
+		q:         q,
+		withTx:    func(tx pgx.Tx) store.Querier { return q.WithTx(tx) },
+		jc:        jc,
+		env:       env,
+		runner:    runner,
+		hub:       h,
+		logHub:    logHub,
+		githubSvc: githubSvc,
+	}
 }
 
 func (s *RunService) LogHub() *hub.RunLogHub {
@@ -105,7 +116,7 @@ func (s *RunService) CreateRun(ctx context.Context, p CreateRunParams) (*dtos.Ru
 		return nil, err
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
-	qtx := s.q.WithTx(tx)
+	qtx := s.withTx(tx)
 
 	repo, err := qtx.GetRepositoryByFeatureID(ctx, p.FeatureID)
 	if err != nil {

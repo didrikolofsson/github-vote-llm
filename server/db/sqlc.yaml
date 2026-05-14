@@ -10,3 +10,4 @@ sql:
         sql_package: "pgx/v5"
         emit_pointers_for_null_types: true
         output_models_file_name: "types.go"
+        emit_interface: true
