@@ -36,17 +36,17 @@ type appInstallStateClaims struct {
 
 type GithubService struct {
 	db        *pgxpool.Pool
-	q         *store.Queries
+	q         store.Querier
 	env       *config.Environment
-	appClient *appgithub.AppClient
+	appClient appgithub.AppClientIface
 	hub       hub.Hub
 }
 
 type GithubServiceDeps struct {
 	DB        *pgxpool.Pool
-	Queries   *store.Queries
+	Queries   store.Querier
 	Env       *config.Environment
-	AppClient *appgithub.AppClient
+	AppClient appgithub.AppClientIface
 	Hub       hub.Hub
 }
 

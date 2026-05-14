@@ -1,4 +1,4 @@
-.PHONY: dev build test generate generate-pkce migrate-new migrate-up migrate-down lint lint-fix
+.PHONY: dev build test generate mocks generate-pkce migrate-new migrate-up migrate-down lint lint-fix
 
 dev:
 	air
@@ -11,6 +11,11 @@ test:
 
 generate:
 	sqlc generate -f db/sqlc.yaml
+
+mocks:
+	mockgen -destination=internal/store/mock_querier.go -package=store github.com/didrikolofsson/github-vote-llm/internal/store Querier
+	mockgen -destination=internal/hub/mock_hub.go -package=hub github.com/didrikolofsson/github-vote-llm/internal/hub Hub
+	mockgen -destination=internal/github/mock_app_client.go -package=github github.com/didrikolofsson/github-vote-llm/internal/github AppClientIface
 
 generate-pkce:
 	node scripts/pkce.js
